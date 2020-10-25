@@ -111,6 +111,8 @@ void kbd_irq() {
 
    itoa(scancode,buffer,16);
    kprintf("  ");
+
+   itoa(jiffies,buffer,16);
    kprintf(buffer);
 
    outb(0x64,0xFF);  /* set the "enable kbd" bit */

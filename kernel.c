@@ -54,7 +54,8 @@ void pit_setup(void) {
 void kinit(void)
 {
     vga_clear();
-    kprintf("SIL-OS 64b\n");
+    kprintf("Booting.......\n");
+    kprintf("Wheeler OS.......\n");
     kprintf("Copyright:Kyle Pelton 2020 \n");
     gdt_install();
     kprintf("Installing idt\n");

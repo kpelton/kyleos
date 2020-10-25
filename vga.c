@@ -42,7 +42,7 @@ void kprintf(char *str) {
             cursor_y++;
             cursor_x=0; 
         } else {
-            print_loc(cursor_x,cursor_y,0, 4,*str,0);
+            print_loc(cursor_x,cursor_y,0, 3,*str,0);
             cursor_x++;   
         }
         if(cursor_x >= 80){

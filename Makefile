@@ -22,5 +22,5 @@ kernel.img: kernel.bin
 clean:
 	$(RM) $(OBJFILES) kernel.bin kernel.img kernel32.bin
  
-install:
-	$(RM) $(OBJFILES) kernel.bin
+test: kernel32.bin
+	qemu-system-x86_64 -m 128M -kernel  kernel32.bin
