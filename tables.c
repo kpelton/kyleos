@@ -30,7 +30,7 @@ struct gdt_ptr
 struct idt_ptr
 {
 	uint16_t limit;
-	uint32_t base;
+	uint64_t base;
 } __attribute__((packed));
 
 struct gdt_entry gdt[3];
@@ -60,7 +60,7 @@ void idt_set_gate(int num, uint64_t base, uint8_t type_attr)
 void idt_install(void)
 {
     int i;
-    ip_t.base = (uint64_t)idt;
+    ip_t.base = (uint64_t)&idt;
     ip_t.limit = (sizeof(struct idt_entry) *256)-1;
 
     //setup panic handler

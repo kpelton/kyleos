@@ -3,7 +3,7 @@
 static int cursor_x = 0;
 static int cursor_y = 0;
 
-static unsigned char *vram = (unsigned char *)0x100B8000;
+static unsigned char *vram = (unsigned char *)0xffffffff800B8000;
 
 void update_cursor(int row, int col) {
     unsigned short position=(row*80) + col;

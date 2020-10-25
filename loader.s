@@ -64,12 +64,12 @@ kernel_bootstrap:
     rep stosd          ; Clear the memory.
     mov edi, cr3       ; Set the destination index to control register 3.
     mov DWORD [edi], 0x200003      ; Set the uint32_t at the destination index to 0x2003.
+    mov DWORD [edi+(0x8*511)], 0x200003      ; for kernel virutal addressing 512 entry pml4
     push edi
     add edi, 0x100000              ; Add 0x1000 to the destination index.
     mov DWORD [edi], 0x300003      ; Set the uint32_t at the destination index to 0x3003.
+    mov DWORD [edi+(0x8*510)], 0x300003      ; for kernel virutal addressing 511 entry pdpr
     mov eax, edi
-    add edi, 0x100400              ; Add 0x1000 to the destination index.
-    mov DWORD [edi], 0x400003      ; Set the uint32_t at the destination index to 0x3003.
     mov edi,eax
     add edi, 0x100000              ; Add 0x1000 to the destination index.
     mov DWORD [edi], 0x400003      ; Set the uint32_t at the destination index to 0x4003.
@@ -104,9 +104,10 @@ Realm64:
     mov gs, ax                    ; Set the G-segment to the A-register.
     mov ss, ax                    ; Set the stack segment to the A-register.
     mov rax, rsp
-    add rax, 0x10000000
-    mov rsp,rax
-    jmp kmain
+    add rax, 0xffffffff80000000   ;Set stack to higher half scheme
+    mov rsp,rax 
+    mov rax, strict qword kmain
+    jmp rax
 
 section .bss 
 align 4

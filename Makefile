@@ -23,4 +23,4 @@ clean:
 	$(RM) $(OBJFILES) kernel.bin kernel.img kernel32.bin
  
 test: kernel32.bin
-	qemu-system-x86_64 -m 128M -kernel  kernel32.bin
+	qemu-system-x86_64 -kernel kernel32.bin -d int,cpu_reset 2>log

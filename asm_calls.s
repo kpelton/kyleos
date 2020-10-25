@@ -7,7 +7,8 @@
 [global load_page_directory]
 [global setup_long_mode]
 gdt_flush:
- lgdt [gp]
+ mov rax, strict qword gp
+ lgdt [rax]
   mov ax, 0x10
     mov ds, ax
     mov es, ax
@@ -23,7 +24,8 @@ setup_long_mode:
   ret 
 [global idt_flush] ; make 'gdt_flush' accessible from C code
 idt_flush:
-    lidt [ip_t]
+    mov rax, strict qword ip_t
+    lidt [rax]
 	ret
       
 [global std_handler] ; global int handler
