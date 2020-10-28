@@ -48,9 +48,17 @@ void kprompt(void)
 void pit_setup(void) {
     asm("cli");
     outb(0x43,0x34);
-    outb(0x40,0x1);
+    //set 100hz 11931 0x2e9b
+    outb(0x40,0x9b);
+    outb(0x40,0x2e);
     asm("sti");
 }
+void ksleep(unsigned int sec) {
+    unsigned int expires = read_jiffies()+(sec*100);
+    while(read_jiffies() < expires);
+        
+}
+
 void kinit(void)
 {
     vga_clear();
@@ -64,7 +72,15 @@ void kinit(void)
     PIC_init();
     pit_setup();
     setup_paging();
+    //need to setup kernel stack after paging is setup
+    asm("mov $0xffffffff800c0000,%rsp");
     kprintf("Switch to kernel tables done.");
+    while (1) {
+        ksleep(1);
+        kprintf("Sleep test\n");
+        ksleep(5);
+        kprintf("Sleep test 5\n");
+    }
     HALT();
 }
 void kmain(void)

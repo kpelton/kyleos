@@ -110,7 +110,8 @@ Realm64:
     jmp rax
 
 section .bss 
-align 4
+align 0x1000
 stack: resb STACKSIZE                   ; reserve 16k stack on a doubleword boundary
+stack_end:
 magic: resd 1
 mbd:   resd 1

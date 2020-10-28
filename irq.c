@@ -3,6 +3,7 @@
 #include "pong.h"
 #include "irq.h"
 
+unsigned int jiffies=0;
 #define PIC1		0x20		/* IO base address for master PIC */
 #define PIC2		0xA0		/* IO base address for slave PIC */
 #define PIC1_COMMAND	PIC1
@@ -22,7 +23,6 @@
 #define ICW4_BUF_SLAVE	0x08		/* Buffered mode/slave */
 #define ICW4_BUF_MASTER	0x0C		/* Buffered mode/master */
 #define ICW4_SFNM	0x10		/* Special fully nested (not) */
-unsigned int jiffies = 0;
 void PIC_sendEOI(unsigned char irq)
 {
 	if(irq >= 8)
@@ -120,6 +120,9 @@ void kbd_irq() {
 
 //   pong_handle_key(scancode);
   
+}
+unsigned int read_jiffies() {
+    return jiffies;
 }
 void timer_irq() {
    jiffies+=1;
