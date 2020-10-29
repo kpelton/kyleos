@@ -58,12 +58,22 @@ void ksleep(unsigned int sec) {
     while(read_jiffies() < expires);
         
 }
-
+void kernel(void)
+{
+    while (1) {
+        ksleep(1);
+        kprintf("Sleep test\n");
+        ksleep(5);
+        kprintf("Sleep test 5\n");
+    }
+    HALT();
+}
 void kinit(void)
 {
+
     vga_clear();
     kprintf("Booting.......\n");
-    kprintf("Wheeler OS.......\n");
+    kprintf("Ted Wheeler OS.......\n");
     kprintf("Copyright:Kyle Pelton 2020 \n");
     gdt_install();
     kprintf("Installing idt\n");
@@ -73,15 +83,9 @@ void kinit(void)
     pit_setup();
     setup_paging();
     //need to setup kernel stack after paging is setup
-    asm("mov $0xffffffff800c0000,%rsp");
-    kprintf("Switch to kernel tables done.");
-    while (1) {
-        ksleep(1);
-        kprintf("Sleep test\n");
-        ksleep(5);
-        kprintf("Sleep test 5\n");
-    }
-    HALT();
+    asm("mov $0xffffffff84000000,%rsp");
+    kprintf("Switch to kernel tables/stack done.\n");
+    kernel();
 }
 void kmain(void)
 {

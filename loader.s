@@ -57,23 +57,23 @@ GDT64:                           ; Global Descriptor Table (64-bit).
 
 kernel_bootstrap:
     cli
-    mov edi, 0x100000    ; Set the destination index to 0x1000.
+    mov edi, 0x1000    ; Set the destination index to 0x1000.
     mov cr3, edi       ; Set control register 3 to the destination index.
     xor eax, eax       ; Nullify the A-register.
     mov ecx, 4096      ; Set the C-register to 4096.
     rep stosd          ; Clear the memory.
     mov edi, cr3       ; Set the destination index to control register 3.
-    mov DWORD [edi], 0x200003      ; Set the uint32_t at the destination index to 0x2003.
-    mov DWORD [edi+(0x8*511)], 0x200003      ; for kernel virutal addressing 512 entry pml4
+    mov DWORD [edi], 0x2003      ; Set the uint32_t at the destination index to 0x2003.
+    mov DWORD [edi+(0x8*511)], 0x2003      ; for kernel virutal addressing 512 entry pml4
     push edi
-    add edi, 0x100000              ; Add 0x1000 to the destination index.
-    mov DWORD [edi], 0x300003      ; Set the uint32_t at the destination index to 0x3003.
-    mov DWORD [edi+(0x8*510)], 0x300003      ; for kernel virutal addressing 511 entry pdpr
+    add edi, 0x1000              ; Add 0x1000 to the destination index.
+    mov DWORD [edi], 0x3003      ; Set the uint32_t at the destination index to 0x3003.
+    mov DWORD [edi+(0x8*510)], 0x3003      ; for kernel virutal addressing 511 entry pdpr
     mov eax, edi
     mov edi,eax
-    add edi, 0x100000              ; Add 0x1000 to the destination index.
-    mov DWORD [edi], 0x400003      ; Set the uint32_t at the destination index to 0x4003.
-    add edi, 0x100000              ; Add 0x1000 to the destination index. 
+    add edi, 0x1000              ; Add 0x1000 to the destination index.
+    mov DWORD [edi], 0x4003      ; Set the uint32_t at the destination index to 0x4003.
+    add edi, 0x1000              ; Add 0x1000 to the destination index. 
     mov ebx, 0x00000003          ; Set the B-register to 0x00000003.
     mov ecx, 512                 ; Set the C-register to 512.
 .set_entry:

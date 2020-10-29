@@ -2,12 +2,13 @@
 #include "vga.h"
 // 512 entriesi
 #define addr_start 0xffffffff80000000
+#define PAGE_TAB 64 //MAP 128mb TO KERNEL SPACE
 typedef  unsigned long long uint64_t;
 
 uint64_t pml4[512] __attribute__((aligned(0x20))); // must be aligned to (at least)0x20, ...
 uint64_t page_dir_ptr_tab[512] __attribute__((aligned(0x20))); // must be aligned to (at least)0x20, ...
 uint64_t page_dir[512] __attribute__((aligned(0x1000)));  // must be aligned to page boundary
-uint64_t page_tab[100][512] __attribute__((aligned(0x1000)));
+uint64_t page_tab[PAGE_TAB][512] __attribute__((aligned(0x1000)));
 
 
 void fill_dir(uint64_t startaddr,uint64_t * dir) {
@@ -30,7 +31,7 @@ void setup_paging() {
     page_dir_ptr_tab[510] = ((uint64_t)&page_dir -addr_start) | 3; // set the page directory into the PDPT and mark it present
 
     j=0;
-    for(i = 0; i < 100; i++) {
+    for(i = 0; i < PAGE_TAB; i++) {
         page_dir[i] = ((uint64_t)&page_tab[j] -addr_start)| 3; //set the page table into the PD and mark it present/writable
         fill_dir((0x200000*j),page_tab[j]);
         j+=1;
