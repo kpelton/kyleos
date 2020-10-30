@@ -6,6 +6,7 @@
 char * heap = (char *)0x400000;
 #define HALT() asm("hlt: jmp hlt")
 #define HANG() asm("cli; hlt")
+extern unsigned long _kernel_end;
 void setup_long_mode();
 
 void * kmalloc(unsigned int size)
@@ -60,6 +61,11 @@ void ksleep(unsigned int sec) {
 }
 void kernel(void)
 {
+    char buffer[10];
+    itoa(&_kernel_end,buffer,16);
+    kprintf("End Of kernel:");
+    kprintf(buffer);
+    kprintf("\n");
     while (1) {
         ksleep(1);
 //        kprintf("Sleep test\n");
