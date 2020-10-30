@@ -1,6 +1,5 @@
 #include "asm.h"
-#include "vga.h"
-#include "pong.h"
+#include "output.h" 
 #include "irq.h"
 
 unsigned int jiffies=0;
@@ -96,8 +95,9 @@ void PIC_init(void) {
    for(i=0; i<20; i++)
      IRQ_set_mask(i);
 
-   IRQ_clear_mask(1);
-   IRQ_clear_mask(0);
+   IRQ_clear_mask(1); //kbd
+   IRQ_clear_mask(0);//timer
+   IRQ_clear_mask(4); //uart
 
    //Enable interrupts!
    asm("sti");

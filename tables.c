@@ -46,6 +46,7 @@ void std_handler();
 void panic_handler();
 void kbd_handler();
 void timer_handler();
+void serial_handler();
 void idt_set_gate(int num, uint64_t base, uint8_t type_attr)
 {
 	idt[num].offset_1 = (uint16_t) (base & 0x0000FFFF);
@@ -71,6 +72,7 @@ void idt_install(void)
     //setup other ints
       idt_set_gate(32,(uint64_t )timer_handler,INT_GATE);
       idt_set_gate(33,(uint64_t )kbd_handler,INT_GATE);
+      idt_set_gate(36,(uint64_t )serial_handler,INT_GATE);
               
     //write to cpu
     idt_flush();

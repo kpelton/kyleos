@@ -2,7 +2,7 @@ CC	= gcc
 CFLAGS	= -m64 -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -no-pie
 LD	= ld  -m elf_x86_64 -no-pie
  
-OBJFILES = asm.o kernel.o loader.o vga.o tables.o asm_calls.o irq.o  paging.o
+OBJFILES = asm.o kernel.o loader.o vga.o tables.o asm_calls.o irq.o  paging.o output.o uart.o
 #OBJFILES =  loader.o 
  
 all: kernel.img

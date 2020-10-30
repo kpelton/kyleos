@@ -1,5 +1,5 @@
 #include "asm.h"
-#include "vga.h"
+#include "output.h"
 #include "tables.h"
 #include "irq.h"
 #include "paging.h"
@@ -62,16 +62,16 @@ void kernel(void)
 {
     while (1) {
         ksleep(1);
-        kprintf("Sleep test\n");
+//        kprintf("Sleep test\n");
         ksleep(5);
-        kprintf("Sleep test 5\n");
+  //      kprintf("Sleep test 5\n");
     }
     HALT();
 }
 void kinit(void)
 {
 
-    vga_clear();
+    output_init();
     kprintf("Booting.......\n");
     kprintf("Ted Wheeler OS.......\n");
     kprintf("Copyright:Kyle Pelton 2020 \n");

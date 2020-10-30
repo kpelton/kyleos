@@ -1,5 +1,5 @@
 #include "paging.h"
-#include "vga.h"
+#include "output.h"
 // 512 entriesi
 #define addr_start 0xffffffff80000000
 #define PAGE_TAB 64 //MAP 128mb TO KERNEL SPACE

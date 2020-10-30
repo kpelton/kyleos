@@ -2,6 +2,7 @@
 [extern gp]
 [extern print_regs]
 [extern kbd_irq]       
+[extern serial_irq]       
 [extern timer_irq]       
 [global gdt_flush]
 [global load_page_directory]
@@ -40,6 +41,11 @@ kbd_handler:
 timer_handler:
     call timer_irq
     iretq
+[global serial_handler] ; global int handler
+serial_handler:
+    call serial_irq
+    iretq
+
 [global panic_handler] ; global int handler     
 panic_handler:
     call print_regs
