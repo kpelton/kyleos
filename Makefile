@@ -2,7 +2,7 @@ CC	= gcc
 CFLAGS	= -m64 -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -no-pie
 LD	= ld  -m elf_x86_64 -no-pie
  
-OBJFILES = asm.o kernel.o loader.o vga.o tables.o asm_calls.o irq.o  paging.o output.o uart.o
+OBJFILES = asm.o kernel.o loader.o vga.o tables.o asm_calls.o irq.o  paging.o output.o uart.o ata.o
 #OBJFILES =  loader.o 
  
 all: kernel.img
@@ -23,4 +23,4 @@ clean:
 	$(RM) $(OBJFILES) kernel.bin kernel.img kernel32.bin
  
 test: kernel32.bin
-	qemu-system-x86_64 -kernel kernel32.bin -d int,cpu_reset 2>log
+	qemu-system-x86_64 -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img 2>log

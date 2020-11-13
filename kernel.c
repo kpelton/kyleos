@@ -1,6 +1,7 @@
 #include "asm.h"
 #include "output.h"
 #include "tables.h"
+#include "ata.h"
 #include "irq.h"
 #include "paging.h"
 char * heap = (char *)0x400000;
@@ -66,12 +67,6 @@ void kernel(void)
     kprintf("End Of kernel:");
     kprintf(buffer);
     kprintf("\n");
-    while (1) {
-        ksleep(1);
-//        kprintf("Sleep test\n");
-        ksleep(5);
-  //      kprintf("Sleep test 5\n");
-    }
     HALT();
 }
 void kinit(void)
@@ -90,6 +85,7 @@ void kinit(void)
     setup_paging();
     //need to setup kernel stack after paging is setup
     asm("mov $0xffffffff84000000,%rsp");
+    ata_init();
     kprintf("Switch to kernel tables/stack done.\n");
     kernel();
 }

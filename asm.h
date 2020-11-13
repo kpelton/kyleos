@@ -20,6 +20,7 @@ struct RegDump{
 
 //Wrapped asm functions
 unsigned char inb( unsigned short port );
+unsigned short inw( unsigned short port );
 void outb( unsigned short port, unsigned char val );
 void io_wait( void );
 struct RegDump dump_regs();
