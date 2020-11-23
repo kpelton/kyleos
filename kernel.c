@@ -4,17 +4,10 @@
 #include "ata.h"
 #include "irq.h"
 #include "paging.h"
-char * heap = (char *)0x400000;
+#include "mm.h"
+
 #define HALT() asm("hlt: jmp hlt")
 #define HANG() asm("cli; hlt")
-extern unsigned long _kernel_end;
-void setup_long_mode();
-
-void * kmalloc(unsigned int size)
-{
-    heap+=size+1;
-    return heap;
-}
 
 void print_vendor()
 {
@@ -63,10 +56,23 @@ void ksleep(unsigned int sec) {
 void kernel(void)
 {
     char buffer[10];
+    char *test=0;
     itoa(&_kernel_end,buffer,16);
     kprintf("End Of kernel:");
     kprintf(buffer);
     kprintf("\n");
+    test = kmalloc(0x400);
+    itoa(test,buffer,16);
+    kprintf("heap");
+    kprintf(buffer);
+    kprintf("\n");
+    test = kmalloc(0x400);
+    itoa(test,buffer,16);
+    kprintf("heap");
+    kprintf(buffer);
+    kprintf("\n");
+
+
     HALT();
 }
 void kinit(void)
@@ -83,10 +89,11 @@ void kinit(void)
     PIC_init();
     pit_setup();
     setup_paging();
+    mm_init();
     //need to setup kernel stack after paging is setup
     asm("mov $0xffffffff84000000,%rsp");
-    ata_init();
     kprintf("Switch to kernel tables/stack done.\n");
+    ata_init();
     kernel();
 }
 void kmain(void)

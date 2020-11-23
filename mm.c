@@ -10,6 +10,6 @@ void * kmalloc(unsigned int size) {
 }
 
 void mm_init() {
-    kernel_heap =  &_kernel_end + 0x8;
+    kernel_heap =  (char *) &_kernel_end + 0x8;
 }
 
