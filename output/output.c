@@ -1,6 +1,6 @@
-#include "vga.h"
-#include "uart.h"
-#include "asm.h"
+#include <output/vga.h>
+#include <output/uart.h>
+#include <asm/asm.h>
 
 
 void kprintf(char *str) {

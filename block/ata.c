@@ -1,6 +1,6 @@
-#include "asm.h"
-#include "output.h"
-#include "mm.h"
+#include <asm/asm.h>
+#include <output/output.h>
+#include <mm/mm.h>
 
 #define DATA_REG 0
 #define ERROR_REG 1

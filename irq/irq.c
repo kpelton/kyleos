@@ -1,6 +1,6 @@
-#include "asm.h"
-#include "output.h" 
-#include "irq.h"
+#include <asm/asm.h>
+#include <output/output.h> 
+#include <irq/irq.h>
 
 unsigned int jiffies=0;
 #define PIC1		0x20		/* IO base address for master PIC */

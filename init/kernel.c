@@ -1,10 +1,10 @@
-#include "asm.h"
-#include "output.h"
-#include "tables.h"
-#include "ata.h"
-#include "irq.h"
-#include "paging.h"
-#include "mm.h"
+#include <asm/asm.h>
+#include <output/output.h>
+#include <init/tables.h>
+#include <block/ata.h>
+#include <irq/irq.h>
+#include <mm/paging.h>
+#include <mm/mm.h>
 
 #define HALT() asm("hlt: jmp hlt")
 #define HANG() asm("cli; hlt")
@@ -57,21 +57,13 @@ void kernel(void)
 {
     char buffer[10];
     char *test=0;
-    itoa(&_kernel_end,buffer,16);
-    kprintf("End Of kernel:");
-    kprintf(buffer);
-    kprintf("\n");
+    
     test = kmalloc(0x400);
-    itoa(test,buffer,16);
+    itoa((unsigned long)test,buffer,16);
     kprintf("heap");
     kprintf(buffer);
     kprintf("\n");
     test = kmalloc(0x400);
-    itoa(test,buffer,16);
-    kprintf("heap");
-    kprintf(buffer);
-    kprintf("\n");
-
 
     HALT();
 }

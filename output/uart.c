@@ -1,6 +1,6 @@
-#include "asm.h"
-#include "irq.h"
-#include "output.h"
+#include <asm/asm.h>
+#include <irq/irq.h>
+#include <output/output.h>
 #define PORT 0x3f8   /* COM1 */
 
 void serial_kprintf(char* str) {

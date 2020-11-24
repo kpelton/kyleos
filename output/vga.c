@@ -1,5 +1,5 @@
-#include "vga.h"
-#include "asm.h"
+#include <output/vga.h>
+#include <asm/asm.h>
 static int cursor_x = 0;
 static int cursor_y = 0;
 

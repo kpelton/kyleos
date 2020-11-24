@@ -1,4 +1,4 @@
-#include "asm.h"
+#include <asm/asm.h>
 unsigned char inb( unsigned short port ) {
 
     unsigned char ret;
