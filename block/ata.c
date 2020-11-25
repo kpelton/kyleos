@@ -1,6 +1,8 @@
 #include <asm/asm.h>
 #include <output/output.h>
 #include <mm/mm.h>
+#include <block/ata.h>
+#include <block/fat.h>
 
 #define DATA_REG 0
 #define ERROR_REG 1
@@ -74,6 +76,7 @@ void ata_init(void)
     unsigned int part_start;
     unsigned int part_size;
     unsigned short valid_mbr;
+    unsigned short part_type;
 
     char mbr[512];
     char cbuffer[10];
@@ -82,19 +85,33 @@ void ata_init(void)
     part_start = mbr[0x1c6] | mbr[0x1c7] <<8 | mbr[0x1c8] <<16| mbr[0x1c9] <<24;
     part_size = mbr[0x1ca] | mbr[0x1cb] <<8 | mbr[0x1cc] <<16| mbr[0x1cd] <<24;
     valid_mbr = mbr[0x1fe] | mbr[0x1ff] <<8 ;
+    part_type = mbr[0x1c2];
 
 
     //Look for valid MBR 0x55aa
     if (valid_mbr == 0xaa55) {
-        kprintf("first part\n");
-        itoa(part_start,cbuffer,16);
+          //set FS info
+        fs1.fs_start = part_start;
+        fs1.fs_size = part_size;
+        fs1.part_type = part_type;
+        kprintf("MBR INFO:\n");
+        kprintf("fs start: 0x");
+        itoa(fs1.fs_start,cbuffer,16);
         kprintf(cbuffer);
         kprintf("\n");
 
-        kprintf("part_size\n");
-        itoa(part_size,cbuffer,16);
+        kprintf("fs size: 0x");
+        itoa(fs1.fs_size,cbuffer,16);
         kprintf(cbuffer);
         kprintf("\n");
+    
+        kprintf("part_type: 0x");
+        itoa(fs1.part_type,cbuffer,16);
+        kprintf(cbuffer);
+        kprintf("\n");
+
+
+        fat_init();
     }
     else {
         kprintf("PANIC:ATA init failed.. could not find MBR");

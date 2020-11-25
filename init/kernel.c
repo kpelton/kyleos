@@ -5,6 +5,7 @@
 #include <irq/irq.h>
 #include <mm/paging.h>
 #include <mm/mm.h>
+#include <timer/pit.h>
 
 #define HALT() asm("hlt: jmp hlt")
 #define HANG() asm("cli; hlt")
@@ -40,14 +41,6 @@ void kprompt(void)
 {
     kprintf(">");
 }
-void pit_setup(void) {
-    asm("cli");
-    outb(0x43,0x34);
-    //set 100hz 11931 0x2e9b
-    outb(0x40,0x9b);
-    outb(0x40,0x2e);
-    asm("sti");
-}
 void ksleep(unsigned int sec) {
     unsigned int expires = read_jiffies()+(sec*100);
     while(read_jiffies() < expires);
@@ -79,7 +72,7 @@ void kinit(void)
     idt_install();
     kprintf("PIC init done..\n");  
     PIC_init();
-    pit_setup();
+    pit_init();
     setup_paging();
     mm_init();
     //need to setup kernel stack after paging is setup
