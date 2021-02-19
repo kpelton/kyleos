@@ -11,7 +11,6 @@ void output_init() {
     vga_clear();
     serial_init();
 }
-
 //refactor itoa
 char * itoa_8( unsigned char value, char * str, int base )
 {
@@ -172,3 +171,11 @@ void print_regs(unsigned long exception) {
     kprintf(buffer);
     kprintf("\n");
 }
+void kprint_hex(char *desc, unsigned long val) {
+    char buffer[20];
+    kprintf(desc);
+    itoa(val,buffer,16);
+    kprintf(buffer);
+    kprintf("\n");
+}
+

@@ -1,3 +1,4 @@
+//crappy pio ATA driver
 #include <asm/asm.h>
 #include <output/output.h>
 #include <mm/mm.h>
@@ -20,6 +21,9 @@
 #define CMD_READ_SECTORS 0x20
 #define STAT_DRIVE_BUSY  0x80
 #define STAT_PIO_READY  0x8
+//#define ATA_DEBUG
+
+
 
 unsigned char read_status(void) {
     unsigned char status;
@@ -45,7 +49,9 @@ int read_sec(unsigned int sec,void *buffer  ) {
     int i;
 
     data = buffer;
+#ifdef ATA_DEBUG
     print_drive_status();
+#endif
     outb(PRIMARY + DRIVE_HEAD_REG,0xE0);
     outb(PRIMARY + ERROR_REG,0x00);
     //read 1 sectors =0x200
@@ -59,7 +65,9 @@ int read_sec(unsigned int sec,void *buffer  ) {
 
     while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY  ) != 0) {
         status = read_status();
+#ifdef ATA_DEBUG
         print_drive_status();
+#endif
     }
     //data is ready
     for (i=0; i<256; i++) {

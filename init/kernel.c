@@ -48,16 +48,7 @@ void ksleep(unsigned int sec) {
 }
 void kernel(void)
 {
-    char buffer[10];
-    char *test=0;
-    
-    test = kmalloc(0x400);
-    itoa((unsigned long)test,buffer,16);
-    kprintf("heap");
-    kprintf(buffer);
-    kprintf("\n");
-    test = kmalloc(0x400);
-
+    kprintf("Kernel is booted\n"); 
     HALT();
 }
 void kinit(void)
