@@ -5,6 +5,7 @@
 
 static void read_directory(unsigned int sec,unsigned int first_fat_sector);
 static void read_file(unsigned int cluster,unsigned int first_fat_sector,unsigned int first_data_sector);
+extern struct mbr_info fs1;
 
 void fat_init() {
     char bs_buf[512];
@@ -38,9 +39,9 @@ void fat_init() {
     kprint_hex("fat_size 0x",fat_size);
   
     read_directory(first_data_sector,fs1.fs_start + first_fat_sector);
-    read_directory(0x3e48,fs1.fs_start + first_fat_sector);
+    read_directory(0x802,fs1.fs_start + first_fat_sector);
     //read_file(0x16889+2,fs1.fs_start + first_fat_sector,first_data_sector);
-    //read_file(0x16889+2,fs1.fs_start + first_fat_sector,first_data_sector);
+    read_file(0x802,fs1.fs_start + first_fat_sector,first_data_sector);
     //read_file(0x16889+2,fs1.fs_start + first_fat_sector,first_data_sector);
     //read_file(0x16889+2,fs1.fs_start + first_fat_sector,first_data_sector);
     //read_file(0x16889+2,fs1.fs_start + first_fat_sector,first_data_sector);

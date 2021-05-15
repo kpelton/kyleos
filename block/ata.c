@@ -23,6 +23,8 @@
 #define STAT_PIO_READY  0x8
 //#define ATA_DEBUG
 
+struct mbr_info fs1;
+
 
 
 unsigned char read_status(void) {
