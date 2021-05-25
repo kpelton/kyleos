@@ -67,10 +67,23 @@ int read_sec(unsigned int sec,void *buffer  ) {
 
     while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY  ) != 0) {
         status = read_status();
+        status = read_status();
+        status = read_status();
+        status = read_status();
+        status = read_status();
+        status = read_status();
+        status = read_status();
+        status = read_status();
 #ifdef ATA_DEBUG
         print_drive_status();
 #endif
     }
+
+        status = read_status();
+        status = read_status();
+        status = read_status();
+        status = read_status();
+        status = read_status();
     //data is ready
     for (i=0; i<256; i++) {
         data[i] = inw(0x1f0);
