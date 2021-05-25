@@ -48,7 +48,7 @@ void ksleep(unsigned int sec) {
 }
 void kernel(void)
 {
-    kprintf("Kernel is booted\n"); 
+    kprintf("Ted Wheeler OS has booted\n");
     HALT();
 }
 void kinit(void)
@@ -69,6 +69,7 @@ void kinit(void)
     //need to setup kernel stack after paging is setup
     asm("mov $0xffffffff84000000,%rsp");
     kprintf("Switch to kernel tables/stack done.\n");
+    ksleep(2);
     ata_init();
     kernel();
 }

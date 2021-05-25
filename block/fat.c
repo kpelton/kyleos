@@ -44,7 +44,7 @@ void fat_init() {
     read_directory(clust2sec(0xbe1,fat_boot,first_data_sector),fs1.fs_start + first_fat_sector);
     read_directory(clust2sec(0x803,fat_boot,first_data_sector),fs1.fs_start + first_fat_sector);
     //read_directory(first_data_sector+0x800,fs1.fs_start + first_fat_sector);
-    read_file(0x804,fs1.fs_start + first_fat_sector,first_data_sector);
+    //read_file(0x804,fs1.fs_start + first_fat_sector,first_data_sector);
     //read_file(0x16889+2,fs1.fs_start + first_fat_sector,first_data_sector);
     //read_file(0x16889+2,fs1.fs_start + first_fat_sector,first_data_sector);
     //read_file(0x16889+2,fs1.fs_start + first_fat_sector,first_data_sector);
