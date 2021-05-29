@@ -61,7 +61,7 @@ void kinit(void)
     gdt_install();
     kprintf("Installing idt\n");
     idt_install();
-    kprintf("PIC init done..\n");  
+    kprintf("PIC init done..\n");
     PIC_init();
     pit_init();
     setup_paging();
@@ -70,6 +70,8 @@ void kinit(void)
     asm("mov $0xffffffff84000000,%rsp");
     kprintf("Switch to kernel tables/stack done.\n");
     ksleep(2);
+    kprintf("Starting tear gas\n");
+    ksleep(5);
     ata_init();
     kernel();
 }

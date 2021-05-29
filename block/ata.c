@@ -72,7 +72,7 @@ int read_sec(unsigned int sec,void *buffer  ) {
 #endif
     }
     //Data is not quite ready, need to read status a few more times
-    for(i=0; i<10; i++)
+    for(i=0; i<50; i++)
         status = read_status();
 
     //data is ready

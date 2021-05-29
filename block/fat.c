@@ -72,7 +72,10 @@ static unsigned int read_fat_ptr(unsigned int cluster_num,unsigned int first_fat
 
     read_sec(fat_sector,FAT_table);
     
-    unsigned int table_value =  FAT_table[ent_offset+3] <<24 | FAT_table[ent_offset+2] <<16 | FAT_table[ent_offset+1] <<8 |FAT_table[ent_offset] & 0x0FFFFFFF;
+    unsigned int table_value =  FAT_table[ent_offset+3] << 24 | \
+			    FAT_table[ent_offset+2] << 16 | \
+				FAT_table[ent_offset+1] << 8  | \
+				FAT_table[ent_offset] & 0x0FFFFFFF;
     //kprint_hex("fat value ",table_value);
     //kprint_hex("fat offset ",fat_sector*512 + ent_offset);
     return table_value;
