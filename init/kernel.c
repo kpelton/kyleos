@@ -69,9 +69,7 @@ void kinit(void)
     //need to setup kernel stack after paging is setup
     asm("mov $0xffffffff84000000,%rsp");
     kprintf("Switch to kernel tables/stack done.\n");
-    ksleep(2);
-    kprintf("Starting tear gas\n");
-    ksleep(5);
+    ksleep(1);
     ata_init();
     kernel();
 }

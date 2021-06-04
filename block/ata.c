@@ -125,7 +125,7 @@ void ata_init(void)
         kprintf("\n");
 
 
-        fat_init();
+        fat_init(fs1);
     }
     else {
         kprintf("PANIC:ATA init failed.. could not find MBR");

@@ -5,46 +5,46 @@
 
 static void read_directory(unsigned int sec);
 static void read_file(unsigned int cluster,unsigned int first_fat_sector,unsigned int first_data_sector);
-static inline unsigned int clust2sec(unsigned int cluster,struct fat_BS * fat_boot, unsigned int first_data_sector);
-extern struct mbr_info fs1;
+static inline unsigned int clust2sec(unsigned int cluster,struct fatFS * fs);
+#define FAT_UNUSED_DIR 0xe5
+#define FAT_END_OF_CHAIN 0x0FFFFFF8
+#define FAT_LONG_FILENAME 0xf
 
-void fat_init() {
+struct fatFS * fat_init(struct mbr_info mbr_entry) {
     char bs_buf[512];
-    unsigned int fat_size;
-    unsigned int first_data_sector;
-    unsigned int first_fat_sector;
-    struct fat_BS *fat_boot;
-    struct fat_extBS_32 *fat_boot_ext_32;
+    struct  fatFS* fs;
+
+    fs = kmalloc(sizeof(struct fatFS));
     kprintf("FAT driver init\n");
+    //Read sector and fill out fs info data struct
+    read_sec(mbr_entry.fs_start,bs_buf);
+    fs->fat_boot = *(struct fat_BS *)bs_buf;
+    fs->fat_boot_ext_32 = *(struct fat_extBS_32 *)fs->fat_boot.extended_section;
+    fs->fat_size = fs->fat_boot_ext_32.table_size_32;
+    fs->first_data_sector = mbr_entry.fs_start + fs->fat_boot.reserved_sector_count
+                            + (fs->fat_boot.table_count * fs->fat_size);
+    fs->first_fat_sector = mbr_entry.fs_start + fs->fat_boot.reserved_sector_count;
+    fs->mbr_info = mbr_entry;
 
-    read_sec(fs1.fs_start,bs_buf);
-    fat_boot = (struct fat_BS *)bs_buf;
-    fat_boot_ext_32 = (struct fat_extBS_32 *)fat_boot->extended_section;
-    fat_size = fat_boot_ext_32->table_size_32;
-    first_data_sector = fs1.fs_start + fat_boot->reserved_sector_count + (fat_boot->table_count * fat_size); 
-    first_fat_sector = fat_boot->reserved_sector_count;
-   
     kprintf("==== Fat debug ====\n\n");
-
-    kprint_hex("fs1.fs_start 0x",fs1.fs_start);
-    kprint_hex("first_fat_sector 0x",first_fat_sector);
-    kprint_hex("reserved sectors 0x",fat_boot->reserved_sector_count);
-    kprint_hex("sectors per cluster",fat_boot->sectors_per_cluster);
-    kprint_hex("fs_start + reserved sectors byte offset",(fs1.fs_start +fat_boot->reserved_sector_count+(fat_size*fat_boot->table_count))*512);
-    kprint_hex("fs_start + reserved sectors sector offset",(fs1.fs_start +fat_boot->reserved_sector_count+(fat_size*fat_boot->table_count)));
-    kprint_hex("cluster start",(fs1.fs_start +(fat_size*fat_boot->table_count)));
-    kprint_hex("first_data_sector 0x",first_data_sector);
-    kprint_hex("table count 0x",fat_boot->table_count);
-    kprint_hex("fat_size 0x",fat_size);
+    kprint_hex("mbr_entry.fs_start 0x",mbr_entry.fs_start);
+    kprint_hex("first_fat_sector 0x",fs->first_fat_sector);
+    kprint_hex("reserved sectors 0x",fs->fat_boot.reserved_sector_count);
+    kprint_hex("sectors per cluster",fs->fat_boot.sectors_per_cluster);
+    kprint_hex("table count 0x",fs->fat_boot.table_count);
+    kprint_hex("fat_size 0x",fs->fat_size);
   
-    read_directory(first_data_sector);
-    read_directory(clust2sec(0xbe1,fat_boot,first_data_sector));
-    read_directory(clust2sec(0x803,fat_boot,first_data_sector));
-    read_file(0x804,fs1.fs_start + first_fat_sector,first_data_sector);
+    read_directory(fs->first_data_sector);
+    //read_file(0x804,fs->first_fat_sector,fs->first_data_sector);
+    read_directory(clust2sec(0xbe1,fs));
+    return fs;
 }
 
-static inline unsigned int clust2sec(unsigned int cluster,struct fat_BS * fat_boot, unsigned int first_data_sector) {
-    return (cluster - 2) * fat_boot->sectors_per_cluster + first_data_sector;
+static inline unsigned int clust2sec(unsigned int cluster,struct fatFS * fs) {
+    if (cluster == 0 ) {
+        return fs->first_data_sector;
+    }
+    return (cluster - 2) * fs->fat_boot.sectors_per_cluster + fs->first_data_sector;
 }
 
 static void read_cluster(unsigned int cluster_start, unsigned char *dest) {
@@ -77,7 +77,7 @@ static void read_file(unsigned int cluster,unsigned int first_fat_sector,unsigne
     cluster_dest[4096] = '\0';
 
     kprintf("in read file\n");
-    while (clust < 0x0FFFFFF8) {
+    while (clust < FAT_END_OF_CHAIN) {
         read_cluster(((clust-2)*8+first_data_sector),cluster_dest);
         clust = read_fat_ptr(clust,first_fat_sector);
         kprintf((char *) cluster_dest);
@@ -96,7 +96,7 @@ static void read_directory(unsigned int sec) {
 
     kprint_hex("dir_ptr ",*dir_ptr);
     while (*dir_ptr != 0) { 
-                if (*dir_ptr != 0xe5 && !(*dir_ptr == 0x41 && dir_ptr[11] == 0xf))  {
+                if (*dir_ptr != FAT_UNUSED_DIR && !(*dir_ptr == 0x41 && dir_ptr[11] == FAT_LONG_FILENAME))  {
                     file = (std_fat_8_3_fmt *) dir_ptr;
                     if (file->attribute != 0xf) {
                         kprintf((char *) file->fname);

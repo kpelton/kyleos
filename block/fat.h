@@ -1,5 +1,7 @@
 #ifndef FAT_H
 #define FAT_H
+#include <block/ata.h>
+
 typedef struct fat_extBS_32
 {
 	//extended fat32 stuff
@@ -70,7 +72,15 @@ typedef struct std_fat_8_3_fmt
  
 }__attribute__((packed)) std_fat_8_3_fmt;
 
+struct fatFS
+{
+    struct fat_extBS_32 fat_boot_ext_32;
+    struct fat_BS fat_boot;
+    struct mbr_info mbr_info;
+    unsigned int fat_size;
+    unsigned int first_data_sector;
+    unsigned int first_fat_sector;
+};
 
-
-void fat_init();
+struct fatFS* fat_init(struct mbr_info mbr_entry);
 #endif
