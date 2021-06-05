@@ -82,5 +82,5 @@ struct fatFS
     unsigned int first_fat_sector;
 };
 
-struct fatFS* fat_init(struct mbr_info mbr_entry);
+int fat_init(struct mbr_info mbr_entry);
 #endif

@@ -6,6 +6,7 @@
 #include <mm/paging.h>
 #include <mm/mm.h>
 #include <timer/pit.h>
+#include <block/vfs.h>
 
 #define HALT() asm("hlt: jmp hlt")
 #define HANG() asm("cli; hlt")
@@ -49,6 +50,9 @@ void ksleep(unsigned int sec) {
 void kernel(void)
 {
     kprintf("Ted Wheeler OS has booted\n");
+    kprintf("VFS TEST\n");
+    read_dir("0:/X/bible/txt.");
+    read_dir("1:/test");
     HALT();
 }
 void kinit(void)

@@ -11,6 +11,39 @@ void output_init() {
     vga_clear();
     serial_init();
 }
+
+int kpow(int base,int exp) {
+    int i;
+    int val = 1;
+    for (i=0; i<exp; i++)
+        val*= base;
+    return val;
+}
+//only handles >=0
+int atoi(char* str) {
+    char * ptr = str;
+    int size = 1;
+    int i;
+    int place=0;
+    int val = 0;
+    int cval = 0;
+    while (*(ptr+1) != '\0') {
+        ptr++;
+        size++;
+    }
+
+    place=0;
+    for(i=size; i>0; i--) {
+
+        cval = ((*ptr) -0x30);
+        cval *= kpow(10,place);
+        val += cval;
+        ptr--;
+        place+=1;
+    }
+    return val;
+}
+
 //refactor itoa
 char * itoa_8( unsigned char value, char * str, int base )
 {

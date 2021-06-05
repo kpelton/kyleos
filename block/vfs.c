@@ -20,7 +20,7 @@ int vfs_register_device(struct vfs_device newdev) {
     return 0;
 }
 void read_dir(char *path) {
-    
+
     char *ptr = path;
     char dev[4];
     int i = 0;

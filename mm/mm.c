@@ -9,7 +9,7 @@ void * kmalloc(unsigned int size) {
     kernel_heap+=size;
     used_bytes += size;
 
-    kprint_hex("MM used_bytes",used_bytes);
+    kprint_hex("MM used_bytes ",used_bytes);
     return ret;
 
 }

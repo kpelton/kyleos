@@ -1,20 +1,26 @@
 #include <block/fat.h>
 #include <block/ata.h>
+#include <block/vfs.h>
 #include <output/output.h>
 #include <mm/mm.h>
 
 static void read_directory(unsigned int sec);
 static void read_file(unsigned int cluster,unsigned int first_fat_sector,unsigned int first_data_sector);
 static inline unsigned int clust2sec(unsigned int cluster,struct fatFS * fs);
+int read_path(char * path,union fsinfo);
+
 #define FAT_UNUSED_DIR 0xe5
 #define FAT_END_OF_CHAIN 0x0FFFFFF8
 #define FAT_LONG_FILENAME 0xf
-
-struct fatFS * fat_init(struct mbr_info mbr_entry) {
+//#define DEBUG
+int fat_init(struct mbr_info mbr_entry) {
     char bs_buf[512];
     struct  fatFS* fs;
+    struct  vfs_device vfs_dev;
+    struct  vfs_ops* vfs_ops;
 
     fs = kmalloc(sizeof(struct fatFS));
+    vfs_ops = kmalloc(sizeof(struct vfs_ops));
     kprintf("FAT driver init\n");
     //Read sector and fill out fs info data struct
     read_sec(mbr_entry.fs_start,bs_buf);
@@ -26,6 +32,7 @@ struct fatFS * fat_init(struct mbr_info mbr_entry) {
     fs->first_fat_sector = mbr_entry.fs_start + fs->fat_boot.reserved_sector_count;
     fs->mbr_info = mbr_entry;
 
+#ifdef DEBUG
     kprintf("==== Fat debug ====\n\n");
     kprint_hex("mbr_entry.fs_start 0x",mbr_entry.fs_start);
     kprint_hex("first_fat_sector 0x",fs->first_fat_sector);
@@ -33,11 +40,25 @@ struct fatFS * fat_init(struct mbr_info mbr_entry) {
     kprint_hex("sectors per cluster",fs->fat_boot.sectors_per_cluster);
     kprint_hex("table count 0x",fs->fat_boot.table_count);
     kprint_hex("fat_size 0x",fs->fat_size);
-  
-    read_directory(fs->first_data_sector);
+#endif
+    //setup vfs device struct to be registered
+    vfs_dev.fstype = FAT_FS;
+    vfs_ops->read_path = &read_path;
+    vfs_dev.ops = vfs_ops;
+    vfs_dev.finfo.fat = fs;
+
+    vfs_register_device(vfs_dev);
+    //read_directory(fs->first_data_sector);
     //read_file(0x804,fs->first_fat_sector,fs->first_data_sector);
-    read_directory(clust2sec(0xbe1,fs));
-    return fs;
+    //read_directory(clust2sec(0xbe1,fs));
+
+    return 0;
+}
+int read_path(char * path, union fsinfo finfo) {
+    kprintf(path);
+    kprintf("\n");
+    read_directory(finfo.fat->first_data_sector);
+    return 0;
 }
 
 static inline unsigned int clust2sec(unsigned int cluster,struct fatFS * fs) {
@@ -96,14 +117,16 @@ static void read_directory(unsigned int sec) {
 
     kprint_hex("dir_ptr ",*dir_ptr);
     while (*dir_ptr != 0) { 
-                if (*dir_ptr != FAT_UNUSED_DIR && !(*dir_ptr == 0x41 && dir_ptr[11] == FAT_LONG_FILENAME))  {
-                    file = (std_fat_8_3_fmt *) dir_ptr;
-                    if (file->attribute != 0xf) {
-                        kprintf((char *) file->fname);
-                        cnumber = file->high_cluster<<16|file->low_cluster;
-                        kprint_hex("Cluster ",cnumber);
-                        //kprint_hex("Attribute ",file->attribute);
-                    }
+        if (*dir_ptr != FAT_UNUSED_DIR &&
+                        !(*dir_ptr == 0x41
+                           && dir_ptr[11] == FAT_LONG_FILENAME))  {
+             file = (std_fat_8_3_fmt *) dir_ptr;
+             if (file->attribute != 0xf) {
+                kprintf((char *) file->fname);
+                cnumber = file->high_cluster<<16|file->low_cluster;
+                kprint_hex("Cluster ",cnumber);
+                //kprint_hex("Attribute ",file->attribute);
+                }
              }
         dir_ptr+=32;
     }
