@@ -1,4 +1,4 @@
-all: kernel.o loader.o tables.o
+all: kernel.o loader.o tables.o dshell.o
 
 tables.o:  tables.c tables.h
 	$(CC) $(CFLAGS) -o $@ -c tables.c
@@ -9,6 +9,9 @@ kernel.o:  kernel.c
 loader.o: loader.s
 	$(AS) $(ASFLAGS) -o $@ $<
 
+dshell.o: dshell.c
+	$(CC) $(CFLAGS) -o $@ -c dshell.c
+	
 clean:
 	rm -rfv *.o
 	

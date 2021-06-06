@@ -7,8 +7,9 @@
 #include <mm/mm.h>
 #include <timer/pit.h>
 #include <block/vfs.h>
+#include <init/dshell.h>
 
-#define HALT() asm("hlt: jmp hlt")
+#define HALT() asm("cli; hlt")
 #define HANG() asm("cli; hlt")
 
 void print_vendor()
@@ -17,7 +18,7 @@ void print_vendor()
     int * string = kmalloc(sizeof(int)*20);
     string[12]='\0';
     asm volatile( "cpuid;"
-            :"=b"(b), "=c"(c),"=d"(d));  
+            :"=b"(b), "=c"(c),"=d"(d));
 
     string[0] = b;
     string[1] = d;
@@ -27,7 +28,7 @@ void print_vendor()
     kprintf("\n\n");
 }
 
-int strlen(char *str) 
+int strlen(char *str)
 {
     char *str_p;
     str_p= str;
@@ -45,14 +46,21 @@ void kprompt(void)
 void ksleep(unsigned int sec) {
     unsigned int expires = read_jiffies()+(sec*100);
     while(read_jiffies() < expires);
-        
+
 }
+static void ksleepm(unsigned int msec) {
+    unsigned int expires = read_jiffies()+(msec);
+    while(read_jiffies() < expires);
+}
+
+
 void kernel(void)
 {
+    struct inode_list *ptr;
+    struct dnode *dptr;
+    struct inode *iptr;
     kprintf("Ted Wheeler OS has booted\n");
-    kprintf("VFS TEST\n");
-    read_dir("0:/X/bible/txt.");
-    read_dir("1:/test");
+    start_dshell();
     HALT();
 }
 void kinit(void)
@@ -65,21 +73,20 @@ void kinit(void)
     gdt_install();
     kprintf("Installing idt\n");
     idt_install();
-    kprintf("PIC init done..\n");
     PIC_init();
     pit_init();
+    kprintf("PIC init done..\n");
     setup_paging();
     mm_init();
     //need to setup kernel stack after paging is setup
     asm("mov $0xffffffff84000000,%rsp");
     kprintf("Switch to kernel tables/stack done.\n");
-    ksleep(1);
     ata_init();
     kernel();
 }
 void kmain(void)
 {
-    kinit();  
+    kinit();
 }
 
 

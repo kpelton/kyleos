@@ -43,7 +43,29 @@ int atoi(char* str) {
     }
     return val;
 }
+char * kstrcpy(char *dest, const char *src) {
+    int i;
+    for (i=0; src[i] != '\0'; i++) 
+        dest[i] = src[i];
+    dest[i+1] = '\0';
+    return dest;
+}
 
+char * kstrncpy(char *dest, const char *src,int bytes) {
+    int i;
+    for (i=0; i <bytes; i++) 
+        dest[i] = src[i];
+    return dest;
+}
+
+int kstrcmp(char *dest, const char *src) {
+    int i;
+    for (i=0; (src[i] != '\0' || dest[i] !='\0' ) ; i++) 
+        if (src[i] != dest[i]) {
+            return -1;
+        }
+    return 0;
+}
 //refactor itoa
 char * itoa_8( unsigned char value, char * str, int base )
 {
@@ -212,3 +234,6 @@ void kprint_hex(char *desc, unsigned long val) {
     kprintf("\n");
 }
 
+void read_input(char * dest) {
+     serial_read_input(dest);
+}

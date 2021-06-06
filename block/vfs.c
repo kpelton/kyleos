@@ -19,7 +19,21 @@ int vfs_register_device(struct vfs_device newdev) {
     current_device+=1;
     return 0;
 }
-void read_dir(char *path) {
+
+struct dnode* vfs_read_inode_dir(struct inode * i_node) {
+   
+    int idev;
+    idev = i_node->dev->devicenum;
+    return vfs_devices[idev].ops->read_inode_dir(i_node);
+}
+
+void vfs_read_inode_file(struct inode * i_node) {
+   
+    int idev;
+    idev = i_node->dev->devicenum;
+    vfs_devices[idev].ops->read_inode_file(i_node);
+}
+struct dnode* vfs_read_root_dir(char *path) {
 
     char *ptr = path;
     char dev[4];
@@ -43,8 +57,8 @@ void read_dir(char *path) {
         goto error;
     }
     vdevice = &vfs_devices[idev];
-    vdevice->ops->read_path(ptr,vdevice->finfo);
+    return vdevice->ops->read_root_dir(ptr,vdevice);
     error:
 
-    return;
+    return 0;
 }
