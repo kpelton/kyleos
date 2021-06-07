@@ -33,5 +33,8 @@ kernel.img: kernel.bin
 test: kernel32.bin
 	qemu-system-x86_64 -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -serial stdio 2>log
 
+test-c: kernel32.bin
+	qemu-system-x86_64 -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -display none -serial stdio 2>log
+
 debug: kernel32.bin
 	qemu-system-x86_64 -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -s -S 

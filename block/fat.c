@@ -142,7 +142,29 @@ static void read_file(unsigned int cluster, unsigned int first_fat_sector, unsig
         kprintf((char *)cluster_dest);
     }
 }
+static int handle_lfilename(char longfname [], unsigned char *dir_ptr) 
+{
+    int j=0;
+    int i=0;
 
+    if  (dir_ptr[11] == 0xf) {
+                j = (13* ((dir_ptr[0] &0xf)-1));
+                for (i=1; i<11; i+=2) {
+                    longfname[j] = dir_ptr[i];
+                    j+=1;
+                }
+                for (i=14; i<26; i+=2) {
+                    longfname[j] = dir_ptr[i];
+                    j+=1;
+                }
+                for (i=28; i<32; i+=2) {
+                    longfname[j] = dir_ptr[i];
+                    j+=1;
+                }
+            return 1;
+        } 
+    return 0;
+}
 static void read_directory(unsigned int sec, struct dnode *dir, struct vfs_device *dev)
 {
     unsigned char cluster[4096];
@@ -152,13 +174,29 @@ static void read_directory(unsigned int sec, struct dnode *dir, struct vfs_devic
     struct inode_list *ilist;
     struct inode_list *prev_ilist;
     struct inode *cur_inode;
+    int i;
+    int j;
+    int k=0;
     dir->head = NULL;
+    char longfname[128];
     read_cluster(sec, cluster);
-    //kprintf("===Directory contents===\n");
-    //kprint_hex("dir_ptr ",*dir_ptr);
-    while (*dir_ptr != 0) {
-        if (*dir_ptr != FAT_UNUSED_DIR &&
-            !(*dir_ptr == 0x41 && dir_ptr[11] == FAT_LONG_FILENAME)) {
+    int using_lfname = 0;
+    j=0;
+    unsigned int clust = dir->root_inode->i_ino;
+
+    do {
+
+
+
+    while (*dir_ptr != 0 && k <0x80) {
+        //kprint_hex("k ",k);
+        //IF this is a long file name entry handle it
+        if  (dir_ptr[11] == 0xf) {
+            using_lfname = handle_lfilename(longfname,dir_ptr);
+        } 
+
+        else if (*dir_ptr != FAT_UNUSED_DIR &&
+            !(dir_ptr[11] == 0xf)) {
             file = (std_fat_8_3_fmt *)dir_ptr;
             if (file->attribute != 0xf) {
                 ilist = kmalloc(sizeof(struct inode_list));
@@ -172,7 +210,12 @@ static void read_directory(unsigned int sec, struct dnode *dir, struct vfs_devic
                 ilist->next = NULL;
                 cur_inode->dev = dev;
                 prev_ilist = ilist;
-                kstrcpy(cur_inode->i_name, (const char *)file->fname);
+    
+                if (using_lfname)
+                    kstrcpy(cur_inode->i_name, (const char *)longfname);
+                else
+                    kstrcpy(cur_inode->i_name, (const char *)file->fname);
+
                 cnumber = file->high_cluster << 16 | file->low_cluster;
                 cur_inode->i_ino = cnumber;
 
@@ -180,8 +223,18 @@ static void read_directory(unsigned int sec, struct dnode *dir, struct vfs_devic
                     cur_inode->i_type = I_DIR;
                 else if ((file->attribute & FAT_FILE) == FAT_FILE)
                     cur_inode->i_type = I_FILE;
+            using_lfname = 0;
             }
         }
         dir_ptr += 32;
+        k+=1;
     }
+        clust = read_fat_ptr(clust, dev->finfo.fat->first_fat_sector);
+        kprint_hex("Cluster ",clust);
+        k=0;
+        read_cluster(clust2sec(clust,dev->finfo.fat), cluster);
+        dir_ptr = cluster;
+     
+    }while (clust < FAT_END_OF_CHAIN);
+
 }
