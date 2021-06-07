@@ -40,9 +40,9 @@ struct dnode {
 
 struct vfs_ops {
     int (*read)(char* path,union fsinfo);
-    struct dnode* (*read_root_dir)(char* path,struct vfs_device * dev);
+    struct dnode* (*read_root_dir)(struct vfs_device * dev);
     struct dnode* (*read_inode_dir)(struct inode* i_node);
-    struct dnode* (*read_inode_file)(struct inode* i_node);
+    void (*read_inode_file)(struct inode* i_node);
 
 };
 

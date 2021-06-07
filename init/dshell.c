@@ -8,7 +8,7 @@
 #include <block/vfs.h>
 
 
-const char WHEELER_PROMPT[] = "Wheeler OS |0:/>";
+const char WHEELER_PROMPT[] = "Ted Wheeler OS |0:/>";
 
 static void ksleepm(unsigned int msec) {
     unsigned int expires = read_jiffies()+(msec);
@@ -18,7 +18,7 @@ static void ksleepm(unsigned int msec) {
 static void print_dir(struct inode* pwd) {
     struct inode_list *ptr;
     struct dnode *dptr;
-    struct inode *iptr;
+
     dptr = vfs_read_inode_dir(pwd);
     if (dptr == 0)
         goto error;
@@ -28,7 +28,6 @@ static void print_dir(struct inode* pwd) {
         if (ptr->current->i_type == I_DIR) {
             kprintf(" DIR");
         } else {
-            iptr = ptr->current;
             kprintf(" FILE");
     }
         kprint_hex(" inode=",ptr->current->i_ino);
@@ -40,7 +39,6 @@ static void print_dir(struct inode* pwd) {
 }
 struct inode *  shell_cd(char cmd[], struct dnode *dptr) {
     struct inode_list *ptr;
-    struct inode *iptr;
     int i;
     char buffer[512];
     char *cmdptr = cmd;
@@ -52,7 +50,7 @@ struct inode *  shell_cd(char cmd[], struct dnode *dptr) {
     nptr = cmdptr;
     //Take out newline
     while(*nptr != '\n')
-        *nptr++;
+        nptr++;
     *nptr = '\0';
 
 
@@ -82,7 +80,6 @@ struct inode *  shell_cd(char cmd[], struct dnode *dptr) {
 
 static void shell_cat(char cmd[], struct dnode *dptr) {
     struct inode_list *ptr;
-    struct inode *iptr;
     int i;
     char buffer[512];
     char *cmdptr = cmd;
@@ -114,19 +111,17 @@ static void shell_cat(char cmd[], struct dnode *dptr) {
         ptr= ptr->next;
     }
     kprintf("bad file\n");
-    return dptr->root_inode;
 }
 
 void start_dshell() {
 
     char buffer[512];
-    kprintf(WHEELER_PROMPT);
+    kprintf((char *) WHEELER_PROMPT);
     struct dnode *dptr;
     dptr = vfs_read_root_dir("0:/");
     struct inode *pwd = dptr->root_inode;
-
     while (1) { 
-        ksleepm(1);
+        ksleepm(10);
         for(int i =0; i<512; i++)
             buffer[i]= '\0';
         read_input(buffer);
@@ -159,7 +154,7 @@ void start_dshell() {
             kprintf("Unknown command:");
             kprintf(buffer);
         }
-        kprintf(WHEELER_PROMPT);
+        kprintf( (char *)WHEELER_PROMPT);
 
     }
 }

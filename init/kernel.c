@@ -38,34 +38,22 @@ int strlen(char *str)
     return len;
 }
 
-
-void kprompt(void)
+void ksleep(unsigned int sec)
 {
-    kprintf(">");
-}
-void ksleep(unsigned int sec) {
     unsigned int expires = read_jiffies()+(sec*100);
     while(read_jiffies() < expires);
 
 }
-static void ksleepm(unsigned int msec) {
-    unsigned int expires = read_jiffies()+(msec);
-    while(read_jiffies() < expires);
-}
-
 
 void kernel(void)
 {
-    struct inode_list *ptr;
-    struct dnode *dptr;
-    struct inode *iptr;
     kprintf("Ted Wheeler OS has booted\n");
     start_dshell();
     HALT();
 }
+
 void kinit(void)
 {
-
     output_init();
     kprintf("Booting.......\n");
     kprintf("Ted Wheeler OS.......\n");

@@ -33,6 +33,7 @@ void vfs_read_inode_file(struct inode * i_node) {
     idev = i_node->dev->devicenum;
     vfs_devices[idev].ops->read_inode_file(i_node);
 }
+
 struct dnode* vfs_read_root_dir(char *path) {
 
     char *ptr = path;
@@ -57,7 +58,7 @@ struct dnode* vfs_read_root_dir(char *path) {
         goto error;
     }
     vdevice = &vfs_devices[idev];
-    return vdevice->ops->read_root_dir(ptr,vdevice);
+    return vdevice->ops->read_root_dir(vdevice);
     error:
 
     return 0;

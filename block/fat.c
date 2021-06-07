@@ -10,7 +10,7 @@ static void read_file(unsigned int cluster, unsigned int first_fat_sector, unsig
 static inline unsigned int clust2sec(unsigned int cluster, struct fatFS *fs);
 void read_inode_file(struct inode *i_node);
 
-struct dnode *fat_read_root_dir(char *path, struct vfs_device *dev);
+struct dnode *fat_read_root_dir(struct vfs_device *dev);
 struct dnode *read_inode_dir(struct inode *i_node);
 #define FAT_UNUSED_DIR 0xe5
 #define FAT_END_OF_CHAIN 0x0FFFFFF8
@@ -66,7 +66,7 @@ static inline unsigned int clust2sec(unsigned int cluster, struct fatFS *fs)
     return (cluster - 2) * fs->fat_boot.sectors_per_cluster + fs->first_data_sector;
 }
 
-struct dnode *fat_read_root_dir(char *path, struct vfs_device *dev)
+struct dnode *fat_read_root_dir(struct vfs_device *dev)
 {
     struct dnode *dir;
     dir = kmalloc(sizeof(struct dnode));
@@ -99,8 +99,6 @@ struct dnode *read_inode_dir(struct inode *i_node)
 
 void read_inode_file(struct inode *i_node)
 {
-
-    unsigned int sec = clust2sec(i_node->i_ino, i_node->dev->finfo.fat);
     read_file(i_node->i_ino, i_node->dev->finfo.fat->first_fat_sector,
               i_node->dev->finfo.fat->first_data_sector);
 }
@@ -137,8 +135,6 @@ static void read_file(unsigned int cluster, unsigned int first_fat_sector, unsig
     unsigned char cluster_dest[4097];
     unsigned int clust = cluster;
     cluster_dest[4096] = '\0';
-
-    kprintf("in read file\n");
     while (clust < FAT_END_OF_CHAIN)
     {
         read_cluster(((clust - 2) * 8 + first_data_sector), cluster_dest);
@@ -160,43 +156,30 @@ static void read_directory(unsigned int sec, struct dnode *dir, struct vfs_devic
     read_cluster(sec, cluster);
     //kprintf("===Directory contents===\n");
     //kprint_hex("dir_ptr ",*dir_ptr);
-    while (*dir_ptr != 0)
-    {
+    while (*dir_ptr != 0) {
         if (*dir_ptr != FAT_UNUSED_DIR &&
-            !(*dir_ptr == 0x41 && dir_ptr[11] == FAT_LONG_FILENAME))
-        {
+            !(*dir_ptr == 0x41 && dir_ptr[11] == FAT_LONG_FILENAME)) {
             file = (std_fat_8_3_fmt *)dir_ptr;
-            if (file->attribute != 0xf)
-            {
+            if (file->attribute != 0xf) {
                 ilist = kmalloc(sizeof(struct inode_list));
                 if (dir->head == NULL)
-                {
                     dir->head = ilist;
-                }
                 else
-                {
                     prev_ilist->next = ilist;
-                }
+
                 cur_inode = kmalloc(sizeof(struct inode));
                 ilist->current = cur_inode;
                 ilist->next = NULL;
                 cur_inode->dev = dev;
                 prev_ilist = ilist;
-                //kprintf((char *) file->fname);
                 kstrcpy(cur_inode->i_name, (const char *)file->fname);
                 cnumber = file->high_cluster << 16 | file->low_cluster;
                 cur_inode->i_ino = cnumber;
 
-                //kprint_hex("Attribute ",file->attribute);
                 if ((file->attribute & FAT_DIR) == FAT_DIR)
-                {
                     cur_inode->i_type = I_DIR;
-                }
                 else if ((file->attribute & FAT_FILE) == FAT_FILE)
-                {
                     cur_inode->i_type = I_FILE;
-                }
-                //kprint_hex("Cluster ",cnumber);
             }
         }
         dir_ptr += 32;

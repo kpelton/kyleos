@@ -16,7 +16,7 @@ void * kmalloc(unsigned int size) {
 
 void mm_print_stats() {
     kprint_hex("MM used_bytes   0x",used_bytes);
-    kprint_hex("End of kernel   0x",&_kernel_end);
+    kprint_hex("End of kernel   0x", (unsigned long) &_kernel_end);
     kprint_hex("Start of kernel 0x",0xffffffff80000000);
 }
 
