@@ -72,16 +72,19 @@ int read_sec(unsigned int sec,void *buffer  ) {
 #endif
     }
     //Data is not quite ready, need to read status a few more times
-    for(i=0; i<50; i++)
+    for(i=0; i<100; i++)
         status = read_status();
 
     //data is ready
+    asm("cli");
     for (i=0; i<256; i++) {
+        //asm("cli");
         data[i] = inw(0x1f0);
         //itoa_16(data[i],cbuffer,16);
         //kprintf(cbuffer);
         //kprintf(" ");
     }
+    asm("sti");
     //kprintf("\n");
     return 0;
 }

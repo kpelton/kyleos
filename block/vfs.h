@@ -20,7 +20,7 @@ struct vfs_device {
 };
 
 struct inode {
-    char i_name[128];
+    char i_name[256];
     int i_type;
     struct vfs_device* dev;
     unsigned long i_ino;
@@ -32,7 +32,7 @@ struct inode_list {
 };
 
 struct dnode {
-    char i_name[128];
+    char i_name[256];
     struct inode* root_inode;
     //children files and folders
     struct inode_list* head;

@@ -125,7 +125,9 @@ unsigned int read_jiffies() {
     return jiffies;
 }
 void timer_irq() {
+    asm("cli");
    jiffies+=1;
    PIC_sendEOI(1);
+   asm("sti");
 //   kprintf("timer\n");
 }

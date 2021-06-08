@@ -12,11 +12,18 @@ void read_inode_file(struct inode *i_node);
 
 struct dnode *fat_read_root_dir(struct vfs_device *dev);
 struct dnode *read_inode_dir(struct inode *i_node);
+
 #define FAT_UNUSED_DIR 0xe5
 #define FAT_END_OF_CHAIN 0x0FFFFFF8
 #define FAT_LONG_FILENAME 0xf
+//how many bytes per long file name record
+#define FAT_LFNAME_RECORD_SIZE 13
 #define FAT_DIR 0x10
+#define FAT_ATTRIBUTE 11
 #define FAT_FILE 0x20
+#define FAT_DIR_RECORD_SIZE 32
+#define FAT_MAX_FNAME 256
+
 //#define DEBUG
 int fat_init(struct mbr_info mbr_entry)
 {
@@ -142,99 +149,109 @@ static void read_file(unsigned int cluster, unsigned int first_fat_sector, unsig
         kprintf((char *)cluster_dest);
     }
 }
-static int handle_lfilename(char longfname [], unsigned char *dir_ptr) 
+static void fat_read_lfilename(char longfname [], unsigned char *dir_ptr) 
 {
     int j=0;
     int i=0;
+    //Calculate where in char array this long file name goes
+    j = (FAT_LFNAME_RECORD_SIZE * ((dir_ptr[0] &0x3f)-1));
+    //kprint_hex("dir_ptr[0] ",dir_ptr[0]);
+    for (i=1; i<11; i+=2) {
+        longfname[j] = dir_ptr[i];
+        j+=1;
+    }
+    for (i=14; i<26; i+=2) {
+        longfname[j] = dir_ptr[i];
+        j+=1;
+    }
+    for (i=28; i<32; i+=2) {
+        longfname[j] = dir_ptr[i];
+        j+=1;
+    }
 
-    if  (dir_ptr[11] == 0xf) {
-                j = (13* ((dir_ptr[0] &0xf)-1));
-                for (i=1; i<11; i+=2) {
-                    longfname[j] = dir_ptr[i];
-                    j+=1;
-                }
-                for (i=14; i<26; i+=2) {
-                    longfname[j] = dir_ptr[i];
-                    j+=1;
-                }
-                for (i=28; i<32; i+=2) {
-                    longfname[j] = dir_ptr[i];
-                    j+=1;
-                }
-            return 1;
-        } 
-    return 0;
 }
+static struct inode_list* fat_read_std_fmt(struct inode_list* tail,struct dnode *dir, 
+                                           struct vfs_device *dev, unsigned char *dir_ptr, 
+                                           int using_lfname, char *longfname)
+{
+    std_fat_8_3_fmt *file;
+    struct inode_list *ilist;
+    struct inode_list *prev_ilist = tail;
+    struct inode *cur_inode;
+
+    file = (std_fat_8_3_fmt *)dir_ptr;
+    ilist = kmalloc(sizeof(struct inode_list));
+    
+    if (dir->head == NULL)
+        dir->head = ilist;
+    else
+        prev_ilist->next = ilist;
+
+    cur_inode = kmalloc(sizeof(struct inode));
+    ilist->current = cur_inode;
+    ilist->next = NULL;
+    cur_inode->dev = dev;
+    prev_ilist = ilist;
+    
+    if (using_lfname){
+        kstrcpy(cur_inode->i_name, (const char *)longfname);
+    } else {
+        char *ptr = file->fname;
+        int i=0;
+        //max 8 chars
+        while (*ptr != ' ' && i <8){
+            ptr++;
+            i++;
+        }
+        *ptr = '\0';
+        kstrcpy(cur_inode->i_name, (const char *)file->fname);
+    }
+    cur_inode->i_ino = file->high_cluster << 16 | file->low_cluster;
+
+    if ((file->attribute & FAT_DIR) == FAT_DIR)
+        cur_inode->i_type = I_DIR;
+    else if ((file->attribute & FAT_FILE) == FAT_FILE)
+        cur_inode->i_type = I_FILE;
+    return prev_ilist;
+
+}
+
 static void read_directory(unsigned int sec, struct dnode *dir, struct vfs_device *dev)
 {
     unsigned char cluster[4096];
-    std_fat_8_3_fmt *file;
     unsigned char *dir_ptr = cluster;
-    unsigned int cnumber;
-    struct inode_list *ilist;
-    struct inode_list *prev_ilist;
-    struct inode *cur_inode;
-    int i;
-    int j;
     int k=0;
-    dir->head = NULL;
-    char longfname[128];
-    read_cluster(sec, cluster);
     int using_lfname = 0;
-    j=0;
     unsigned int clust = dir->root_inode->i_ino;
 
+    char longfname[FAT_MAX_FNAME];
+    struct inode_list *tail = NULL;
+    dir->head = NULL;
+    int lbytes_written = 0;
+    read_cluster(sec, cluster);
     do {
-
-
-
-    while (*dir_ptr != 0 && k <0x80) {
-        //kprint_hex("k ",k);
-        //IF this is a long file name entry handle it
-        if  (dir_ptr[11] == 0xf) {
-            using_lfname = handle_lfilename(longfname,dir_ptr);
-        } 
-
-        else if (*dir_ptr != FAT_UNUSED_DIR &&
-            !(dir_ptr[11] == 0xf)) {
-            file = (std_fat_8_3_fmt *)dir_ptr;
-            if (file->attribute != 0xf) {
-                ilist = kmalloc(sizeof(struct inode_list));
-                if (dir->head == NULL)
-                    dir->head = ilist;
-                else
-                    prev_ilist->next = ilist;
-
-                cur_inode = kmalloc(sizeof(struct inode));
-                ilist->current = cur_inode;
-                ilist->next = NULL;
-                cur_inode->dev = dev;
-                prev_ilist = ilist;
-    
-                if (using_lfname)
-                    kstrcpy(cur_inode->i_name, (const char *)longfname);
-                else
-                    kstrcpy(cur_inode->i_name, (const char *)file->fname);
-
-                cnumber = file->high_cluster << 16 | file->low_cluster;
-                cur_inode->i_ino = cnumber;
-
-                if ((file->attribute & FAT_DIR) == FAT_DIR)
-                    cur_inode->i_type = I_DIR;
-                else if ((file->attribute & FAT_FILE) == FAT_FILE)
-                    cur_inode->i_type = I_FILE;
-            using_lfname = 0;
+        while (*dir_ptr != 0 && k <0x80) {
+            //IF this is a long file name entry handle it
+            if  (dir_ptr[FAT_ATTRIBUTE] == FAT_LONG_FILENAME )  {
+                using_lfname = 1;
+                fat_read_lfilename(longfname,dir_ptr);
+                //keep track of how many bytes have been written to arary 
+                lbytes_written += FAT_LFNAME_RECORD_SIZE;
+                
+            } 
+            else if (*dir_ptr != FAT_UNUSED_DIR) {
+                longfname[lbytes_written] = '\0';
+                tail = fat_read_std_fmt(tail,dir,dev,dir_ptr,using_lfname,longfname);   
+                using_lfname = 0;
+                lbytes_written = 0;
             }
+            dir_ptr += FAT_DIR_RECORD_SIZE;
+            k+=1;
         }
-        dir_ptr += 32;
-        k+=1;
-    }
+
         clust = read_fat_ptr(clust, dev->finfo.fat->first_fat_sector);
-        kprint_hex("Cluster ",clust);
         k=0;
         read_cluster(clust2sec(clust,dev->finfo.fat), cluster);
         dir_ptr = cluster;
-     
     }while (clust < FAT_END_OF_CHAIN);
-
 }
