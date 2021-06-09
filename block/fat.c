@@ -208,6 +208,8 @@ static struct inode_list* fat_read_std_fmt(struct inode_list* tail,struct dnode 
         }
         *ptr = '\0';
         kstrncpy(cur_inode->i_name, (const char *)file->fname,8);
+        //copy over empty string past the 8 chars
+        kstrncpy(cur_inode->i_name+8,"",8);
     }
     cur_inode->i_ino = file->high_cluster << 16 | file->low_cluster;
 
