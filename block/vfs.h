@@ -3,6 +3,7 @@
 #include <block/fat.h>
 #define VFS_MAX_DEVICES 10
 #define FAT_FS 0
+#define VFS_MAX_FNAME 256
 enum inode_type {
     I_DIR,
     I_FILE,
@@ -20,7 +21,7 @@ struct vfs_device {
 };
 
 struct inode {
-    char i_name[256];
+    char i_name[VFS_MAX_FNAME];
     int i_type;
     struct vfs_device* dev;
     unsigned long i_ino;
@@ -32,7 +33,7 @@ struct inode_list {
 };
 
 struct dnode {
-    char i_name[256];
+    char i_name[VFS_MAX_FNAME];
     struct inode* root_inode;
     //children files and folders
     struct inode_list* head;
@@ -51,4 +52,7 @@ struct dnode* vfs_read_root_dir(char * path);
 struct dnode* vfs_read_inode_dir(struct inode * i_node);
 void vfs_read_inode_file(struct inode * i_node);
 int vfs_register_device(struct vfs_device newdev);
+void vfs_free_inode(struct inode * i_node); 
+void vfs_free_inode_list(struct inode_list * list); 
+void vfs_free_dnode(struct dnode * dn);
 #endif

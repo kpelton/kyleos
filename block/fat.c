@@ -76,12 +76,14 @@ static inline unsigned int clust2sec(unsigned int cluster, struct fatFS *fs)
 struct dnode *fat_read_root_dir(struct vfs_device *dev)
 {
     struct dnode *dir;
+    kprintf("read_root_dir\n");
+
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     dir->root_inode->i_ino= 0;
     dir->root_inode->dev = dev;
     dir->root_inode->i_type = I_DIR;
-    kstrcpy(dir->root_inode->i_name, "/");
+    kstrncpy(dir->root_inode->i_name, "/",2);
     
     read_directory(dev->finfo.fat->first_data_sector, dir, dev);
     return dir;
@@ -90,15 +92,15 @@ struct dnode *fat_read_root_dir(struct vfs_device *dev)
 struct dnode *read_inode_dir(struct inode *i_node)
 {
     struct dnode *dir;
-
+    kprintf("inode_dir_alloc\n");
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     dir->root_inode->i_ino =  i_node->i_ino;
     dir->root_inode->dev = i_node->dev;
     dir->root_inode->i_type = I_DIR;
-    kstrcpy(dir->root_inode->i_name, i_node->i_name);
+    kstrncpy(dir->root_inode->i_name, i_node->i_name,256);
 
-    kstrcpy(dir->i_name, i_node->i_name);
+    kstrncpy(dir->i_name, i_node->i_name,256);
     unsigned int sec = clust2sec(i_node->i_ino, i_node->dev->finfo.fat);
     read_directory(sec, dir, i_node->dev);
     return dir;
@@ -181,20 +183,21 @@ static struct inode_list* fat_read_std_fmt(struct inode_list* tail,struct dnode 
 
     file = (std_fat_8_3_fmt *)dir_ptr;
     ilist = kmalloc(sizeof(struct inode_list));
-    
+
     if (dir->head == NULL)
         dir->head = ilist;
     else
         prev_ilist->next = ilist;
 
     cur_inode = kmalloc(sizeof(struct inode));
+
     ilist->current = cur_inode;
     ilist->next = NULL;
     cur_inode->dev = dev;
     prev_ilist = ilist;
     
     if (using_lfname){
-        kstrcpy(cur_inode->i_name, (const char *)longfname);
+        kstrncpy(cur_inode->i_name, (const char *)longfname,0xff);
     } else {
         char *ptr = file->fname;
         int i=0;
@@ -204,7 +207,7 @@ static struct inode_list* fat_read_std_fmt(struct inode_list* tail,struct dnode 
             i++;
         }
         *ptr = '\0';
-        kstrcpy(cur_inode->i_name, (const char *)file->fname);
+        kstrncpy(cur_inode->i_name, (const char *)file->fname,8);
     }
     cur_inode->i_ino = file->high_cluster << 16 | file->low_cluster;
 
@@ -248,8 +251,8 @@ static void read_directory(unsigned int sec, struct dnode *dir, struct vfs_devic
             dir_ptr += FAT_DIR_RECORD_SIZE;
             k+=1;
         }
-
         clust = read_fat_ptr(clust, dev->finfo.fat->first_fat_sector);
+
         k=0;
         read_cluster(clust2sec(clust,dev->finfo.fat), cluster);
         dir_ptr = cluster;

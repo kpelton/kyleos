@@ -10,7 +10,7 @@
 
 const char WHEELER_PROMPT[] = "Ted Wheeler OS |0:";
 
-char * dir_stack[100];
+char * dir_stack[100][256];
 int top_dir_stack = -1;
 
 static void ksleepm(unsigned int msec) {
@@ -28,7 +28,7 @@ static void push_dir_stack(char *dir)
     }else {
         top_dir_stack++;
     }
-    dir_stack[top_dir_stack] = dir;
+    kstrcpy(dir_stack[top_dir_stack],dir);
 }
 
 static char * pop_dir_stack() 
@@ -61,6 +61,7 @@ static void print_dir(struct inode* pwd) {
         kprint_hex(" inode=",ptr->current->i_ino);
         ptr= ptr->next;
     }
+    vfs_free_dnode(dptr);
     error:
     return;
 
@@ -156,7 +157,8 @@ void start_dshell() {
 
     char buffer[512];
     struct dnode *dptr;
-    dptr = vfs_read_root_dir("0:/");
+    dptr = vfs_read_root_dir("0:/"); 
+    struct dnode *olddptr=dptr;
     struct inode *pwd = dptr->root_inode;
     struct inode *oldpwd;
     push_dir_stack("/");
@@ -170,6 +172,7 @@ void start_dshell() {
         if (buffer[0] == '\0')
             continue;
         if (kstrcmp(buffer,"ls\n") == 0) {
+
             print_dir(pwd);
         }
         else if (buffer[0] == 'c' && buffer[1] == 'd' 
@@ -178,9 +181,12 @@ void start_dshell() {
             oldpwd = pwd;
             pwd = shell_cd(buffer,dptr);
             //If failure
-            if (pwd == 0)
+            if (pwd == 0) {
                 pwd = oldpwd;
-
+            } else {
+                vfs_free_dnode(olddptr);
+                olddptr = dptr;
+            }
             if (buffer[3] == '.' && buffer[4] == '.' && kstrcmp(dptr->i_name,"/") !=0 && oldpwd != pwd)
                 pop_dir_stack();
             else if(oldpwd != pwd)
@@ -189,7 +195,6 @@ void start_dshell() {
         else if (buffer[0] == 'c' && buffer[1] == 'a' 
                 && buffer[2] == 't' && buffer[3] == ' '
                 && buffer[4] != '\0') {
-            dptr = vfs_read_inode_dir(pwd); 
             shell_cat(buffer,dptr);
         }
         else if (kstrcmp(buffer,"mem\n") == 0) {

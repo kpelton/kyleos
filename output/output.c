@@ -53,8 +53,12 @@ char * kstrcpy(char *dest, const char *src) {
 
 char * kstrncpy(char *dest, const char *src,int bytes) {
     int i;
-    for (i=0; i <bytes; i++) 
+    for (i=0; i <bytes; i++) {
         dest[i] = src[i];
+        if (src[i] == '\0') {
+            break;
+        }
+    }
     return dest;
 }
 
