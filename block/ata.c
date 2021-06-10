@@ -49,7 +49,6 @@ int read_sec(unsigned int sec,void *buffer  ) {
     short *data =0;
     unsigned char status;
     int i;
-
     data = buffer;
 #ifdef ATA_DEBUG
     print_drive_status();
@@ -76,7 +75,6 @@ int read_sec(unsigned int sec,void *buffer  ) {
         status = read_status();
 
     //data is ready
-    asm("cli");
     for (i=0; i<256; i++) {
         //asm("cli");
         data[i] = inw(0x1f0);
@@ -84,7 +82,6 @@ int read_sec(unsigned int sec,void *buffer  ) {
         //kprintf(cbuffer);
         //kprintf(" ");
     }
-    asm("sti");
     //kprintf("\n");
     return 0;
 }

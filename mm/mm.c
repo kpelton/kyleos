@@ -7,7 +7,7 @@ char * kernel_heap;
 #define MIN_SIZE 64
 
 
-static struct mm_block {
+ struct mm_block {
 
     unsigned long * addr;
     unsigned long size;
@@ -18,7 +18,7 @@ static struct mm_block {
 
 static struct  mm_block * head = 0;
 static struct  mm_block * tail = 0;
-unsigned long * kmalloc(unsigned int p_size) 
+void * kmalloc(unsigned int p_size) 
 {
     //kprint_hex("MM Allocating ",size)
     unsigned long * ret;
@@ -31,10 +31,10 @@ unsigned long * kmalloc(unsigned int p_size)
     while(lptr != 0) {
         if (size <= lptr->size && lptr->free == 1 ) {
             lptr->free = 0;
-            if (lptr->addr < 0xffffffff80000000) {
-                kprint_hex("old alloc ",lptr->addr);
-                kprint_hex("old alloc ",&lptr->addr);
-                kprint_hex("mem corrution detected ",&lptr->addr);
+            if ((unsigned long)lptr->addr  < 0xffffffff80000000) {
+                kprint_hex("old alloc ",(unsigned long) &lptr->addr);
+                kprint_hex("old alloc ",(unsigned long) &lptr->addr);
+                kprint_hex("mem corrution detected ",(unsigned long) &lptr->addr);
 
                 continue;
             }
@@ -42,7 +42,6 @@ unsigned long * kmalloc(unsigned int p_size)
         }
         lptr = lptr->next;
     } 
-
 
     struct  mm_block *ptr = (void *) kernel_heap;
     kernel_heap+=sizeof(struct mm_block);
@@ -66,11 +65,10 @@ unsigned long * kmalloc(unsigned int p_size)
 
 }
 
-void kfree(unsigned long *ptr) 
+void kfree(void *ptr) 
 {
     struct  mm_block *lptr = head;
     //kprint_hex("Freeing 0x",ptr);
-
     while(lptr != 0) {
         if (lptr->addr == ptr) {
             lptr->free = 1;
@@ -78,8 +76,6 @@ void kfree(unsigned long *ptr)
         }
         lptr = lptr->next;
     }
-
-
 }
 
 void mm_print_stats() 
@@ -101,6 +97,7 @@ void mm_print_stats()
         }
     kprint_hex("Total Used Memory     0x", size);
     kprint_hex("LL nodes              0x", ll_size);
+    kprint_hex("LL node size          0x", ll_size*sizeof(struct mm_block));
     kprint_hex("End of kernel         0x", (unsigned long) &_kernel_end);
     kprint_hex("Start of kernel       0x",0xffffffff80000000);
 }

@@ -2,7 +2,7 @@
 #include <output/output.h>
 // 512 entriesi
 #define addr_start 0xffffffff80000000
-#define PAGE_TAB 64 //MAP 128mb TO KERNEL SPACE
+#define PAGE_TAB 511 //MAP 128mb TO KERNEL SPACE
 typedef  unsigned long long uint64_t;
 
 uint64_t pml4[512] __attribute__((aligned(0x20))); // must be aligned to (at least)0x20, ...
@@ -42,7 +42,6 @@ void setup_paging() {
     kprintf("\n");
     asm volatile("cli; \
             movq %0 ,%%cr3; \
-            sti; \
             " : : "r"(address));
 }
 

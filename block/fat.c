@@ -199,7 +199,7 @@ static struct inode_list* fat_read_std_fmt(struct inode_list* tail,struct dnode 
     if (using_lfname){
         kstrncpy(cur_inode->i_name, (const char *)longfname,0xff);
     } else {
-        char *ptr = file->fname;
+        char *ptr = (char *)file->fname;
         int i=0;
         //max 8 chars
         while (*ptr != ' ' && i <8){

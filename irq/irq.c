@@ -98,9 +98,6 @@ void PIC_init(void) {
    IRQ_clear_mask(1); //kbd
    IRQ_clear_mask(0);//timer
    IRQ_clear_mask(4); //uart
-
-   //Enable interrupts!
-   asm("sti");
 }
 
 void kbd_irq() {
@@ -125,7 +122,6 @@ unsigned int read_jiffies() {
     return jiffies;
 }
 void timer_irq() {
-    asm("cli");
    jiffies+=1;
    PIC_sendEOI(1);
    asm("sti");

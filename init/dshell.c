@@ -8,7 +8,7 @@
 #include <block/vfs.h>
 
 
-const char WHEELER_PROMPT[] = "Ted Wheeler OS |0:";
+char WHEELER_PROMPT[] = "Ted Wheeler OS |0:";
 
 char * dir_stack[100][256];
 int top_dir_stack = -1;
@@ -28,7 +28,7 @@ static void push_dir_stack(char *dir)
     }else {
         top_dir_stack++;
     }
-    kstrcpy(dir_stack[top_dir_stack],dir);
+    kstrcpy( (char*)dir_stack[top_dir_stack],dir);
 }
 
 static char * pop_dir_stack() 
@@ -38,7 +38,7 @@ static char * pop_dir_stack()
         kprintf("dirstack empty");
         return 0;
     }
-    val = dir_stack[top_dir_stack];
+    val = (char *) dir_stack[top_dir_stack];
     top_dir_stack -=1;
     return val;
 }
@@ -68,8 +68,6 @@ static void print_dir(struct inode* pwd) {
 }
 struct inode *  shell_cd(char cmd[], struct dnode *dptr) {
     struct inode_list *ptr;
-    int i;
-    char buffer[512];
     char *cmdptr = cmd;
     char *nptr = cmd;
     //Find directory
@@ -85,20 +83,15 @@ struct inode *  shell_cd(char cmd[], struct dnode *dptr) {
 
     ptr = dptr->head;
     while (ptr != 0) {
-        buffer[0] = '\0';
         if (ptr->current->i_type == I_DIR) {
-            for(i=0; ptr->current->i_name[i] != ' '; i++){
-                buffer[i] = ptr->current->i_name[i];
-            }
-            buffer[i] = '\0';
-            /*
+
             kprintf("Comparing ");
-            kprintf(buffer);
+            kprintf(ptr->current->i_name);
             kprintf(" ");
             kprintf(cmdptr);
             kprintf("\n");
-            */
-            if (kstrcmp(cmdptr,buffer) == 0)
+
+            if (kstrcmp(cmdptr,ptr->current->i_name) == 0)
                 return ptr->current;
         } 
         ptr= ptr->next;
@@ -109,8 +102,6 @@ struct inode *  shell_cd(char cmd[], struct dnode *dptr) {
 
 static void shell_cat(char cmd[], struct dnode *dptr) {
     struct inode_list *ptr;
-    int i;
-    char buffer[512];
     char *cmdptr = cmd;
     char *nptr = cmd;
     //Find directory
@@ -126,13 +117,13 @@ static void shell_cat(char cmd[], struct dnode *dptr) {
 
     ptr = dptr->head;
     while (ptr != 0) {
-        buffer[0] = '\0';
         if (ptr->current->i_type == I_FILE) {
-            for(i=0; ptr->current->i_name[i] != ' '; i++){
-                buffer[i] = ptr->current->i_name[i];
-            }
-            buffer[i] = '\0';
-            if (kstrcmp(cmdptr,buffer) == 0) {
+            kprintf("Comparing ");
+            kprintf(ptr->current->i_name);
+            kprintf(" ");
+            kprintf(cmdptr);
+            kprintf("\n");
+            if (kstrcmp(cmdptr,ptr->current->i_name) == 0) {
                 vfs_read_inode_file(ptr->current);
                 return;
             }
@@ -146,7 +137,7 @@ void print_prompt() {
     kprintf(WHEELER_PROMPT);
     for(int i=0; i<=top_dir_stack; i++)
     {
-        kprintf(dir_stack[i]);
+        kprintf((char *)dir_stack[i]);
         if (i==top_dir_stack)
                 kprintf(">");
         else if (i > 0)
@@ -157,6 +148,7 @@ void start_dshell() {
 
     char buffer[512];
     struct dnode *dptr;
+    struct dnode *dptr1;
     dptr = vfs_read_root_dir("0:/"); 
     struct dnode *olddptr=dptr;
     struct inode *pwd = dptr->root_inode;
@@ -164,8 +156,35 @@ void start_dshell() {
     push_dir_stack("/");
     print_prompt();
 
+//debug
+    asm("sti");
+/*
+for(;;) {
+
+    struct dnode *dptr2;
+
+     dptr1 = vfs_read_inode_dir(dptr->head->next->next->next->current);
+
+
+
+     print_dir(dptr1->root_inode);
+     dptr2 = vfs_read_inode_dir(dptr->head->next->next->next->next->current);
+     print_dir(dptr2->root_inode);
+
+     vfs_free_dnode(dptr1);
+     vfs_free_dnode(dptr2);
+
+     mm_print_stats();
+     ksleepm(10);
+     //ksleepm(1000);
+}
+    return;
+*/
+
+
+//
     while (1) { 
-        ksleepm(10);
+        ksleepm(1);
         for(int i =0; i<512; i++)
             buffer[i]= '\0';
         read_input(buffer);
@@ -178,24 +197,28 @@ void start_dshell() {
         else if (buffer[0] == 'c' && buffer[1] == 'd' 
                 && buffer[2] == ' ' && buffer[3] != '\n') {
             dptr = vfs_read_inode_dir(pwd);
-            oldpwd = pwd;
             pwd = shell_cd(buffer,dptr);
             //If failure
             if (pwd == 0) {
                 pwd = oldpwd;
             } else {
                 vfs_free_dnode(olddptr);
+                if (buffer[3] == '.' && buffer[4] == '.' && kstrcmp(dptr->i_name,"/") !=0 && oldpwd != pwd)
+                    pop_dir_stack();
+                else if(oldpwd != pwd)
+                    push_dir_stack(pwd->i_name);
                 olddptr = dptr;
+                oldpwd = pwd;
             }
-            if (buffer[3] == '.' && buffer[4] == '.' && kstrcmp(dptr->i_name,"/") !=0 && oldpwd != pwd)
-                pop_dir_stack();
-            else if(oldpwd != pwd)
-                push_dir_stack(pwd->i_name);
+
         }
         else if (buffer[0] == 'c' && buffer[1] == 'a' 
                 && buffer[2] == 't' && buffer[3] == ' '
                 && buffer[4] != '\0') {
-            shell_cat(buffer,dptr);
+            dptr1 = vfs_read_inode_dir(pwd);
+
+            shell_cat(buffer,dptr1);
+            vfs_free_dnode(dptr1);
         }
         else if (kstrcmp(buffer,"mem\n") == 0) {
             mm_print_stats();

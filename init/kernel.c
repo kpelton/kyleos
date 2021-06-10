@@ -67,7 +67,7 @@ void kinit(void)
     setup_paging();
     mm_init();
     //need to setup kernel stack after paging is setup
-    asm("mov $0xffffffff84000000,%rsp");
+    asm("mov $0xffffffffbf000000,%rsp");
     kprintf("Switch to kernel tables/stack done.\n");
     ata_init();
     kernel();

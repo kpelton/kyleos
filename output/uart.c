@@ -29,15 +29,12 @@ void serial_init() {
         SERIAL_BUFFER[i] = '\0';
 }
 void serial_read_input(char* dest) {
-    asm("cli");
     kstrcpy(dest,SERIAL_BUFFER);
     for (int i=0; i<MAX_CHARS; i++) 
         SERIAL_BUFFER[i] = '\0';
-    asm("sti");
 }
 
 void serial_irq() {
-    asm("cli");
 
     char in;
     char output[1];
@@ -63,7 +60,6 @@ void serial_irq() {
     output[1] = '\0';
     kprintf(output);
     PIC_sendEOI(1);
-    asm("sti");
 
 }
 
