@@ -184,7 +184,7 @@ for(;;) {
 
 //
     while (1) { 
-        ksleepm(1);
+        asm("hlt");
         for(int i =0; i<512; i++)
             buffer[i]= '\0';
         read_input(buffer);

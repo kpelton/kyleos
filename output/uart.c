@@ -37,7 +37,7 @@ void serial_read_input(char* dest) {
 void serial_irq() {
 
     char in;
-    char output[1];
+    char output[2];
     outb(PORT + 3, 0x00); //dlab = 0 
     in = inb(PORT);
     if (in == '\r')

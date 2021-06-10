@@ -6,16 +6,6 @@ char * kernel_heap;
 #define USED 1
 #define MIN_SIZE 64
 
-
- struct mm_block {
-
-    unsigned long * addr;
-    unsigned long size;
-    struct mm_block* next;
-    short free;
-
-};
-
 static struct  mm_block * head = 0;
 static struct  mm_block * tail = 0;
 void * kmalloc(unsigned int p_size) 
