@@ -222,7 +222,7 @@ for(;;) {
         else if (kstrcmp(buffer,"mem\n") == 0) {
             mm_print_stats();
         }else if (kstrcmp(buffer,"panic\n") == 0) {
-            print_regs(0,0);
+            print_regs(0xdeadbeef,0xdeadbeef);
         }else if (kstrcmp(buffer,"jiffies\n") == 0) {
             kprint_hex("Jiffies 0x",read_jiffies());
         }else if (kstrcmp(buffer,"gas\n") == 0) {
