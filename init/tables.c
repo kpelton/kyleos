@@ -43,7 +43,38 @@ struct idt_ptr ip_t;
 void gdt_flush();
 void idt_flush();
 void std_handler();
-void panic_handler();
+void panic_handler_1();
+void panic_handler_2();
+void panic_handler_3();
+void panic_handler_4();
+void panic_handler_5();
+void panic_handler_6();
+void panic_handler_7();
+void panic_handler_8();
+void panic_handler_9();
+void panic_handler_10();
+void panic_handler_11();
+void panic_handler_12();
+void panic_handler_13();
+void panic_handler_14();
+void panic_handler_15();
+void panic_handler_16();
+void panic_handler_17();
+void panic_handler_18();
+void panic_handler_19();
+void panic_handler_20();
+void panic_handler_21();
+void panic_handler_22();
+void panic_handler_23();
+void panic_handler_24();
+void panic_handler_25();
+void panic_handler_26();
+void panic_handler_27();
+void panic_handler_28();
+void panic_handler_29();
+void panic_handler_30();
+void panic_handler_31();
+void panic_handler_32();
 void kbd_handler();
 void timer_handler();
 void serial_handler();
@@ -58,16 +89,48 @@ void idt_set_gate(int num, uint64_t base, uint8_t type_attr)
     idt[num].ist = 0;
 
 }
+#define IDT_PANIC(i)  idt_set_gate(i, (uint64_t) panic_handler_##i ,INT_GATE)
+
+
 void idt_install(void)
 {
     int i;
     ip_t.base = (uint64_t)&idt;
     ip_t.limit = (sizeof(struct idt_entry) *256)-1;
 
-    //setup panic handler
-    for(i=0; i<32; i++) {
-      idt_set_gate(i,(uint64_t)panic_handler,INT_GATE);
-    }
+    IDT_PANIC(1);
+    IDT_PANIC(2);
+    IDT_PANIC(3);
+    IDT_PANIC(4);
+    IDT_PANIC(5);
+    IDT_PANIC(6);
+    IDT_PANIC(7);
+    IDT_PANIC(8);
+    IDT_PANIC(9);
+    IDT_PANIC(10);
+    IDT_PANIC(11);
+    IDT_PANIC(12);
+    IDT_PANIC(13);
+    IDT_PANIC(14);
+    IDT_PANIC(15);
+    IDT_PANIC(16);
+    IDT_PANIC(17);
+    IDT_PANIC(18);
+    IDT_PANIC(19);
+    IDT_PANIC(20);
+    IDT_PANIC(21);
+    IDT_PANIC(22);
+    IDT_PANIC(23);
+    IDT_PANIC(24);
+    IDT_PANIC(25);
+    IDT_PANIC(26);
+    IDT_PANIC(27);
+    IDT_PANIC(28);
+    IDT_PANIC(29);
+    IDT_PANIC(30);
+    IDT_PANIC(31);
+    IDT_PANIC(32);
+
     
     //setup other ints
       idt_set_gate(32,(uint64_t )timer_handler,INT_GATE);

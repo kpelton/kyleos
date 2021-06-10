@@ -6,7 +6,7 @@
 static char SERIAL_BUFFER[MAX_CHARS] = {'\0'};
 static char INTERNAL_SERIAL_BUFFER[MAX_CHARS];
 
-int SERIAL_CURRENT_PLACE;
+static int SERIAL_CURRENT_PLACE;
 
 void serial_kprintf(char* str) {
     char* strp = str;

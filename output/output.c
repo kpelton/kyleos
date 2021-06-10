@@ -171,65 +171,58 @@ char * itoa( unsigned long value, char * str, int base )
     }
     return rc;
 }
-void print_regs(unsigned long exception) {
+
+static void print_reg(char * name,unsigned long val)
+{
+    char buffer[50];
+    itoa(val,buffer,16);
+    kprintf(name);
+    kprintf(":0x");
+    kprintf(buffer);
+    kprintf(" ");
+}
+void print_regs(unsigned long exception,unsigned long rip) {
     struct RegDump dump;
     char buffer[50];
-    kprintf("\nKERNEL PANIC\nREGISTER DUMP\n=============\n");
+    kprintf("\n\nTed Wheeler took a dump on the sidewalk\nREGISTER DUMP\n=============\n");
     kprintf("EXCEPTION:");
     itoa(exception,buffer,16);
+    kprintf("0x");
     kprintf(buffer);
     kprintf("\n");
-    itoa(dump.rax,buffer,16);
     dump = dump_regs();
-    itoa(dump.rax,buffer,16);
-    kprintf("rax:0x");
-    kprintf(buffer);
-    kprintf(" ");
-
-    itoa(dump.rbx,buffer,16);
-    kprintf("rbx:0x");
-    kprintf(buffer);
-    kprintf(" ");
-
-    itoa(dump.rcx,buffer,16);
-    kprintf("rcx:0x");
-    kprintf(buffer);
-    kprintf(" ");
-
-    itoa(dump.rdi,buffer,16);
-    kprintf("rdi:0x");
-    kprintf(buffer);
-    kprintf(" ");
-
-    itoa(dump.rsi,buffer,16);
-    kprintf("rsi:0x");
-    kprintf(buffer);
-    kprintf(" ");
-
-    itoa(dump.rdx,buffer,16);
-    kprintf("rdx:0x");
-    kprintf(buffer);
-    kprintf(" ");
-
-    itoa(dump.rsp,buffer,16);
-    kprintf("rsp:0x");
-    kprintf(buffer);
+    print_reg("rip",rip);
+    kprintf("\n");
+    print_reg("rax",dump.rax);
+    print_reg("rbx",dump.rbx);
+    print_reg("rcx",dump.rcx);
+    kprintf("\n");
+    print_reg("rdx",dump.rdx);
+    print_reg("rsp",dump.rsp);
+    print_reg("rdi",dump.rdi);
+    print_reg("rsi",dump.rsi);
+    kprintf("\n");
+    print_reg("r8",dump.r8);
+    print_reg("r9",dump.r9);
+    print_reg("r10",dump.r10);
+    kprintf("\n");
+    print_reg("r11",dump.r11);
+    print_reg("r12",dump.r12);
+    print_reg("r13",dump.r13);
+    kprintf("\n");
+    print_reg("r14",dump.r14);
+    print_reg("r15",dump.r15);
+    kprintf("\n=============\n");
+    print_reg("cr0",dump.cr0);
+    kprintf("\n");
+    print_reg("cr2",dump.cr2);
+    kprintf("\n");
+    print_reg("cr3",dump.cr3);
+    kprintf("\n");
+    print_reg("cr4",dump.cr4);
     kprintf("\n");
 
-    itoa(dump.cr0,buffer,16);
-    kprintf("cr0:0x");
-    kprintf(buffer);
-    kprintf(" ");
 
-    itoa(dump.cr3,buffer,16);
-    kprintf("cr3:0x");
-    kprintf(buffer);
-    kprintf(" ");
-
-    itoa(dump.cr4,buffer,16);
-    kprintf("cr4:0x");
-    kprintf(buffer);
-    kprintf("\n");
 }
 void kprint_hex(char *desc, unsigned long val) {
     char buffer[20];

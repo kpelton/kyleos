@@ -1,9 +1,9 @@
 [extern ip_t]
 [extern gp]
 [extern print_regs]
-[extern kbd_irq]       
-[extern serial_irq]       
-[extern timer_irq]       
+[extern kbd_irq]
+[extern serial_irq]
+[extern timer_irq]
 [global gdt_flush]
 [global load_page_directory]
 [global setup_long_mode]
@@ -28,7 +28,7 @@ idt_flush:
     mov rax, strict qword ip_t
     lidt [rax]
 	ret
-      
+
 [global std_handler] ; global int handler
 std_handler:
     iretq
@@ -142,10 +142,152 @@ serial_handler:
     pop rax
     iretq
 
-[global panic_handler] ; global int handler     
+[global panic_handler] ; global int handler
 panic_handler:
+    mov rdi,rax; Exception code
+    mov rsi,[rsp+8] ; RIP is pushed on stack
     call print_regs
     jmp $
     iretq
+[global panic_handler_1] ;
+panic_handler_1:
+    mov rax,1
+    jmp panic_handler
+[global panic_handler_2] ;
+panic_handler_2:
+    mov rax,2
+    jmp panic_handler
 
-     
+[global panic_handler_3] ;
+panic_handler_3:
+    mov rax,3
+    jmp panic_handler
+
+[global panic_handler_4] ;
+panic_handler_4:
+    mov rax,4
+    jmp panic_handler
+
+[global panic_handler_5] ;
+panic_handler_5:
+    mov rax,5
+    jmp panic_handler
+
+[global panic_handler_6] ;
+panic_handler_6:
+    mov rax,6
+    jmp panic_handler
+
+[global panic_handler_7] ;
+panic_handler_7:
+    mov rax,7
+    jmp panic_handler
+
+[global panic_handler_8] ;
+panic_handler_8:
+    mov rax,8
+    jmp panic_handler
+
+[global panic_handler_9] ;
+panic_handler_9:
+    mov rax,9
+    jmp panic_handler
+
+[global panic_handler_10] ;
+panic_handler_10:
+    mov rax,10
+    jmp panic_handler
+
+[global panic_handler_11] ;
+panic_handler_11:
+    mov rax,11
+    jmp panic_handler
+
+[global panic_handler_12] ;
+panic_handler_12:
+    mov rax,12
+    jmp panic_handler
+
+[global panic_handler_13] ;
+panic_handler_13:
+    mov rax,13
+    jmp panic_handler
+
+[global panic_handler_14] ;
+panic_handler_14:
+    mov rax,14
+    jmp panic_handler
+[global panic_handler_15] ;
+panic_handler_15:
+    mov rax,15
+    jmp panic_handler
+
+[global panic_handler_16] ;
+panic_handler_16:
+    mov rax,16
+    jmp panic_handler
+[global panic_handler_17] ;
+panic_handler_17:
+    mov rax,17
+    jmp panic_handler
+
+[global panic_handler_18] ;
+panic_handler_18:
+    mov rax,18
+    jmp panic_handler
+[global panic_handler_19] ;
+panic_handler_19:
+    mov rax,19
+    jmp panic_handler
+[global panic_handler_20] ;
+panic_handler_20:
+    mov rax,20
+    jmp panic_handler
+[global panic_handler_21] ;
+panic_handler_21:
+    mov rax,21
+    jmp panic_handler
+[global panic_handler_22] ;
+panic_handler_22:
+    mov rax,22
+    jmp panic_handler
+[global panic_handler_23] ;
+panic_handler_23:
+    mov rax,23
+    jmp panic_handler
+[global panic_handler_24] ;
+panic_handler_24:
+    mov rax,24
+    jmp panic_handler
+[global panic_handler_25] ;
+panic_handler_25:
+    mov rax,25
+    jmp panic_handler
+[global panic_handler_26] ;
+panic_handler_26:
+    mov rax,26
+    jmp panic_handler
+[global panic_handler_27] ;
+panic_handler_27:
+    mov rax,27
+    jmp panic_handler
+[global panic_handler_28] ;
+panic_handler_28:
+    mov rax,28
+    jmp panic_handler
+[global panic_handler_29] ;
+panic_handler_29:
+    mov rax,29
+    jmp panic_handler
+[global panic_handler_30] ;
+panic_handler_30:
+    mov rax,30
+    jmp panic_handler
+[global panic_handler_31] ;
+panic_handler_31:
+    mov rax,31
+    jmp panic_handler
+[global panic_handler_32] ;
+panic_handler_32:
+    mov rax,32
+    jmp panic_handler

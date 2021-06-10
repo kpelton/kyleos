@@ -152,10 +152,9 @@ void start_dshell() {
     dptr = vfs_read_root_dir("0:/"); 
     struct dnode *olddptr=dptr;
     struct inode *pwd = dptr->root_inode;
-    struct inode *oldpwd;
+    struct inode *oldpwd=pwd;
     push_dir_stack("/");
     print_prompt();
-
 //debug
     asm("sti");
 /*
@@ -223,7 +222,7 @@ for(;;) {
         else if (kstrcmp(buffer,"mem\n") == 0) {
             mm_print_stats();
         }else if (kstrcmp(buffer,"panic\n") == 0) {
-            print_regs(0);
+            print_regs(0,0);
         }else if (kstrcmp(buffer,"jiffies\n") == 0) {
             kprint_hex("Jiffies 0x",read_jiffies());
         }else if (kstrcmp(buffer,"gas\n") == 0) {

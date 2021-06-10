@@ -57,7 +57,7 @@ void kinit(void)
     output_init();
     kprintf("Booting.......\n");
     kprintf("Ted Wheeler OS.......\n");
-    kprintf("Copyright:Kyle Pelton 2020 \n");
+    kprintf("Copyright:Kyle Pelton 2020 all rights reserved\n");
     gdt_install();
     kprintf("Installing idt\n");
     idt_install();

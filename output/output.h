@@ -1,6 +1,6 @@
 #ifndef OUTPUT_H
 #define OUTPUT_H
-void print_regs(unsigned long exception);
+void print_regs(unsigned long exception,unsigned long rip);
 char * itoa( unsigned long value, char * str, int base );
 char * itoa_16( unsigned short value, char * str, int base );
 char * itoa_8( unsigned char value, char * str, int base );
