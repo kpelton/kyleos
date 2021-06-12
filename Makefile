@@ -10,11 +10,29 @@ export AS
 export ASFLAGS
 SUBDIRS = $(shell ls -d */)
 OBJ_FILES = $(shell find . -type f -name '*.o')
+
 all: kernel.img
-LIBS:
-	for dir in $(SUBDIRS) ; do \
-		make -C  $$dir ; \
-	done
+
+asm: asm/asm.o asm/asm_calls.o
+	$(MAKE) -C asm
+
+block: block/ata.o block/fat.o block/vfs.o
+	$(MAKE) -C block
+
+init: init/kernel.o init/loader.o init/tables.o init/dshell.o
+	$(MAKE) -C init
+
+irq: irq/irq.o
+	$(MAKE) -C irq
+
+mm: mm/mm.o mm/paging.o
+	$(MAKE) -C mm
+
+output: output/output.o output/vga.o output/uart.o
+	$(MAKE) -C output
+
+timer: timer/pit.o
+	$(MAKE) -C timer
 
 clean: 
 	for dir in $(SUBDIRS) ; do \
@@ -24,8 +42,8 @@ clean:
 	rm -rfv kernel.bin
 	rm -rfv kernel32.bin
 
-kernel.bin: LIBS
-	$(LD) -T linker.ld -o kernel.bin $(OBJ_FILES)
+kernel.bin: asm block init irq mm output timer
+	$(LD) -T linker.ld -o kernel.bin $(OBJ_FILES) 
 
 kernel.img: kernel.bin
 	objcopy   -I elf64-x86-64 -O elf32-i386   kernel.bin kernel32.bin
