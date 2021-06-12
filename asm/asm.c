@@ -13,7 +13,11 @@ unsigned short inw( unsigned short port ) {
             : "=a"(ret) : "Nd"(port) );
     return ret;
 }
+void outw( unsigned short port,unsigned short val ) {
 
+    asm volatile( "outw %0, %1"
+            : : "a"(val), "Nd"(port) );
+}
 
 void outb( unsigned short port, unsigned char val ) {
 

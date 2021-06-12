@@ -23,6 +23,7 @@ struct dnode *read_inode_dir(struct inode *i_node);
 #define FAT_FILE 0x20
 #define FAT_DIR_RECORD_SIZE 32
 #define FAT_MAX_FNAME 256
+#define FAT_MAX_LFNAME_RECORDS 0x3f
 
 //#define DEBUG
 int fat_init(struct mbr_info mbr_entry)
@@ -156,7 +157,7 @@ static void fat_read_lfilename(char longfname [], unsigned char *dir_ptr)
     int j=0;
     int i=0;
     //Calculate where in char array this long file name goes
-    j = (FAT_LFNAME_RECORD_SIZE * ((dir_ptr[0] &0x3f)-1));
+    j = (FAT_LFNAME_RECORD_SIZE * ((dir_ptr[0] & FAT_MAX_LFNAME_RECORDS)-1));
     //kprint_hex("dir_ptr[0] ",dir_ptr[0]);
     for (i=1; i<11; i+=2) {
         longfname[j] = dir_ptr[i];
@@ -215,8 +216,10 @@ static struct inode_list* fat_read_std_fmt(struct inode_list* tail,struct dnode 
 
     if ((file->attribute & FAT_DIR) == FAT_DIR)
         cur_inode->i_type = I_DIR;
-    else if ((file->attribute & FAT_FILE) == FAT_FILE)
+    else if ((file->attribute & FAT_FILE) == FAT_FILE) {
         cur_inode->i_type = I_FILE;
+        cur_inode->file_size = file->file_size;
+    }
     return prev_ilist;
 
 }
@@ -242,7 +245,6 @@ static void read_directory(unsigned int sec, struct dnode *dir, struct vfs_devic
                 fat_read_lfilename(longfname,dir_ptr);
                 //keep track of how many bytes have been written to arary 
                 lbytes_written += FAT_LFNAME_RECORD_SIZE;
-                
             } 
             else if (*dir_ptr != FAT_UNUSED_DIR) {
                 longfname[lbytes_written] = '\0';

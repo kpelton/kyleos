@@ -46,6 +46,7 @@ static char * pop_dir_stack()
 static void print_dir(struct inode* pwd) {
     struct inode_list *ptr;
     struct dnode *dptr;
+    char buffer[16];
 
     dptr = vfs_read_inode_dir(pwd);
     if (dptr == 0)
@@ -56,9 +57,12 @@ static void print_dir(struct inode* pwd) {
         if (ptr->current->i_type == I_DIR) {
             kprintf(" DIR");
         } else {
-            kprintf(" FILE");
+            kprintf(" FILE ");
     }
-        kprint_hex(" inode=",ptr->current->i_ino);
+        itoa(ptr->current->file_size,buffer,10);
+        kprintf("  size=");
+        kprintf(buffer);
+        kprintf("\n");
         ptr= ptr->next;
     }
     vfs_free_dnode(dptr);
@@ -155,6 +159,10 @@ void start_dshell() {
     struct inode *oldpwd=pwd;
     push_dir_stack("/");
     print_prompt();
+    short buffer2[256] ={010101};
+
+    //write_sec(0,buffer2);
+   // asm("test: jmp test");
 //debug
     asm("sti");
 /*

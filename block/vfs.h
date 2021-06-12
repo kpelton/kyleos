@@ -25,6 +25,7 @@ struct inode {
     int i_type;
     struct vfs_device* dev;
     unsigned long i_ino;
+    unsigned long file_size;
 };
 
 struct inode_list {

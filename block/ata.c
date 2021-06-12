@@ -19,6 +19,8 @@
 
 #define CMD_IDENTIFY 0xec
 #define CMD_READ_SECTORS 0x20
+#define CMD_WRITE_SECTORS 0x30
+#define CMD_CACHE_FLUSH 0xe7
 #define STAT_DRIVE_BUSY  0x80
 #define STAT_PIO_READY  0x8
 //#define ATA_DEBUG
@@ -44,6 +46,49 @@ void print_drive_status(void) {
     kprintf(cbuffer);
     kprintf("\n");
 
+}
+int write_sec(unsigned int sec,void *buffer  )
+{
+    short *data =0;
+    unsigned char status;
+    int i;
+    data = buffer;
+
+#ifdef ATA_DEBUG
+    print_drive_status();
+#endif
+    outb(PRIMARY + DRIVE_HEAD_REG,0xE0);
+    outb(PRIMARY + ERROR_REG,0x00);
+    //read 1 sectors =0x200
+    outb(PRIMARY + SEC_COUNT_REG,1);
+    outb(PRIMARY + SEC_NUM_REG,sec & 0xff);
+    outb(PRIMARY + CYL_LOW_REG, (sec &0xff00) >>8);
+    //outb(PRIMARY + CYL_LOW_REG,10);
+    outb(PRIMARY + CYL_HI_REG,(sec &0xff0000) >>16);
+    outb(PRIMARY + COMMAND_REG,CMD_WRITE_SECTORS);
+    status = read_status();
+
+    while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY  ) != 0) {
+        status = read_status();
+#ifdef ATA_DEBUG
+        print_drive_status();
+#endif
+    }
+
+
+    //Data is not quite ready, need to read status a few more times
+    for(i=0; i<100; i++)
+        status = read_status();
+
+    //data is ready
+    for (i=0; i<256; i++) {
+        kprintf("writing\n");
+        outw(PRIMARY,data[i]);
+        outb(PRIMARY + COMMAND_REG,CMD_CACHE_FLUSH);
+    }
+
+    
+    return 0;
 }
 int read_sec(unsigned int sec,void *buffer  ) {
     short *data =0;

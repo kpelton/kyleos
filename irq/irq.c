@@ -118,12 +118,14 @@ void kbd_irq() {
 //   pong_handle_key(scancode);
   
 }
-unsigned int read_jiffies() {
+unsigned int read_jiffies() 
+{
     return jiffies;
 }
-void timer_irq() {
+
+void timer_irq() 
+{
    jiffies+=1;
    PIC_sendEOI(1);
-   asm("sti");
 //   kprintf("timer\n");
 }

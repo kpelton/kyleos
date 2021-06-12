@@ -28,6 +28,7 @@ struct RegDump{
 unsigned char inb( unsigned short port );
 unsigned short inw( unsigned short port );
 void outb( unsigned short port, unsigned char val );
+void outw( unsigned short port,unsigned short val );
 void io_wait( void );
 struct RegDump dump_regs();
 uint32_t rdmsr(uint32_t msr_id);
