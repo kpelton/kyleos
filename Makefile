@@ -28,6 +28,9 @@ irq: irq/irq.o
 mm: mm/mm.o mm/paging.o
 	$(MAKE) -C mm
 
+sched: sched/sched.o
+	$(MAKE) -C sched
+
 output: output/output.o output/vga.o output/uart.o
 	$(MAKE) -C output
 
@@ -42,7 +45,7 @@ clean:
 	rm -rfv kernel.bin
 	rm -rfv kernel32.bin
 
-kernel.bin: asm block init irq mm output timer
+kernel.bin: asm block init irq mm output timer sched
 	$(LD) -T linker.ld -o kernel.bin $(OBJ_FILES) 
 
 kernel.img: kernel.bin

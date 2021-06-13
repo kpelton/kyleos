@@ -6,6 +6,7 @@
 #include <mm/mm.h>
 #include <timer/pit.h>
 #include <block/vfs.h>
+#include <sched/sched.h>
 
 
 char WHEELER_PROMPT[] = "Ted Wheeler OS |0:";
@@ -148,6 +149,31 @@ void print_prompt() {
             kprintf("/");
     }
 }
+
+void fs_test() {
+    struct dnode *dptr;
+    struct dnode *dptr1;
+    dptr = vfs_read_root_dir("0:/"); 
+    for(;;) {
+        asm("sti");
+        struct dnode *dptr2;
+
+        dptr1 = vfs_read_inode_dir(dptr->head->next->next->next->current);
+
+        print_dir(dptr1->root_inode);
+        dptr2 = vfs_read_inode_dir(dptr->head->next->next->next->next->current);
+        print_dir(dptr2->root_inode);
+
+        vfs_free_dnode(dptr1);
+        vfs_free_dnode(dptr2);
+
+        mm_print_stats();
+        ksleepm(10);
+        //ksleepm(1000);
+    }
+    return; 
+
+}
 void start_dshell() {
 
     char buffer[512];
@@ -233,6 +259,8 @@ for(;;) {
             print_regs(0xdeadbeef,0xdeadbeef);
         }else if (kstrcmp(buffer,"jiffies\n") == 0) {
             kprint_hex("Jiffies 0x",read_jiffies());
+        }else if (kstrcmp(buffer,"sched\n") == 0) {
+            sched_stats();
         }else if (kstrcmp(buffer,"gas\n") == 0) {
             for (;;)
                 kprintf("Fuck ted wheeler\n");

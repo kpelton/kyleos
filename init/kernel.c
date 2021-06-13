@@ -7,9 +7,11 @@
 #include <mm/mm.h>
 #include <timer/pit.h>
 #include <block/vfs.h>
+#include <sched/sched.h>
 #include <init/dshell.h>
 
 #define HALT() asm("cli; hlt")
+#define START() asm("sti; run: hlt; jmp run")
 #define HANG() asm("cli; hlt")
 
 void print_vendor()
@@ -44,12 +46,41 @@ void ksleep(unsigned int sec)
     while(read_jiffies() < expires);
 
 }
+void testf()
+{
+    int i=0;
+    for(;;) {
+        asm("sti");
+        if ( i%1000000 == 1 )
+          //  kprint_hex("RUN3 ",read_jiffies());
+        i+=1;
+    }
 
+    asm("sti; run1: hlt; jmp run1");
+}
+
+void testf2()
+{
+    int i=0;
+    for(;;) {
+        asm("sti");
+        if ( i%1000000 == 1 )
+           // kprint_hex("RUN2 ",read_jiffies());
+        i+=1;
+    }
+
+    asm("sti; run1: hlt; jmp run1");
+}
 void kernel(void)
 {
     kprintf("Ted Wheeler OS has booted\n");
-    start_dshell();
-    HALT();
+	kthread_add(&start_dshell);
+    kthread_add(&fs_test);
+    kthread_add(&testf2);
+    
+
+    //start_dshell();
+    START();
 }
 
 void kinit(void)

@@ -142,8 +142,23 @@ serial_handler:
     pop rax
     iretq
 
+[global switch_to] ; global int handler
+switch_to:
+    mov rsp,rdi
+    mov rax,rsi
+    jmp rax
+    jmp $
+
+[global resume_p] ; global int handler
+resume_p:
+    mov rsp,rdi
+    mov rbp,rsi
+    sub rsp ,8
+    ret
+
 [global panic_handler] ; global int handler
 panic_handler:
+    cli
     mov rdi,rax; Exception code
     mov rsi,[rsp+8] ; RIP is pushed on stack
     call print_regs
