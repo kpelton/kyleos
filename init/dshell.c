@@ -89,13 +89,13 @@ struct inode *  shell_cd(char cmd[], struct dnode *dptr) {
     ptr = dptr->head;
     while (ptr != 0) {
         if (ptr->current->i_type == I_DIR) {
-
+/*
             kprintf("Comparing ");
             kprintf(ptr->current->i_name);
             kprintf(" ");
             kprintf(cmdptr);
             kprintf("\n");
-
+*/
             if (kstrcmp(cmdptr,ptr->current->i_name) == 0)
                 return ptr->current;
         } 
@@ -123,11 +123,13 @@ static void shell_cat(char cmd[], struct dnode *dptr) {
     ptr = dptr->head;
     while (ptr != 0) {
         if (ptr->current->i_type == I_FILE) {
+            /*
             kprintf("Comparing ");
             kprintf(ptr->current->i_name);
             kprintf(" ");
             kprintf(cmdptr);
             kprintf("\n");
+            */
             if (kstrcmp(cmdptr,ptr->current->i_name) == 0) {
                 vfs_read_inode_file(ptr->current);
                 return;

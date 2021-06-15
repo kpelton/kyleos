@@ -8,7 +8,8 @@ static char INTERNAL_SERIAL_BUFFER[MAX_CHARS];
 
 static int SERIAL_CURRENT_PLACE;
 
-void serial_kprintf(char* str) {
+void serial_kprintf(char* str)
+{
     char* strp = str;
     while (*strp != '\0')  {
         outb(PORT,*strp);
@@ -16,7 +17,8 @@ void serial_kprintf(char* str) {
     }
 }
 
-void serial_init() {
+void serial_init()
+{
    outb(PORT + 1, 0x00);    // Disable all interrupts
    outb(PORT + 3, 0x80);    // Enable DLAB (set baud rate divisor)
    outb(PORT + 0, 0x01);    // Set divisor to 3 (lo byte) 38400 baud
@@ -28,13 +30,15 @@ void serial_init() {
    for (int i = 0; i<MAX_CHARS; i++ )
         SERIAL_BUFFER[i] = '\0';
 }
-void serial_read_input(char* dest) {
+void serial_read_input(char* dest)
+{
     kstrcpy(dest,SERIAL_BUFFER);
     for (int i=0; i<MAX_CHARS; i++) 
         SERIAL_BUFFER[i] = '\0';
 }
 
-void serial_irq() {
+void serial_irq()
+{
 
     char in;
     char output[2];

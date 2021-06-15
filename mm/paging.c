@@ -11,7 +11,8 @@ uint64_t page_dir[512] __attribute__((aligned(0x1000)));  // must be aligned to 
 uint64_t page_tab[PAGE_TAB][512] __attribute__((aligned(0x1000)));
 
 
-void fill_dir(uint64_t startaddr,uint64_t * dir) {
+void fill_dir(uint64_t startaddr,uint64_t * dir)
+{
     uint64_t address = startaddr;
     int i=0;
     for(i = 0; i < 512; i++) {
@@ -20,7 +21,8 @@ void fill_dir(uint64_t startaddr,uint64_t * dir) {
     }
 }
 
-void setup_paging() {
+void setup_paging()
+{
     //set each entry to not present
     char buffer[200];
     uint64_t i = 0;

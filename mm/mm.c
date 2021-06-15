@@ -8,7 +8,7 @@ char * kernel_heap;
 
 static struct  mm_block * head = 0;
 static struct  mm_block * tail = 0;
-void * kmalloc(unsigned int p_size) 
+void * kmalloc(unsigned int p_size)
 {
     //kprint_hex("MM Allocating ",size)
     unsigned long * ret;
@@ -25,7 +25,6 @@ void * kmalloc(unsigned int p_size)
                 kprint_hex("old alloc ",(unsigned long) &lptr->addr);
                 kprint_hex("old alloc ",(unsigned long) &lptr->addr);
                 kprint_hex("mem corrution detected ",(unsigned long) &lptr->addr);
-
                 continue;
             }
             return lptr->addr;
@@ -55,7 +54,7 @@ void * kmalloc(unsigned int p_size)
 
 }
 
-void kfree(void *ptr) 
+void kfree(void *ptr)
 {
     struct  mm_block *lptr = head;
     //kprint_hex("Freeing 0x",ptr);
@@ -68,7 +67,7 @@ void kfree(void *ptr)
     }
 }
 
-void mm_print_stats() 
+void mm_print_stats()
 {
 
         struct  mm_block *lptr = head;
@@ -92,7 +91,8 @@ void mm_print_stats()
     kprint_hex("Start of kernel       0x",0xffffffff80000000);
 }
 
-void mm_init() {
+void mm_init()
+{
     kernel_heap =  (char *) &_kernel_end + 0x8;
 }
 

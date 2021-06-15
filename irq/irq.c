@@ -61,7 +61,8 @@ void PIC_remap(int offset1, int offset2)
 	outb(PIC2_DATA, a2);
 }
 
-void IRQ_set_mask(unsigned char IRQline) {
+void IRQ_set_mask(unsigned char IRQline)
+{
     unsigned short port;
     unsigned char value;
  
@@ -75,8 +76,8 @@ void IRQ_set_mask(unsigned char IRQline) {
     outb(port, value);        
 }
  
-void IRQ_clear_mask(unsigned char IRQline) {
-    
+void IRQ_clear_mask(unsigned char IRQline)
+{
     unsigned short port;
     unsigned char value;
     if(IRQline < 8) {
@@ -89,7 +90,8 @@ void IRQ_clear_mask(unsigned char IRQline) {
     outb(port, value);        
 }
 
-void PIC_init(void) {
+void PIC_init(void)
+{
    int i;
 
    PIC_remap(32,64);
@@ -101,7 +103,8 @@ void PIC_init(void) {
    IRQ_clear_mask(4); //uart
 }
 
-void kbd_irq() {
+void kbd_irq()
+{
    char buffer[8];
    unsigned char scancode;
    scancode = inb(0x60);
@@ -119,12 +122,12 @@ void kbd_irq() {
 //   pong_handle_key(scancode);
   
 }
-unsigned int read_jiffies() 
+unsigned int read_jiffies()
 {
     return jiffies;
 }
 
-void timer_irq() 
+void timer_irq()
 {
    jiffies+=1;
    PIC_sendEOI(1);
