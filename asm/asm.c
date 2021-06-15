@@ -51,6 +51,7 @@ struct RegDump dump_regs( void ) {
     asm volatile("movq %%rcx ,%0" : "=g"(dump.rcx));
     asm volatile("movq %%rdx ,%0" : "=g"(dump.rdx));
     asm volatile("movq %%rsp ,%0" : "=g"(dump.rsp));
+    asm volatile("movq %%rbp ,%0" : "=g"(dump.rbp));
     asm volatile("movq %%rdi ,%0" : "=g"(dump.rdi));
     asm volatile("movq %%rsi ,%0" : "=g"(dump.rsi));
     asm volatile("movq %%r8  ,%0" : "=g"(dump.r8));
@@ -65,5 +66,16 @@ struct RegDump dump_regs( void ) {
     asm volatile("movq %%cr2 ,%0" : "=g"(dump.cr2));
     asm volatile("movq %%cr3 ,%0" : "=g"(dump.cr3));
     asm volatile("movq %%cr4 ,%0" : "=g"(dump.cr4));
-    return dump;
+    /*asm volatile("movq %%rsp, %%rbx; \ 
+                  sub  %%rbx, 4; \
+                  pushfq; \
+				  movl (%%rbx),%%eax; \
+				  addq 8,%%rsp; \
+				  movl %%eax ,%0"  
+				  :"=g" (dump.eflags)
+				  :
+				  :
+				  );
+*/
+return dump;
 }

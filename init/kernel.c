@@ -75,7 +75,7 @@ void kernel(void)
 {
     kprintf("Ted Wheeler OS has booted\n");
 	kthread_add(&start_dshell);
-    kthread_add(&fs_test);
+    //kthread_add(&fs_test);
     kthread_add(&testf2);
     
 

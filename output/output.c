@@ -199,9 +199,10 @@ void print_regs(unsigned long exception,unsigned long rip) {
     kprintf("\n");
     print_reg("rdx",dump.rdx);
     print_reg("rsp",dump.rsp);
+    print_reg("rbp",dump.rbp);
     print_reg("rdi",dump.rdi);
-    print_reg("rsi",dump.rsi);
     kprintf("\n");
+    print_reg("rsi",dump.rsi);
     print_reg("r8",dump.r8);
     print_reg("r9",dump.r9);
     print_reg("r10",dump.r10);
