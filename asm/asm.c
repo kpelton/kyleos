@@ -66,16 +66,15 @@ struct RegDump dump_regs( void ) {
     asm volatile("movq %%cr2 ,%0" : "=g"(dump.cr2));
     asm volatile("movq %%cr3 ,%0" : "=g"(dump.cr3));
     asm volatile("movq %%cr4 ,%0" : "=g"(dump.cr4));
-    /*asm volatile("movq %%rsp, %%rbx; \ 
-                  sub  %%rbx, 4; \
+/*    asm volatile("cli;movq %%rsp, %%rbx; \
                   pushfq; \
-				  movl (%%rbx),%%eax; \
-				  addq 8,%%rsp; \
-				  movl %%eax ,%0"  
+				  movq (%%rsp),%%rax; \
+				  pop %%rbx; \
+                  sti \ 
+                  "
 				  :"=g" (dump.eflags)
 				  :
 				  :
-				  );
-*/
+				  ); */
 return dump;
 }

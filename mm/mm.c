@@ -56,8 +56,7 @@ void * kmalloc(unsigned int p_size)
 
 void kfree(void *ptr)
 {
-    struct  mm_block *lptr = head;
-    //kprint_hex("Freeing 0x",ptr);
+    struct  mm_block *lptr = ptr - (sizeof(struct mm_block));
     while(lptr != 0) {
         if (lptr->addr == ptr) {
             lptr->free = 1;

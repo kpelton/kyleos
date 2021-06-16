@@ -23,7 +23,7 @@ struct RegDump{
   uint64_t cr2;
   uint64_t cr3;
   uint64_t cr4;
-  uint32_t eflags;
+  uint64_t eflags;
 };
 
 //Wrapped asm functions

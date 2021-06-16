@@ -59,14 +59,12 @@ void testf()
     asm("sti; run1: hlt; jmp run1");
 }
 
-void testf2()
+void idle_loop()
 {
     int i=0;
     for(;;) {
         asm("sti");
-        if ( i%1000000 == 1 )
-           // kprint_hex("RUN2 ",read_jiffies());
-        i+=1;
+        asm("hlt");
     }
 
     asm("sti; run1: hlt; jmp run1");
@@ -75,8 +73,8 @@ void kernel(void)
 {
     kprintf("Ted Wheeler OS has booted\n");
 	kthread_add(&start_dshell);
-    //kthread_add(&fs_test);
-    kthread_add(&testf2);
+    kthread_add(&idle_loop);
+    //kthread_add(&testf2);
     
 
     //start_dshell();
