@@ -205,6 +205,8 @@ void gdt_install()
 	gdt_set_gate(2, 0, 0xFFFFFFFFffffffff, 0x92, 0x0);
 	gdt_set_gate(3, 0, 0xFFFFFFFFffffffff, 0xfa, 0x20);
     gdt_set_gate(4, 0, 0xFFFFFFFFffffffff, 0xf2, 0x0);
+
+    //Note GDT tss gate is two entries wide. use special function to set upper 32-64 bits of base addr
     gdt_set_gate(5, base, limit, 0xe9, 0x00);
     gdt_tss_set_gate(6, base, limit, 0xe9, 0x00);
 
