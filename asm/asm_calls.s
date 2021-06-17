@@ -21,6 +21,32 @@ gdt_flush:
 flush2:
     ret
 
+[global tss_flush]
+tss_flush:
+    mov ax, 5*8 | 3
+    ltr ax
+    ret
+
+test_user_function:
+    add eax,123
+    jmp $     
+
+[global jump_usermode] 
+jump_usermode:
+	mov ax, (4 * 8) | 3 ; ring 3 data with bottom 2 bits set for ring 3
+	mov ds, ax
+	mov es, ax 
+	mov fs, ax 
+	mov gs, ax ; SS is handled by iret
+	; set up the stack frame iret expects
+	push (4 * 8) | 3 ; data selector
+	push rsp ; current esp
+    push 0x203
+	push (3 * 8) | 3 ; code selector (ring 3 code with bottom 2 bits set for ring 3)
+	push test_user_function ; instruction address to return to
+    sti
+	iretq
+
 setup_long_mode:
   ret 
 [global idt_flush] ; make 'gdt_flush' accessible from C code
@@ -305,4 +331,8 @@ panic_handler_31:
 [global panic_handler_32] ;
 panic_handler_32:
     mov rax,32
+    jmp panic_handler
+[global panic_handler_80] ;
+panic_handler_80:
+    mov rax,80
     jmp panic_handler

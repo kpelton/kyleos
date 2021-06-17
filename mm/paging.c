@@ -16,7 +16,7 @@ void fill_dir(uint64_t startaddr,uint64_t * dir)
     uint64_t address = startaddr;
     int i=0;
     for(i = 0; i < 512; i++) {
-        dir[i] = address | 3; // map address and mark it present/writable
+        dir[i] = address | 0x7; // map address and mark it present/writable
         address = address + 0x1000;
     }
 }
@@ -29,12 +29,12 @@ void setup_paging()
     uint64_t j = 0;
     uint64_t address = 0;
 
-    pml4[511] = ((uint64_t)&page_dir_ptr_tab -addr_start)| 3; // set the page directory into the PDPT and mark it present
-    page_dir_ptr_tab[510] = ((uint64_t)&page_dir -addr_start) | 3; // set the page directory into the PDPT and mark it present
+    pml4[511] = ((uint64_t)&page_dir_ptr_tab -addr_start)| 7; // set the page directory into the PDPT and mark it present
+    page_dir_ptr_tab[510] = ((uint64_t)&page_dir -addr_start) | 7; // set the page directory into the PDPT and mark it present
 
     j=0;
     for(i = 0; i < PAGE_TAB; i++) {
-        page_dir[i] = ((uint64_t)&page_tab[j] -addr_start)| 3; //set the page table into the PD and mark it present/writable
+        page_dir[i] = ((uint64_t)&page_tab[j] -addr_start)| 7; //set the page table into the PD and mark it present/writable
         fill_dir((0x200000*j),page_tab[j]);
         j+=1;
     }

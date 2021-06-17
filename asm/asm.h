@@ -34,5 +34,8 @@ void outw( unsigned short port,unsigned short val );
 void io_wait( void );
 struct RegDump dump_regs();
 uint32_t rdmsr(uint32_t msr_id);
+void tss_flush();
+void jump_usermode();
+
 void wrmsr (uint32_t msr_id, uint32_t msr_value);
 #endif
