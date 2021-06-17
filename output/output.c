@@ -245,3 +245,13 @@ void read_input(char * dest)
 {
      serial_read_input(dest);
 }
+
+int kstrlen(char *str)
+{
+    char *str_p;
+    str_p= str;
+    int len=0;
+    for(;*str_p !='\0'; str_p++)
+        len++;
+    return len;
+}

@@ -29,7 +29,14 @@ tss_flush:
 
 test_user_function:
     add eax,123
-    jmp $     
+    int 0x80
+    jmp $
+
+[global usermode_int] ;
+usermode_int:
+    mov rax,80
+    cli
+    iretq
 
 [global jump_usermode] 
 jump_usermode:
@@ -331,8 +338,4 @@ panic_handler_31:
 [global panic_handler_32] ;
 panic_handler_32:
     mov rax,32
-    jmp panic_handler
-[global panic_handler_80] ;
-panic_handler_80:
-    mov rax,80
     jmp panic_handler

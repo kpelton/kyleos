@@ -12,6 +12,7 @@ void kprintf(char *str);
 void kprint_hex(char *desc, unsigned long val);
 void output_init();
 int kstrcmp(char *dest, const char *src);
+int kstrlen(char *str);
 void read_input(char * dest);
 
 

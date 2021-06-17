@@ -1,4 +1,5 @@
 #define INT_GATE 0x8E
+#define INT_GATE_USER 0xEE
 #include <include/types.h>
 struct gdt_entry
 {
@@ -96,7 +97,7 @@ void panic_handler_29();
 void panic_handler_30();
 void panic_handler_31();
 void panic_handler_32();
-void panic_handler_80();
+void usermode_int();
 void kbd_handler();
 void timer_handler();
 void serial_handler();
@@ -154,12 +155,13 @@ void idt_install(void)
     IDT_PANIC(30);
     IDT_PANIC(31);
     IDT_PANIC(32);
-    IDT_PANIC(80);
+    //Entry into kernel from userspace
+    idt_set_gate(0x80,usermode_int ,INT_GATE_USER);
 
     //setup other ints
-      idt_set_gate(32,(uint64_t )timer_handler,INT_GATE);
-      idt_set_gate(33,(uint64_t )kbd_handler,INT_GATE);
-      idt_set_gate(36,(uint64_t )serial_handler,INT_GATE);
+    idt_set_gate(32,(uint64_t )timer_handler,INT_GATE);
+    idt_set_gate(33,(uint64_t )kbd_handler,INT_GATE);
+    idt_set_gate(36,(uint64_t )serial_handler,INT_GATE);
               
     //write to cpu
     idt_flush();
@@ -205,6 +207,8 @@ void gdt_install()
     gdt_set_gate(4, 0, 0xFFFFFFFFffffffff, 0xf2, 0x0);
     gdt_set_gate(5, base, limit, 0xe9, 0x00);
     gdt_tss_set_gate(6, base, limit, 0xe9, 0x00);
+
+    //TODO: These will change
 	tss_entry.rsp0 = 0xffffffffbf000000; // Set the kernel stack pointer.
 	tss_entry.ist1 = 0xffffffffb0000000; // Set the kernel stack pointer.
 

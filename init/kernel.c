@@ -72,8 +72,8 @@ void idle_loop()
 void kernel(void)
 {
     kprintf("Ted Wheeler OS has booted\n");
-	kthread_add(&start_dshell);
-    kthread_add(&idle_loop);
+	kthread_add(&start_dshell,"D Shell");
+    kthread_add(&idle_loop, "Idle loop");
 
     
 
@@ -89,7 +89,8 @@ void kinit(void)
     kprintf("Copyright:Kyle Pelton 2020 all rights reserved\n");
     kprintf("Install GDT\n");
     gdt_install();
-    
+        tss_flush();
+
     kprintf("Installing idt\n");
     idt_install();
     PIC_init();
@@ -97,7 +98,6 @@ void kinit(void)
     kprintf("PIC init done..\n");
     kprintf("MM init\n");
     setup_paging();
-    tss_flush();
     //user mode test
     mm_init();
     //need to setup kernel stack after paging is setup
@@ -105,6 +105,7 @@ void kinit(void)
     kprintf("Switch to kernel tables/stack done.\n");
 
     ata_init();
+    //IRQ_set_mask(0);//timer
     //jump_usermode();
 
     kernel();
