@@ -102,10 +102,10 @@ void schedule()
 {
     int i = next_task;
     int x = pid +i;
-asm("cli");   
+    asm("cli");   
     for (i = next_task; i < max_task; i++) {
         next_task = (next_task +1) %max_task;
-    //    kprint_hex("next ",next_task);
+        //kprint_hex("next ",next_task);
         if (update_timer(&ktasks[i].timer)) {
             ktasks[i].state = TASK_READY;
         }
