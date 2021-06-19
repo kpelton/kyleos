@@ -186,7 +186,6 @@ void gdt_set_gate(int num, uint64_t base, uint64_t limit, uint8_t access, uint8_
 	gdt[num].granularity = ((limit >> 16) & 0x0F);
  
 	gdt[num].granularity |= (gran & 0xF0);
-    kprint_hex("access ",access);
 	gdt[num].access = access;
 }
 
@@ -221,10 +220,8 @@ void gdt_install()
 	tss_entry.rsp0 = 0xffffffffbf000000; // Set the kernel stack pointer.
 	tss_entry.ist1 = 0xffffffffb0000000; // Set the kernel stack pointer.
 
-    kprint_hex("base", base);
     //jump_usermode();
 	gdt_flush();
-    kprint_hex("sizeof", sizeof(tss_entry));
 
 
 }

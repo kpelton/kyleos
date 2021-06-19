@@ -121,15 +121,16 @@ void schedule()
             asm volatile("movq %%rbp ,%0" : "=g"(ktasks[prev_task].s_rbp));
             //kprint_hex("saved stack ",ktasks[prev_task].s_rsp);
         }
-        prev_task=i;
         if (ktasks[i].state == TASK_NEW && ktasks[i].type == KERNEL_PROCESS) {
             ktasks[i].state = TASK_RUNNING;
+            prev_task=i;
             switch_to(ktasks[i].start_stack,ktasks[i].start_addr);
             return;
         }
         else if (ktasks[i].state == TASK_NEW && ktasks[i].type == USER_PROCESS) {
             ktasks[i].state = TASK_RUNNING;
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
+            prev_task=i;
             jump_usermode(ktasks[i].start_addr,ktasks[i].user_start_stack);
             return;
         }
@@ -137,9 +138,9 @@ void schedule()
             ktasks[i].state = TASK_RUNNING;
             ktasks[i].context_switches += 1;
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
+            prev_task=i;
             resume_p(ktasks[i].s_rsp,ktasks[i].s_rbp);
             return;
         }	
-//    kprint_hex("Skip ",i);
     }
 }

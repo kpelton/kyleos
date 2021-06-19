@@ -57,12 +57,10 @@ void * kmalloc(unsigned int p_size)
 void kfree(void *ptr)
 {
     struct  mm_block *lptr = ptr - (sizeof(struct mm_block));
-    while(lptr != 0) {
-        if (lptr->addr == ptr) {
+    if (lptr->addr == ptr) {
             lptr->free = 1;
-            break;
-        }
-        lptr = lptr->next;
+    } else {
+        kprintf("Memory courrption detected on free\n");
     }
 }
 
