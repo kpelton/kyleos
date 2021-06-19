@@ -1,5 +1,6 @@
 #ifndef SCHED_H
 #define SCHED_H
+#include <timer/timer.h>
 #define SCHED_MAX_TASKS 100
 #define SCHED_MAX_NAME 32
 #define KTHREAD_STACK_SIZE 0x8000
@@ -8,7 +9,8 @@ void kthread_add(unsigned long *fptr,char * name);
 void user_process_add(unsigned long *fptr,char * name);
 void schedule();
 void sched_stats();
-
+void ksleepm(unsigned int ms);
+struct ktask* get_current_process();
 enum sched_states {
 	TASK_RUNNING,
 	TASK_READY,
@@ -36,6 +38,7 @@ struct ktask{
 	unsigned long *s_rsp;
 	unsigned long *s_rbp;
 	unsigned long context_switches;
+    struct basic_timer timer;
 };
 
 

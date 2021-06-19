@@ -1,6 +1,7 @@
 #define INT_GATE 0x8E
 #define INT_GATE_USER 0xEE
 #include <include/types.h>
+#include <init/tables.h>
 struct gdt_entry
 {
     uint16_t limit_low;
@@ -21,27 +22,7 @@ struct idt_entry{
     uint32_t zero;
 } __attribute__((packed));
 
-struct tss_entry_struct {
-    uint32_t reserved_start;
-    uint64_t rsp0;
-    uint64_t rsp1;
-    uint64_t rsp2;
-    uint32_t reserved1;
-    uint32_t reserved2;
-    uint64_t ist1;
-    uint64_t ist2;
-    uint64_t ist3;
-    uint64_t ist4;
-    uint64_t ist5;
-    uint64_t ist6;
-    uint64_t ist7;
-    uint32_t reserved3;
-    uint32_t reserved4;
-    uint16_t reserved5;
-	uint16_t iomap_base;
-} __attribute__((packed));
 
-struct tss_entry_struct tss_entry;
 
 struct gdt_ptr
 {
@@ -103,6 +84,32 @@ void timer_handler();
 void serial_handler();
 void jump_usermode();
 
+struct tss_entry_struct {
+    uint32_t reserved_start;
+    uint64_t rsp0;
+    uint64_t rsp1;
+    uint64_t rsp2;
+    uint32_t reserved1;
+    uint32_t reserved2;
+    uint64_t ist1;
+    uint64_t ist2;
+    uint64_t ist3;
+    uint64_t ist4;
+    uint64_t ist5;
+    uint64_t ist6;
+    uint64_t ist7;
+    uint32_t reserved3;
+    uint32_t reserved4;
+    uint16_t reserved5;
+	uint16_t iomap_base;
+} __attribute__((packed));
+
+struct tss_entry_struct tss_entry;
+
+
+void set_tss_rsp(uint64_t ptr) {
+    tss_entry.rsp0 = ptr;
+}
 void idt_set_gate(int num, uint64_t base, uint8_t type_attr)
 {
 	idt[num].offset_1 = (uint16_t) (base & 0x0000FFFF);

@@ -19,11 +19,9 @@ void update_cursor(int row, int col)
 void vga_clear()
 {
     int i;
-    asm("cli");
     for(i=0; i<(80*25)*2; i++) {
         vram[i] = 0x00;
     }
-    asm("cli");
 }
 void vga_scroll()
 {

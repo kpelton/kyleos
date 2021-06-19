@@ -14,6 +14,13 @@ void resume_p(unsigned long rsp,unsigned long rbp);
 const char process_types_str [PROCESS_TYPES_LEN][100] = {"Kernel","User"};
 const char task_type_str [TASK_STATE_NUM][100] = {"RUNNING","READY","NEW","BLOCKED","DONE"};
 
+void ksleepm(unsigned int ms) {
+    struct ktask *process = get_current_process();
+    process->timer = new_timer(ms); 
+    //yield to another process
+    schedule();
+}
+
 void kthread_add(unsigned long *fptr,char * name)
 {
 	struct ktask *t;
@@ -32,9 +39,14 @@ void kthread_add(unsigned long *fptr,char * name)
 	t->start_stack = stack_low+ KTHREAD_STACK_SIZE;
 	t->pid = pid;
 	t->type = KERNEL_PROCESS;
+    t->timer.state = TIMER_UNUSED;
 	kstrcpy(t->name,name);
 	t->context_switches = 0;
 	pid+=1;
+}
+
+struct ktask* get_current_process() {
+    return &ktasks[prev_task];
 }
 
 void user_process_add(unsigned long *fptr,char * name)
@@ -58,6 +70,7 @@ void user_process_add(unsigned long *fptr,char * name)
 	t->user_start_stack = user_stack_low + KTHREAD_STACK_SIZE;
 	t->pid = pid;
 	t->type = USER_PROCESS;
+    t->timer.state = TIMER_UNUSED;
 	kstrcpy(t->name,name);
 	t->context_switches = 0;
 	pid+=1;
@@ -81,37 +94,52 @@ void sched_stats()
 		kprintf("  Process Type:    ");
 		kprintf(process_types_str[ktasks[i].type]);
 		kprintf("\n");
+		kprint_hex("  Sleep state:    ",ktasks[i].timer.state);
 	}
 }
+
 void schedule()
 {
-		int i = next_task;
-		int x = pid +i;
-		do  {
-			next_task = (next_task +1) %max_task;
-			if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED) {
-				ktasks[prev_task].state = TASK_READY;
-				//save old stack
-				asm volatile("movq %%rsp ,%0" : "=g"(ktasks[prev_task].s_rsp));
-				asm volatile("movq %%rbp ,%0" : "=g"(ktasks[prev_task].s_rbp));
-				//kprint_hex("saved stack ",ktasks[prev_task].s_rsp);
-			}
-			prev_task=i;
+    int i = next_task;
+    int x = pid +i;
+asm("cli");   
+    for (i = next_task; i < max_task; i++) {
+        next_task = (next_task +1) %max_task;
+    //    kprint_hex("next ",next_task);
+        if (update_timer(&ktasks[i].timer)) {
+            ktasks[i].state = TASK_READY;
+        }
+        if (ktasks[i].timer.state == TIMER_RUNNING) {
+            ktasks[i].state = TASK_BLOCKED;
+            return;
+        }
 
-			if (ktasks[i].state == TASK_NEW && ktasks[i].type == KERNEL_PROCESS) {
-				ktasks[i].state = TASK_RUNNING;
-				switch_to(ktasks[i].start_stack,ktasks[i].start_addr);
-			}
-			else if (ktasks[i].state == TASK_NEW && ktasks[i].type == USER_PROCESS) {
-				ktasks[i].state = TASK_RUNNING;
-				set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
-				jump_usermode(ktasks[i].start_addr,ktasks[i].user_start_stack);
-			}
-			else if (ktasks[i].state == TASK_READY){
-					ktasks[i].state = TASK_RUNNING;
-					ktasks[i].context_switches += 1;
-					set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
-					resume_p(ktasks[prev_task].s_rsp,ktasks[prev_task].s_rbp);
-			}	
-		}while (ktasks[next_task].state == TASK_BLOCKED);
+        if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED) {
+            ktasks[prev_task].state = TASK_READY;
+            //save old stack
+            asm volatile("movq %%rsp ,%0" : "=g"(ktasks[prev_task].s_rsp));
+            asm volatile("movq %%rbp ,%0" : "=g"(ktasks[prev_task].s_rbp));
+            //kprint_hex("saved stack ",ktasks[prev_task].s_rsp);
+        }
+        prev_task=i;
+        if (ktasks[i].state == TASK_NEW && ktasks[i].type == KERNEL_PROCESS) {
+            ktasks[i].state = TASK_RUNNING;
+            switch_to(ktasks[i].start_stack,ktasks[i].start_addr);
+            return;
+        }
+        else if (ktasks[i].state == TASK_NEW && ktasks[i].type == USER_PROCESS) {
+            ktasks[i].state = TASK_RUNNING;
+            set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
+            jump_usermode(ktasks[i].start_addr,ktasks[i].user_start_stack);
+            return;
+        }
+        else if (ktasks[i].state == TASK_READY){
+            ktasks[i].state = TASK_RUNNING;
+            ktasks[i].context_switches += 1;
+            set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
+            resume_p(ktasks[i].s_rsp,ktasks[i].s_rbp);
+            return;
+        }	
+//    kprint_hex("Skip ",i);
+    }
 }

@@ -14,7 +14,7 @@ char WHEELER_PROMPT[] = "Ted Wheeler OS |0:";
 char * dir_stack[100][256];
 int top_dir_stack = -1;
 
-static void ksleepm(unsigned int msec) {
+static void ksleepm_busy(unsigned int msec) {
     unsigned int expires = read_jiffies()+(msec);
     while(read_jiffies() < expires);
 }
@@ -219,12 +219,13 @@ for(;;) {
 
 //
     while (1) { 
-        asm("hlt");
         for(int i =0; i<512; i++)
             buffer[i]= '\0';
         read_input(buffer);
-        if (buffer[0] == '\0')
+        if (buffer[0] == '\0') {
+            asm("hlt");
             continue;
+        }
         if (kstrcmp(buffer,"ls\n") == 0) {
 
             print_dir(pwd);
@@ -264,8 +265,9 @@ for(;;) {
         }else if (kstrcmp(buffer,"sched\n") == 0) {
             sched_stats();
         }else if (kstrcmp(buffer,"gas\n") == 0) {
-            for (;;)
+            for (;;){
                 kprintf("Fuck ted wheeler\n");
+            }
         } else {
             kprintf("Unknown command:");
             kprintf(buffer);

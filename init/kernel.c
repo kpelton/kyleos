@@ -13,7 +13,7 @@
 #define HALT() asm("cli; hlt")
 #define START() asm("sti; run: hlt; jmp run")
 #define HANG() asm("cli; hlt")
-
+void test_user_function ();
 void print_vendor()
 {
     unsigned int  b,c,d;
@@ -46,14 +46,13 @@ void ksleep(unsigned int sec)
     while(read_jiffies() < expires);
 
 }
-void testf()
+void test_sleep()
 {
     int i=0;
     for(;;) {
         asm("sti");
-        if ( i%1000000 == 1 )
-          //  kprint_hex("RUN3 ",read_jiffies());
-        i+=1;
+//        kprintf("FUCK TED WHEELER\n");
+        ksleepm(10);
     }
 
     asm("sti; run1: hlt; jmp run1");
@@ -64,19 +63,77 @@ void idle_loop()
     int i=0;
     for(;;) {
         asm("sti");
+        ksleepm(100);
         asm("hlt");
     }
-
-    asm("sti; run1: hlt; jmp run1");
 }
 void kernel(void)
 {
     kprintf("Ted Wheeler OS has booted\n");
 	kthread_add(&start_dshell,"D Shell");
-    kthread_add(&idle_loop, "Idle loop");
-
-    
-
+//    kthread_add(&idle_loop, "Idle loop");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+    kthread_add(&test_sleep, "sleep test");
+        user_process_add(&test_user_function,"Test userspace3");
+    user_process_add(&test_user_function,"Test userspace3");
+    user_process_add(&test_user_function,"Test userspace3");
+    user_process_add(&test_user_function,"Test userspace3");
     //start_dshell();
     START();
 }
@@ -89,7 +146,7 @@ void kinit(void)
     kprintf("Copyright:Kyle Pelton 2020 all rights reserved\n");
     kprintf("Install GDT\n");
     gdt_install();
-        tss_flush();
+    tss_flush();
 
     kprintf("Installing idt\n");
     idt_install();
@@ -106,6 +163,7 @@ void kinit(void)
 
     ata_init();
     //IRQ_set_mask(0);//timer
+    
     //jump_usermode();
 
     kernel();

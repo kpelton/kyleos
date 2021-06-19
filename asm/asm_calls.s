@@ -3,10 +3,15 @@
 [extern print_regs]
 [extern kbd_irq]
 [extern serial_irq]
+[extern kprintf]
+[extern ksleepm]
 [extern timer_irq]
 [global gdt_flush]
 [global load_page_directory]
 [global setup_long_mode]
+HelloString db '1', 0
+
+
 gdt_flush:
  mov rax, strict qword gp
  lgdt [rax]
@@ -27,18 +32,39 @@ tss_flush:
     ltr ax
     ret
 
+test_user_function2:
+    add eax,123
+    ;;int 0x80
+    ;;sti
+    ret
+[global test_user_function]
 test_user_function:
     add eax,123
     int 0x80
-    jmp $
+    ;sti
+    call test_user_function2
+    jmp test_user_function
+    ret
+
+
 
 [global usermode_int] ;
 usermode_int:
-    mov rax,80
-    cli
+    mov rdi,100
+    call ksleepm
+    mov rdi,HelloString
+    call kprintf
+    ;jmp panic_handler
+    mov ax, (4 * 8)
+	mov ds, ax
+	mov es, ax 
+	mov fs, ax 
     iretq
 
-[global jump_usermode] 
+[global jump_usermode]
+
+;rdi address to jump to
+;rsi user stack
 jump_usermode:
 	mov ax, (4 * 8) | 3 ; ring 3 data with bottom 2 bits set for ring 3
 	mov ds, ax
@@ -47,10 +73,10 @@ jump_usermode:
 	mov gs, ax ; SS is handled by iret
 	; set up the stack frame iret expects
 	push (4 * 8) | 3 ; data selector
-	push rsp ; current esp
+	push rsi ; current esp
     push 0x203
 	push (3 * 8) | 3 ; code selector (ring 3 code with bottom 2 bits set for ring 3)
-	push test_user_function ; instruction address to return to
+	push rdi ; instruction address to return to
     sti
 	iretq
 
@@ -83,6 +109,10 @@ kbd_handler:
     push r14
     push r15
     pushfq
+    mov ax, (2 * 8)
+	mov ds, ax
+	mov es, ax 
+	mov fs, ax 
     call kbd_irq
     popfq
     pop r15
@@ -119,6 +149,11 @@ timer_handler:
     push r14
     push r15
     pushfq
+    mov ax, (2 * 8)
+	mov ds, ax
+	mov es, ax 
+	mov fs, ax 
+	mov gs, ax ; SS is handled by iret
     call timer_irq
     popfq
     pop r15
@@ -156,6 +191,10 @@ serial_handler:
     push r14
     push r15
     pushfq
+    mov ax, (2 * 8)
+	mov ds, ax
+	mov es, ax 
+	mov fs, ax 
     call serial_irq
     popfq
     pop r15
