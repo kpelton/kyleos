@@ -264,10 +264,6 @@ for(;;) {
             kprint_hex("Jiffies 0x",read_jiffies());
         }else if (kstrcmp(buffer,"sched\n") == 0) {
             sched_stats();
-        }else if (kstrcmp(buffer,"gas\n") == 0) {
-            for (;;){
-                kprintf("Fuck ted wheeler\n");
-            }
         } else {
             kprintf("Unknown command:");
             kprintf(buffer);

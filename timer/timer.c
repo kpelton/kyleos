@@ -8,7 +8,6 @@ int update_timer(struct basic_timer* t)
         unsigned int current = read_jiffies();
         if (current  >= t->end_time) {
             t->state = TIMER_EXPIRED;
-
             return 1;
         }
     }

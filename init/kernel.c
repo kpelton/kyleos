@@ -51,7 +51,6 @@ void test_sleep()
     int i=0;
     for(;;) {
         asm("sti");
-//        kprintf("FUCK TED WHEELER\n");
         ksleepm(10);
     }
 

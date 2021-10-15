@@ -74,9 +74,9 @@ void mm_print_stats()
             size +=sizeof(struct mm_block);
             if (lptr->free == 0)
                 size += lptr->size;
-           // kprint_hex("Used Memory        0x", lptr->addr);
-           // kprint_hex("   Size            0x", lptr->size);
-          //  kprint_hex("   free          0x", lptr->free);
+            kprint_hex("Used Memory        0x", lptr->addr);
+            kprint_hex("   Size            0x", lptr->size);
+            kprint_hex("   free          0x", lptr->free);
             ll_size +=1;
             lptr = lptr->next;
 

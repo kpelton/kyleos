@@ -19,6 +19,7 @@ void ksleepm(unsigned int ms) {
     process->timer = new_timer(ms); 
     //yield to another process
     schedule();
+	//asm("sti");
 }
 
 void kthread_add(unsigned long *fptr,char * name)
@@ -139,7 +140,11 @@ void schedule()
             ktasks[i].context_switches += 1;
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
             prev_task=i;
-            resume_p(ktasks[i].s_rsp,ktasks[i].s_rbp);
+            //kprintf("Resuming:");
+			//kprintf(ktasks[i].name);
+			//kprintf("\n");
+			resume_p(ktasks[i].s_rsp,ktasks[i].s_rbp);
+			
             return;
         }	
     }

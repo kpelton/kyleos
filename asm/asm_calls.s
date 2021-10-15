@@ -50,7 +50,7 @@ test_user_function:
 
 [global usermode_int] ;
 usermode_int:
-    mov rdi,100
+    mov rdi,1000
     call ksleepm
     mov rdi,HelloString
     call kprintf
@@ -130,6 +130,7 @@ kbd_handler:
     pop rcx
     pop rbx
     pop rax
+    sti
     iretq
 [global timer_handler] ; global int handler
 timer_handler:
@@ -171,6 +172,7 @@ timer_handler:
     pop rcx
     pop rbx
     pop rax
+    sti
     iretq
 
 [global serial_handler] ; global int handler
@@ -212,12 +214,15 @@ serial_handler:
     pop rcx
     pop rbx
     pop rax
+    sti
+
     iretq
 
 [global switch_to] ; global int handler
 switch_to:
     mov rsp,rdi
     mov rax,rsi
+    sti
     jmp rax
     jmp $
 
@@ -226,6 +231,7 @@ resume_p:
     mov rsp,rdi
     mov rbp,rsi
     sub rsp ,8
+    sti
     ret
 
 [global panic_handler] ; global int handler
