@@ -6,6 +6,7 @@
 [extern kprintf]
 [extern ksleepm]
 [extern timer_irq]
+[extern rtc_irq]
 [global gdt_flush]
 [global load_page_directory]
 [global setup_long_mode]
@@ -50,10 +51,10 @@ test_user_function:
 
 [global usermode_int] ;
 usermode_int:
-    mov rdi,10000
+    mov rdi,100
     call ksleepm
     mov rdi,HelloString
-    call kprintf
+    ;call kprintf
     ;jmp panic_handler
     mov ax, (4 * 8)
 	mov ds, ax
@@ -93,6 +94,7 @@ std_handler:
     iretq
 [global kbd_handler] ; global int handler
 kbd_handler:
+    cli
     push rax
     push rbx
     push rcx
@@ -178,6 +180,7 @@ timer_handler:
 
 [global serial_handler] ; global int handler
 serial_handler:
+    cli
     push rax
     push rbx
     push rcx
@@ -218,6 +221,50 @@ serial_handler:
     sti
 
     iretq
+
+[global rtc_handler] ; global int handler
+rtc_handler:
+    cli
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    pushfq
+    mov ax, (2 * 8)
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    call rtc_irq
+    popfq
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    sti
+    iretq
+
 
 [global switch_to] ; global int handler
 switch_to:

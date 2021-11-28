@@ -34,7 +34,7 @@ sched: sched/sched.o
 output: output/output.o output/vga.o output/uart.o
 	$(MAKE) -C output
 
-timer: timer/pit.o timer/timer.o
+timer: timer/pit.o timer/timer.o timer/rtc.o
 	$(MAKE) -C timer
 
 clean: 

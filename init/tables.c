@@ -82,6 +82,7 @@ void usermode_int();
 void kbd_handler();
 void timer_handler();
 void serial_handler();
+void rtc_handler();
 void jump_usermode();
 
 struct tss_entry_struct {
@@ -169,6 +170,7 @@ void idt_install(void)
     idt_set_gate(32,(uint64_t )timer_handler,INT_GATE);
     idt_set_gate(33,(uint64_t )kbd_handler,INT_GATE);
     idt_set_gate(36,(uint64_t )serial_handler,INT_GATE);
+    idt_set_gate(64,(uint64_t )rtc_handler,INT_GATE);
               
     //write to cpu
     idt_flush();

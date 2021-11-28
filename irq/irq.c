@@ -51,7 +51,6 @@ void PIC_remap(int offset1, int offset2)
 	io_wait();
 	outb(PIC2_DATA, 2);                       // ICW3: tell Slave PIC its cascade identity (0000 0010)
 	io_wait();
- 
 	outb(PIC1_DATA, ICW4_8086);
 	io_wait();
 	outb(PIC2_DATA, ICW4_8086);
@@ -101,6 +100,9 @@ void PIC_init(void)
    IRQ_clear_mask(1); //kbd
    IRQ_clear_mask(0);//timer
    IRQ_clear_mask(4); //uart
+   IRQ_clear_mask(8); //rtc
+   IRQ_clear_mask(2); //slave PIC
+   //enable time update interrupt
 }
 
 void kbd_irq()
@@ -119,8 +121,7 @@ void kbd_irq()
    outb(0x64,0xFF);  /* set the "enable kbd" bit */
    PIC_sendEOI(1);
 
-//   pong_handle_key(scancode);
-  
+
 }
 unsigned int read_jiffies()
 {

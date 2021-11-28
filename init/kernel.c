@@ -8,6 +8,7 @@
 #include <timer/pit.h>
 #include <block/vfs.h>
 #include <sched/sched.h>
+#include <timer/rtc.h>
 #include <init/dshell.h>
 
 #define HALT() asm("cli; hlt")
@@ -86,7 +87,8 @@ void kinit(void)
     idt_install();
     PIC_init();
     pit_init();
-    kprintf("PIC init done..\n");
+    kprintf("PIC init done\n");
+
     kprintf("MM init\n");
     setup_paging();
     //user mode test
@@ -94,7 +96,8 @@ void kinit(void)
     //need to setup kernel stack after paging is setup
     asm("mov $0xffffffffbf000000,%rsp");
     kprintf("Switch to kernel tables/stack done.\n");
-
+    rtc_init();
+    kprintf("RTC init done\n");
     ata_init();
     //IRQ_set_mask(0);//timer
     
