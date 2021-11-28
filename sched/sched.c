@@ -104,48 +104,42 @@ void schedule()
     int i = next_task;
     int x = pid +i;
     asm("cli");   
+    if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED) {
+        ktasks[prev_task].state = TASK_READY;
+        //save old stack
+        asm volatile("movq %%rsp ,%0" : "=g"(ktasks[prev_task].s_rsp));
+        asm volatile("movq %%rbp ,%0" : "=g"(ktasks[prev_task].s_rbp));
+    }
+ 
     for (i = next_task; i < max_task; i++) {
         next_task = (next_task +1) %max_task;
-        //kprint_hex("next ",next_task);
+        
         if (update_timer(&ktasks[i].timer)) {
             ktasks[i].state = TASK_READY;
         }
-        if (ktasks[i].timer.state == TIMER_RUNNING) {
+        else if (ktasks[i].timer.state == TIMER_RUNNING) {
             ktasks[i].state = TASK_BLOCKED;
             return;
         }
 
-        if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED) {
-            ktasks[prev_task].state = TASK_READY;
-            //save old stack
-            asm volatile("movq %%rsp ,%0" : "=g"(ktasks[prev_task].s_rsp));
-            asm volatile("movq %%rbp ,%0" : "=g"(ktasks[prev_task].s_rbp));
-            //kprint_hex("saved stack ",ktasks[prev_task].s_rsp);
-        }
+       
+        prev_task=i;
+
         if (ktasks[i].state == TASK_NEW && ktasks[i].type == KERNEL_PROCESS) {
             ktasks[i].state = TASK_RUNNING;
-            prev_task=i;
             switch_to(ktasks[i].start_stack,ktasks[i].start_addr);
-            return;
         }
         else if (ktasks[i].state == TASK_NEW && ktasks[i].type == USER_PROCESS) {
             ktasks[i].state = TASK_RUNNING;
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
-            prev_task=i;
             jump_usermode(ktasks[i].start_addr,ktasks[i].user_start_stack);
-            return;
         }
         else if (ktasks[i].state == TASK_READY){
             ktasks[i].state = TASK_RUNNING;
             ktasks[i].context_switches += 1;
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
-            prev_task=i;
-            //kprintf("Resuming:");
-			//kprintf(ktasks[i].name);
-			//kprintf("\n");
 			resume_p(ktasks[i].s_rsp,ktasks[i].s_rbp);
-			
-            return;
         }	
+        return;
     }
 }

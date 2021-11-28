@@ -1,7 +1,7 @@
 #ifndef SCHED_H
 #define SCHED_H
 #include <timer/timer.h>
-#define SCHED_MAX_TASKS 100
+#define SCHED_MAX_TASKS 1024
 #define SCHED_MAX_NAME 32
 #define KTHREAD_STACK_SIZE 0x8000
 

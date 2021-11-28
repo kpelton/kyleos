@@ -9,7 +9,7 @@
 [global gdt_flush]
 [global load_page_directory]
 [global setup_long_mode]
-HelloString db '1', 0
+HelloString db 'hello',0xa, 0
 
 
 gdt_flush:
@@ -50,7 +50,7 @@ test_user_function:
 
 [global usermode_int] ;
 usermode_int:
-    mov rdi,1000
+    mov rdi,10000
     call ksleepm
     mov rdi,HelloString
     call kprintf
@@ -134,6 +134,7 @@ kbd_handler:
     iretq
 [global timer_handler] ; global int handler
 timer_handler:
+    cli
     push rax
     push rbx
     push rcx

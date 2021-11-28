@@ -61,8 +61,6 @@ void idle_loop()
 {
     int i=0;
     for(;;) {
-        asm("sti");
-        ksleepm(100);
         asm("hlt");
     }
 }
@@ -70,70 +68,8 @@ void kernel(void)
 {
     kprintf("Ted Wheeler OS has booted\n");
 	kthread_add(&start_dshell,"D Shell");
-//    kthread_add(&idle_loop, "Idle loop");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-    kthread_add(&test_sleep, "sleep test");
-        user_process_add(&test_user_function,"Test userspace3");
+    //kthread_add(&idle_loop, "Idle loop");
     user_process_add(&test_user_function,"Test userspace3");
-    user_process_add(&test_user_function,"Test userspace3");
-    user_process_add(&test_user_function,"Test userspace3");
-    //start_dshell();
     START();
 }
 
@@ -146,7 +82,6 @@ void kinit(void)
     kprintf("Install GDT\n");
     gdt_install();
     tss_flush();
-
     kprintf("Installing idt\n");
     idt_install();
     PIC_init();
