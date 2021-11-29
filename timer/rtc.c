@@ -14,12 +14,23 @@
 #define UIR 0x10
 #define UPDATE 0x40
 #define IE UIR
+static struct sys_time current_time;
+static void set_time(unsigned char hour, unsigned char min, unsigned char sec);
 
 void rtc_init() {
    outb(CMOS_ADDR,REG_B);
    outb(CMOS_DATA,IE);
    outb(CMOS_ADDR,REG_C);
    inb(CMOS_DATA);
+}
+static void set_time(unsigned char hour, unsigned char min, unsigned char sec) {
+    current_time.hour = hour;
+    current_time.min = min;
+    current_time.sec = sec;
+}
+
+struct sys_time get_time() {
+    return current_time;
 }
 
 void rtc_irq()
@@ -61,13 +72,7 @@ void rtc_irq()
     }
     //hour %=24;
     PIC_sendEOI(8);
-    itoa_8(hour, buffer, 10);
-    kprintf(buffer);
-    kprintf(":");
-    ptr = itoa_8(min, buffer2, 16);
-    kprintf(ptr);
-    kprintf(":");
-    itoa_8(sec, buffer, 16);
-    kprintf(buffer);
-    kprintf("\n");
+
+    set_time(hour,min,sec);
+
 }

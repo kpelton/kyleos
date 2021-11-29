@@ -7,17 +7,13 @@
 #include <timer/pit.h>
 #include <block/vfs.h>
 #include <sched/sched.h>
+#include <timer/rtc.h>
 
 
 char WHEELER_PROMPT[] = "Ted Wheeler OS |0:";
 
 char * dir_stack[100][256];
 int top_dir_stack = -1;
-
-static void ksleepm_busy(unsigned int msec) {
-    unsigned int expires = read_jiffies()+(msec);
-    while(read_jiffies() < expires);
-}
 
 static void push_dir_stack(char *dir) 
 {
@@ -176,6 +172,22 @@ void fs_test() {
     return; 
 
 }
+void print_time() {
+    char buffer[16];
+    char buffer2[16];
+    char *ptr;
+    struct sys_time current_time = get_time();
+
+    itoa_8(current_time.hour, buffer, 10);
+    kprintf(buffer);
+    kprintf(":");
+    ptr = itoa_8(current_time.min, buffer2, 16);
+    kprintf(ptr);
+    kprintf(":");
+    itoa_8(current_time.sec, buffer, 16);
+    kprintf(buffer);
+}
+
 void start_dshell() {
 
     char buffer[512];
@@ -187,7 +199,6 @@ void start_dshell() {
     struct inode *oldpwd=pwd;
     push_dir_stack("/");
     print_prompt();
-    short buffer2[256] ={010101};
 
     //write_sec(0,buffer2);
    // asm("test: jmp test");
@@ -264,6 +275,9 @@ for(;;) {
             kprint_hex("Jiffies 0x",read_jiffies());
         }else if (kstrcmp(buffer,"sched\n") == 0) {
             sched_stats();
+        }else if (kstrcmp(buffer,"time\n") == 0) {
+            print_time();
+            kprintf("\n");
         } else {
             kprintf("Unknown command:");
             kprintf(buffer);
