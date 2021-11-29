@@ -1,4 +1,6 @@
 #include <timer/rtc.h>
+#include <irq/irq.h>
+#include <asm/asm.h>
 #include <output/output.h>
 
 #define CMOS_ADDR 0x70
