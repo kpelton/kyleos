@@ -70,20 +70,22 @@ void mm_print_stats()
         struct  mm_block *lptr = head;
         unsigned long size = 0;
         unsigned long ll_size = 0;
+        
         while(lptr != 0) {
             size +=sizeof(struct mm_block);
             if (lptr->free == 0)
                 size += lptr->size;
-            kprint_hex("Used Memory        0x", lptr->addr);
-            kprint_hex("   Size            0x", lptr->size);
-            kprint_hex("   free          0x", lptr->free);
+           // kprint_hex("Used Memory        0x", lptr->addr);
+           // kprint_hex("   Size            0x", lptr->size);
+           // kprint_hex("   free          0x", lptr->free);
             ll_size +=1;
             lptr = lptr->next;
 
         }
-    kprint_hex("Total Used Memory     0x", size);
-    kprint_hex("LL nodes              0x", ll_size);
-    kprint_hex("LL node size          0x", ll_size*sizeof(struct mm_block));
+        
+    kprint_dec("Total Used Memory     K ", size/1024);
+    kprint_dec("LL nodes                ", ll_size);
+    kprint_dec("LL node size          K ", (ll_size*sizeof(struct mm_block)) /1024);
     kprint_hex("End of kernel         0x", (unsigned long) &_kernel_end);
     kprint_hex("Start of kernel       0x",0xffffffff80000000);
 }

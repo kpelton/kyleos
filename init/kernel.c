@@ -9,11 +9,10 @@
 #include <block/vfs.h>
 #include <sched/sched.h>
 #include <timer/rtc.h>
+#include <timer/pit.h>
 #include <init/dshell.h>
 
-#define HALT() asm("cli; hlt")
-#define START() asm("sti; run: hlt; jmp run")
-#define HANG() asm("cli; hlt")
+
 void test_user_function ();
 void print_vendor()
 {
@@ -52,7 +51,7 @@ void test_sleep()
     int i=0;
     for(;;) {
         asm("sti");
-        ksleepm(10);
+        ksleepm(1000);
     }
 
     asm("sti; run1: hlt; jmp run1");
@@ -70,8 +69,9 @@ void kernel(void)
     kprintf("Ted Wheeler OS has booted\n");
 	kthread_add(&start_dshell,"D Shell");
     //kthread_add(&idle_loop, "Idle loop");
-    user_process_add(&test_user_function,"Test userspace3");
-    START();
+    //user_process_add(&test_user_function,"Test userspace3");
+
+    asm("sti; run: hlt; jmp run");
 }
 
 void kinit(void)

@@ -240,6 +240,15 @@ void kprint_hex(char *desc, unsigned long val)
     kprintf(buffer);
     kprintf("\n");
 }
+void kprint_dec(char *desc, unsigned long val)
+{
+    char buffer[20];
+    kprintf(desc);
+    itoa(val,buffer,10);
+    kprintf(buffer);
+    kprintf("\n");
+}
+
 
 void read_input(char * dest)
 {

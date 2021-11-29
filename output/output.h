@@ -10,6 +10,7 @@ int atoi(char *str);
 int kpow(int base, int exp);
 void kprintf(char *str);
 void kprint_hex(char *desc, unsigned long val);
+void kprint_dec(char *desc, unsigned long val);
 void output_init();
 int kstrcmp(char *dest, const char *src);
 int kstrlen(char *str);

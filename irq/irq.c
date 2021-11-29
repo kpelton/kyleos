@@ -3,7 +3,6 @@
 #include <irq/irq.h>
 #include <sched/sched.h>
 
-unsigned int jiffies=0;
 #define PIC1		0x20		/* IO base address for master PIC */
 #define PIC2		0xA0		/* IO base address for slave PIC */
 #define PIC1_COMMAND	PIC1
@@ -97,7 +96,7 @@ void PIC_init(void)
    for(i=0; i<20; i++)
      IRQ_set_mask(i);
 
-   IRQ_clear_mask(1); //kbd
+   //IRQ_clear_mask(1); //kbd
    IRQ_clear_mask(0);//timer
    IRQ_clear_mask(4); //uart
    IRQ_clear_mask(8); //rtc
@@ -107,31 +106,11 @@ void PIC_init(void)
 
 void kbd_irq()
 {
-   char buffer[8];
-   unsigned char scancode;
-   scancode = inb(0x60);
+   //char buffer[8];
+   //unsigned char scancode;
+   //scancode = inb(0x60);
 
-
-   itoa(scancode,buffer,16);
-   kprintf("  ");
-
-   itoa(jiffies,buffer,16);
-   kprintf(buffer);
-
-   outb(0x64,0xFF);  /* set the "enable kbd" bit */
    PIC_sendEOI(1);
 
 
-}
-unsigned int read_jiffies()
-{
-    return jiffies;
-}
-
-void timer_irq()
-{
-   jiffies+=1;
-   PIC_sendEOI(1);
-   //kprintf("timer\n");
-   schedule();
 }
