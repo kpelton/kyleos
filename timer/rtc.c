@@ -1,5 +1,5 @@
 #include <timer/rtc.h>
-
+#include <output/output.h>
 
 #define CMOS_ADDR 0x70
 #define CMOS_DATA 0x71
@@ -10,7 +10,9 @@
 #define REG_HOUR 0x4
 //Value to write to set the 1 second update register
 #define UIR 0x10
+#define UPDATE 0x40
 #define IE UIR
+
 void rtc_init() {
    outb(CMOS_ADDR,REG_B);
    outb(CMOS_DATA,IE);
@@ -24,7 +26,10 @@ void rtc_irq()
     unsigned char hour;
     unsigned char min;
     unsigned char registerB;
-    char buffer[8];
+    char buffer[20];
+    char buffer2[20];
+    char *ptr;
+    int i;
 
     //Clear interrupt RTC register
     outb(CMOS_ADDR, 0xc);
@@ -45,18 +50,22 @@ void rtc_irq()
         hour = ((hour & 0x7F) + 12) % 24;
     }
 
-    hour -= 8;
-    hour %=24;
+    for(i=8; i >=0; i--) {
+
+        if (hour > 23)
+            hour = 23;
+        else
+            hour -= 1;
+    }
+    //hour %=24;
     PIC_sendEOI(8);
-    /*
-    itoa(hour, buffer, 16);
+    itoa_8(hour, buffer, 10);
     kprintf(buffer);
     kprintf(":");
-    itoa(min, buffer, 16);
-    kprintf(buffer);
+    ptr = itoa_8(min, buffer2, 16);
+    kprintf(ptr);
     kprintf(":");
-    itoa(sec, buffer, 16);
+    itoa_8(sec, buffer, 16);
     kprintf(buffer);
     kprintf("\n");
-    */
 }
