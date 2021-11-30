@@ -36,16 +36,7 @@ unsigned char read_status(void) {
 }
 
 void print_drive_status(void) {
-
-    char cbuffer[10];
-    unsigned char status;
-
-    status = read_status();
-    itoa(status,cbuffer,16);
-    kprintf("ATA STATUS:");
-    kprintf(cbuffer);
-    kprintf("\n");
-
+    kprintf("ATA STATUS:0x%x\n",read_status());
 }
 int write_sec(unsigned int sec,void *buffer  )
 {
@@ -138,7 +129,6 @@ void ata_init(void)
     unsigned short part_type;
 
     char mbr[512];
-    char cbuffer[10];
     kprintf("ATA init\n");
     read_sec(0,mbr);
     part_start = mbr[0x1c6] | mbr[0x1c7] <<8 | mbr[0x1c8] <<16| mbr[0x1c9] <<24;
@@ -154,21 +144,9 @@ void ata_init(void)
         fs1.fs_size = part_size;
         fs1.part_type = part_type;
         kprintf("MBR INFO:\n");
-        kprintf("fs start: 0x");
-        itoa(fs1.fs_start,cbuffer,16);
-        kprintf(cbuffer);
-        kprintf("\n");
-
-        kprintf("fs size: 0x");
-        itoa(fs1.fs_size,cbuffer,16);
-        kprintf(cbuffer);
-        kprintf("\n");
-    
-        kprintf("part_type: 0x");
-        itoa(fs1.part_type,cbuffer,16);
-        kprintf(cbuffer);
-        kprintf("\n");
-
+        kprintf("fs start: 0x%x\n",fs1.fs_start);
+        kprintf("fs size:  0x%x\n",fs1.fs_size);
+        kprintf("part_type: 0x%x\n",fs1.part_type);
 
         fat_init(fs1);
     }

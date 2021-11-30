@@ -11,8 +11,8 @@ static int pid = 1;
 
 void switch_to(unsigned long rsp,unsigned long addr);
 void resume_p(unsigned long rsp,unsigned long rbp);
-const char process_types_str [PROCESS_TYPES_LEN][100] = {"Kernel","User"};
-const char task_type_str [TASK_STATE_NUM][100] = {"RUNNING","READY","NEW","BLOCKED","DONE"};
+static const char process_types_str [PROCESS_TYPES_LEN][100] = {"Kernel","User"};
+static const char task_type_str [TASK_STATE_NUM][100] = {"RUNNING","READY","NEW","BLOCKED","DONE"};
 
 void ksleepm(unsigned int ms) {
     struct ktask *process = get_current_process();
@@ -82,20 +82,14 @@ void sched_stats()
 	int i;
 
 	for (i=0; i<max_task; i++) {
-		kprint_hex("PID ",ktasks[i].pid);
-		kprintf("  name:");
-		kprintf(ktasks[i].name);
-		kprintf("\n");
-		kprint_hex("  stack:           0x",ktasks[i].start_stack);
-		kprint_hex("  stack end:       0x",ktasks[i].start_stack-KTHREAD_STACK_SIZE);
-		kprintf("  Process State:   ");
-		kprintf(task_type_str[ktasks[i].state]);
-		kprintf("\n");
-		kprint_hex("  context switches:0x",ktasks[i].context_switches);
-		kprintf("  Process Type:    ");
-		kprintf(process_types_str[ktasks[i].type]);
-		kprintf("\n");
-		kprint_hex("  Sleep state:    ",ktasks[i].timer.state);
+		kprintf("PID %d\n",ktasks[i].pid);
+		kprintf("  name:%s\n",ktasks[i].name);
+		kprintf("  stack:           0x%x\n",ktasks[i].start_stack);
+		kprintf("  stack end:       0x%x\n",ktasks[i].start_stack-KTHREAD_STACK_SIZE);
+		kprintf("  Process State:   %s\n",task_type_str[ktasks[i].state]);
+		kprintf("  context switches:0x%x\n",ktasks[i].context_switches);
+		kprintf("  Process Type:    %s\n",process_types_str[ktasks[i].type]);
+		kprintf("  Sleep state:    %d\n",ktasks[i].timer.state);
 	}
 }
 

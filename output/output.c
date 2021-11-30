@@ -1,13 +1,8 @@
 #include <output/vga.h>
 #include <output/uart.h>
+#include <output/output.h>
 #include <asm/asm.h>
 
-
-void kprintf(char *str)
-{
-    vga_kprintf(str);
-    serial_kprintf(str);
-}
 void output_init()
 {
     vga_clear();
@@ -78,73 +73,7 @@ int kstrcmp(char *dest, const char *src)
         }
     return 0;
 }
-//refactor itoa
-char * itoa_8( unsigned char value, char * str, int base )
-{
-    char * rc;
-    char * ptr;
-    char * low;
-    // Check for supported base.
-    if ( base < 2 || base > 36 )
-    {
-        *str = '\0';
-        return str;
-    }
-    rc = ptr = str;
-    // Set '-' for negative decimals.
-   // Remember where the numbers start.
-    low = ptr;
-    // The actual conversion.
-    do
-    {
-        // Modulo is negative for negative value. This trick makes abs() unnecessary.
-        *ptr++ = "zyxwvutsrqponmlkjihgfedcba9876543210123456789abcdefghijklmnopqrstuvwxyz"[35 + value % base];
-        value /= base;
-    } while ( value );
-    // Terminating the string.
-    *ptr-- = '\0';
-    // Invert the numbers.
-    while ( low < ptr )
-    {
-        char tmp = *low;
-        *low++ = *ptr;
-        *ptr-- = tmp;
-    }
-    return rc;
-}
-char * itoa_16( unsigned short value, char * str, int base )
-{
-    char * rc;
-    char * ptr;
-    char * low;
-    // Check for supported base.
-    if ( base < 2 || base > 36 )
-    {
-        *str = '\0';
-        return str;
-    }
-    rc = ptr = str;
-    // Set '-' for negative decimals.
-   // Remember where the numbers start.
-    low = ptr;
-    // The actual conversion.
-    do
-    {
-        // Modulo is negative for negative value. This trick makes abs() unnecessary.
-        *ptr++ = "zyxwvutsrqponmlkjihgfedcba9876543210123456789abcdefghijklmnopqrstuvwxyz"[35 + value % base];
-        value /= base;
-    } while ( value );
-    // Terminating the string.
-    *ptr-- = '\0';
-    // Invert the numbers.
-    while ( low < ptr )
-    {
-        char tmp = *low;
-        *low++ = *ptr;
-        *ptr-- = tmp;
-    }
-    return rc;
-}
+
 char * itoa( unsigned long value, char * str, int base )
 {
     char * rc;
@@ -183,10 +112,7 @@ static void print_reg(char * name,unsigned long val)
 {
     char buffer[50];
     itoa(val,buffer,16);
-    kprintf(name);
-    kprintf(":0x");
-    kprintf(buffer);
-    kprintf(" ");
+    kprintf("%s:0x%x ",name,val);
 }
 void print_regs(unsigned long exception,unsigned long rip) {
     struct RegDump dump;
@@ -248,6 +174,56 @@ void kprint_dec(char *desc, unsigned long val)
     kprintf(buffer);
     kprintf("\n");
 }
+
+static void puts( char *str) {
+    vga_kprintf(str);
+    serial_kprintf(str);
+}
+
+static void putc( char c) {
+    char buffer[2] = {'\0'};
+    buffer[0] = c;
+
+    vga_kprintf(buffer);
+    serial_kprintf(buffer);
+
+}
+
+void kprintf(char *format, ...)
+{
+    char *ptr = format;
+    unsigned long x;
+    char * str_ptr;
+    char buffer[20];
+    va_list arguments;
+    va_start(arguments, format);
+    while(*ptr != '\0') {
+        if (*ptr == '%') {
+            ptr++;
+            switch (*ptr) {
+                case 'x':
+                    x = va_arg(arguments,unsigned long);
+                    itoa(x,buffer,16);
+                    puts(buffer);
+                break;
+                case 'd':
+                    x = va_arg(arguments,unsigned long);
+                    itoa(x,buffer,10);
+                    puts(buffer);
+                break;
+                case 's':
+                    str_ptr = va_arg(arguments,char *);
+                    puts(str_ptr);
+                break;
+            }
+        } else {
+            putc(*ptr);
+        }
+        ptr++;
+    }
+    va_end(arguments);
+}
+
 
 
 void read_input(char * dest)

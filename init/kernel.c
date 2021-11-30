@@ -61,15 +61,16 @@ void idle_loop()
 {
     int i=0;
     for(;;) {
-        asm("hlt");
+        schedule();
+        //asm("hlt");
     }
 }
 void kernel(void)
 {
     kprintf("Ted Wheeler OS has booted\n");
+    kthread_add(&idle_loop, "Idle loop");
+    user_process_add(&test_user_function,"Test userspace3");
 	kthread_add(&start_dshell,"D Shell");
-    //kthread_add(&idle_loop, "Idle loop");
-    //user_process_add(&test_user_function,"Test userspace3");
 
     asm("sti; run: hlt; jmp run");
 }
@@ -79,7 +80,7 @@ void kinit(void)
     output_init();
     kprintf("Booting.......\n");
     kprintf("Ted Wheeler OS.......\n");
-    kprintf("Copyright:Kyle Pelton 2020 all rights reserved\n");
+    kprintf("Copyright:Kyle Pelton 2020-2021 all rights reserved\n");
     kprintf("Install GDT\n");
     gdt_install();
     tss_flush();

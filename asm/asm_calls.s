@@ -51,10 +51,10 @@ test_user_function:
 
 [global usermode_int] ;
 usermode_int:
-    mov rdi,100
+    mov rdi,1000
     call ksleepm
     mov rdi,HelloString
-    ;call kprintf
+    ;;call kprintf
     ;jmp panic_handler
     mov ax, (4 * 8)
 	mov ds, ax

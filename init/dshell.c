@@ -173,19 +173,9 @@ void fs_test() {
 
 }
 void print_time() {
-    char buffer[16];
-    char buffer2[16];
-    char *ptr;
     struct sys_time current_time = get_time();
-
-    itoa_8(current_time.hour, buffer, 10);
-    kprintf(buffer);
-    kprintf(":");
-    ptr = itoa_8(current_time.min, buffer2, 16);
-    kprintf(ptr);
-    kprintf(":");
-    itoa_8(current_time.sec, buffer, 16);
-    kprintf(buffer);
+    //TODO: figure out why this is showing hex
+    kprintf("%d:%x:%x\n",current_time.hour,current_time.min,current_time.sec);
 }
 
 void start_dshell() {
@@ -234,7 +224,6 @@ for(;;) {
             buffer[i]= '\0';
         read_input(buffer);
         if (buffer[0] == '\0') {
-            asm("hlt");
             continue;
         }
         if (kstrcmp(buffer,"ls\n") == 0) {
@@ -272,12 +261,11 @@ for(;;) {
         }else if (kstrcmp(buffer,"panic\n") == 0) {
             print_regs(0xdeadbeef,0xdeadbeef);
         }else if (kstrcmp(buffer,"jiffies\n") == 0) {
-            kprint_hex("Jiffies 0x",read_jiffies());
+            kprintf("Jiffies: %d\n",read_jiffies());
         }else if (kstrcmp(buffer,"sched\n") == 0) {
             sched_stats();
         }else if (kstrcmp(buffer,"time\n") == 0) {
             print_time();
-            kprintf("\n");
         } else {
             kprintf("Unknown command:");
             kprintf(buffer);

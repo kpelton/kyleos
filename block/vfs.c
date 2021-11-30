@@ -3,7 +3,7 @@
 #include <mm/mm.h>
 
 struct vfs_device vfs_devices[VFS_MAX_DEVICES];
-int current_device = 0;
+static int current_device = 0;
 
 int vfs_register_device(struct vfs_device newdev) {
 
@@ -15,7 +15,7 @@ int vfs_register_device(struct vfs_device newdev) {
     dev = &vfs_devices[current_device];
     *dev = newdev;
     dev->devicenum = current_device;
-    kprint_hex("VFS Device registered ",dev->devicenum);
+    kprintf("VFS Device registered %d\n",dev->devicenum);
     current_device+=1;
     return 0;
 }
@@ -34,12 +34,11 @@ void vfs_read_inode_file(struct inode * i_node) {
     vfs_devices[idev].ops->read_inode_file(i_node);
 }
 
-void vfs_free_inode(struct inode * i_node) 
-{
+void vfs_free_inode(struct inode * i_node) {
     kfree(i_node);
 }
-void vfs_free_inode_list(struct inode_list * list) 
-{
+
+void vfs_free_inode_list(struct inode_list * list) {
     struct inode_list* curr=list;
     struct inode_list* prev=list;
 
@@ -75,7 +74,7 @@ struct dnode* vfs_read_root_dir(char *path) {
     }
     idev = atoi(dev);
     if (idev > VFS_MAX_DEVICES || idev > current_device-1) {
-        kprint_hex("Invalid device",idev);
+        kprintf("Invalid device %d\n",idev);
         goto error;
     }
     vdevice = &vfs_devices[idev];

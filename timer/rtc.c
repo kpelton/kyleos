@@ -13,7 +13,7 @@
 //Value to write to set the 1 second update register
 #define UIR 0x10
 #define UPDATE 0x40
-#define IE UIR
+#define IE UIR | 0x10
 static struct sys_time current_time;
 static void set_time(unsigned char hour, unsigned char min, unsigned char sec);
 
@@ -33,16 +33,13 @@ struct sys_time get_time() {
     return current_time;
 }
 
-void rtc_irq()
-{
+void rtc_irq() {
     unsigned char sec;
     unsigned char hour;
     unsigned char min;
     unsigned char registerB;
-    char buffer[20];
-    char buffer2[20];
-    char *ptr;
     int i;
+    PIC_sendEOI(8);
 
     //Clear interrupt RTC register
     outb(CMOS_ADDR, 0xc);
@@ -58,8 +55,7 @@ void rtc_irq()
     outb(CMOS_ADDR, REG_HOUR);
     hour = inb(CMOS_DATA);
 
-    if (!(registerB & 0x02) && (hour & 0x80))
-    {
+    if (!(registerB & 0x02) && (hour & 0x80)) {
         hour = ((hour & 0x7F) + 12) % 24;
     }
 
@@ -70,9 +66,6 @@ void rtc_irq()
         else
             hour -= 1;
     }
-    //hour %=24;
-    PIC_sendEOI(8);
-
     set_time(hour,min,sec);
 
 }

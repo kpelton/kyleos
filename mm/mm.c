@@ -83,11 +83,11 @@ void mm_print_stats()
 
         }
         
-    kprint_dec("Total Used Memory     K ", size/1024);
-    kprint_dec("LL nodes                ", ll_size);
-    kprint_dec("LL node size          K ", (ll_size*sizeof(struct mm_block)) /1024);
-    kprint_hex("End of kernel         0x", (unsigned long) &_kernel_end);
-    kprint_hex("Start of kernel       0x",0xffffffff80000000);
+    kprintf("Total Used Memory     %dK\n", size/1024);
+    kprintf("LL nodes              %d\n", ll_size);
+    kprintf("LL node size          %dK\n", (ll_size*sizeof(struct mm_block)) /1024);
+    kprintf("End of kernel         0x%x\n", (unsigned long) &_kernel_end);
+    kprintf("Start of kernel       0x%x\n",0xffffffff80000000);
 }
 
 void mm_init()
