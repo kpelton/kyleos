@@ -2,7 +2,6 @@
 #include <timer/timer.h>
 #include <irq/irq.h>
 
-
 //States the timer can be in
 const char *str_timer_states[] = {
     "TIMER_EXPIRED",
@@ -22,7 +21,6 @@ int update_timer(struct basic_timer* t)
         }
     }
     return 0;
-
 }
 
 struct basic_timer new_timer(unsigned int ms) 
@@ -38,5 +36,3 @@ struct basic_timer new_timer(unsigned int ms)
     t.state = TIMER_RUNNING;
     return t;
 }
-
-

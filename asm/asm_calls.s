@@ -51,7 +51,7 @@ test_user_function:
 
 [global usermode_int] ;
 usermode_int:
-    mov rdi,10
+    mov rdi,1000
     call ksleepm
     mov rdi,HelloString
     ;;call kprintf
