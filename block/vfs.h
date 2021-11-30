@@ -1,6 +1,7 @@
 #ifndef VFS_H
 #define VFS_H
 #include <block/fat.h>
+#include <include/types.h>
 #define VFS_MAX_DEVICES 10
 #define FAT_FS 0
 #define VFS_MAX_FNAME 256
@@ -14,7 +15,7 @@ union fsinfo {
 };
 
 struct vfs_device {   
-    unsigned int devicenum;
+    uint32_t devicenum;
     struct  vfs_ops* ops;
     int fstype;
     union fsinfo finfo;
@@ -24,8 +25,8 @@ struct inode {
     char i_name[VFS_MAX_FNAME];
     int i_type;
     struct vfs_device* dev;
-    unsigned long i_ino;
-    unsigned long file_size;
+    uint64_t  i_ino;
+    uint64_t file_size;
 };
 
 struct inode_list {

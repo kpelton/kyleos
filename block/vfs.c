@@ -49,11 +49,13 @@ void vfs_free_inode_list(struct inode_list * list) {
         prev = curr;
     }
 }
+
 void vfs_free_dnode(struct dnode * dn) {
     vfs_free_inode_list(dn->head);
     vfs_free_inode(dn->root_inode);
     kfree(dn);
 }
+
 struct dnode* vfs_read_root_dir(char *path) {
 
     char *ptr = path;
