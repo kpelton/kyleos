@@ -15,7 +15,7 @@
 #define UPDATE 0x40
 #define IE UIR | 0x10
 static struct sys_time current_time;
-static void set_time(unsigned char hour, unsigned char min, unsigned char sec);
+static void set_time(uint8_t hour, uint8_t min, uint8_t sec);
 
 //Enable rtc interrupt
 void rtc_init() {
@@ -24,7 +24,7 @@ void rtc_init() {
    outb(CMOS_ADDR,REG_C);
    inb(CMOS_DATA);
 }
-static void set_time(unsigned char hour, unsigned char min, unsigned char sec) {
+static void set_time(uint8_t hour, uint8_t min, uint8_t sec) {
     current_time.hour = hour;
     current_time.min = min;
     current_time.sec = sec;
@@ -35,10 +35,10 @@ struct sys_time get_time() {
 }
 
 void rtc_irq() {
-    unsigned char sec;
-    unsigned char hour;
-    unsigned char min;
-    unsigned char registerB;
+    uint8_t sec;
+    uint8_t hour;
+    uint8_t min;
+    uint8_t registerB;
     int i;
     PIC_sendEOI(8);
 
