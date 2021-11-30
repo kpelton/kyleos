@@ -14,7 +14,7 @@ const char *str_timer_states[] = {
 int update_timer(struct basic_timer* t) 
 {
     if (t->state == TIMER_RUNNING) {
-        unsigned int current = read_jiffies();
+        uint32_t current = read_jiffies();
         if (current  >= t->end_time) {
             t->state = TIMER_EXPIRED;
             return 1;
@@ -23,7 +23,7 @@ int update_timer(struct basic_timer* t)
     return 0;
 }
 
-struct basic_timer new_timer(unsigned int ms) 
+struct basic_timer new_timer(uint32_t ms) 
 {
     struct basic_timer t;
 

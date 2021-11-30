@@ -66,7 +66,6 @@ int write_sec(unsigned int sec,void *buffer  )
 #endif
     }
 
-
     //Data is not quite ready, need to read status a few more times
     for(i=0; i<100; i++)
         status = read_status();
@@ -78,7 +77,6 @@ int write_sec(unsigned int sec,void *buffer  )
         outb(PRIMARY + COMMAND_REG,CMD_CACHE_FLUSH);
     }
 
-    
     return 0;
 }
 int read_sec(unsigned int sec,void *buffer  ) {
@@ -106,21 +104,18 @@ int read_sec(unsigned int sec,void *buffer  ) {
         print_drive_status();
 #endif
     }
+
     //Data is not quite ready, need to read status a few more times
     for(i=0; i<100; i++)
         status = read_status();
 
     //data is ready
-    for (i=0; i<256; i++) {
-        //asm("cli");
-        data[i] = inw(0x1f0);
-        //itoa_16(data[i],cbuffer,16);
-        //kprintf(cbuffer);
-        //kprintf(" ");
-    }
-    //kprintf("\n");
+    for (i=0; i<256; i++) 
+        data[i] = inw(PRIMARY);
+    
     return 0;
 }
+
 void ata_init(void)
 {
     unsigned int part_start;
@@ -135,7 +130,6 @@ void ata_init(void)
     part_size = mbr[0x1ca] | mbr[0x1cb] <<8 | mbr[0x1cc] <<16| mbr[0x1cd] <<24;
     valid_mbr = mbr[0x1fe] | mbr[0x1ff] <<8 ;
     part_type = mbr[0x1c2];
-
 
     //Look for valid MBR 0x55aa
     if (valid_mbr == 0xaa55) {
@@ -154,7 +148,6 @@ void ata_init(void)
         kprintf("PANIC:ATA init failed.. could not find MBR");
         asm("cli; hlt");
     }
-
 }
 
 

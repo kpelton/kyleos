@@ -1,5 +1,6 @@
 #ifndef TIMER_H
 #define TIMER_H
+#include <include/types.h>
 
 enum timer_states{
     TIMER_EXPIRED,
@@ -13,12 +14,11 @@ extern const char *str_timer_states[];
 
 struct basic_timer {
     //Start time in jiffies
-    unsigned int start_time;
-    unsigned int end_time;
-    unsigned char state;
+    uint32_t start_time;
+    uint32_t end_time;
+    uint8_t state;
 };
 
 int update_timer(struct basic_timer *t);
-struct basic_timer new_timer(unsigned int ms);
+struct basic_timer new_timer(uint32_t ms);
 #endif
-

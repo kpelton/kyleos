@@ -208,7 +208,6 @@ for(;;) {
 
 
 //
-    ksleepm(1);
     while (1) { 
         for(int i =0; i<512; i++)
             buffer[i]= '\0';
