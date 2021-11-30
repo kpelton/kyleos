@@ -17,6 +17,7 @@
 static struct sys_time current_time;
 static void set_time(unsigned char hour, unsigned char min, unsigned char sec);
 
+//Enable rtc interrupt
 void rtc_init() {
    outb(CMOS_ADDR,REG_B);
    outb(CMOS_DATA,IE);
