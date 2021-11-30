@@ -1,6 +1,7 @@
 #include <output/output.h>
 #include <sched/sched.h>
 #include <init/tables.h>
+#include <timer/timer.h>
 #include <mm/mm.h>
 
 static struct ktask ktasks[SCHED_MAX_TASKS];
@@ -22,7 +23,7 @@ void ksleepm(unsigned int ms) {
 	//asm("sti");
 }
 
-void kthread_add(unsigned long *fptr,char * name)
+void kthread_add(void (*fptr)(),char * name)
 {
 	struct ktask *t;
 	unsigned long stack_low;
@@ -50,7 +51,7 @@ struct ktask* get_current_process() {
     return &ktasks[prev_task];
 }
 
-void user_process_add(unsigned long *fptr,char * name)
+void user_process_add(void (*fptr)(),char * name)
 {
 	struct ktask *t;
 	unsigned long stack_low;
@@ -89,7 +90,7 @@ void sched_stats()
 		kprintf("  Process State:   %s\n",task_type_str[ktasks[i].state]);
 		kprintf("  context switches:0x%x\n",ktasks[i].context_switches);
 		kprintf("  Process Type:    %s\n",process_types_str[ktasks[i].type]);
-		kprintf("  Sleep state:    %d\n",ktasks[i].timer.state);
+		kprintf("  Sleep state:     %s\n",str_timer_states[ktasks[i].timer.state]);
 	}
 }
 

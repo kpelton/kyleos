@@ -1,5 +1,6 @@
 #include <asm/asm.h>
 #include <irq/irq.h>
+#include <sched/sched.h>
 static unsigned int jiffies=0;
 
 void pit_init(void) {
@@ -19,5 +20,6 @@ void timer_irq()
    jiffies+=1;
    PIC_sendEOI(1);
    //kprintf("timer\n");
+   //Tick scheduler
    schedule();
 }

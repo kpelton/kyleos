@@ -1,6 +1,5 @@
 #include <mm/paging.h>
-#include <output/output.h>
-// 512 entriesi
+// 512 entries
 #define addr_start 0xffffffff80000000
 #define PAGE_TAB 511 //MAP 128mb TO KERNEL SPACE
 typedef  unsigned long long uint64_t;
@@ -24,7 +23,6 @@ void fill_dir(uint64_t startaddr,uint64_t * dir)
 void setup_paging()
 {
     //set each entry to not present
-    char buffer[200];
     uint64_t i = 0;
     uint64_t j = 0;
     uint64_t address = 0;
@@ -39,9 +37,6 @@ void setup_paging()
         j+=1;
     }
     address =(uint64_t) &pml4 - addr_start;
-    itoa(address,buffer,16);
-    kprintf(buffer);
-    kprintf("\n");
     asm volatile("cli; \
             movq %0 ,%%cr3; \
             " : : "r"(address));

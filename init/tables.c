@@ -22,8 +22,6 @@ struct idt_entry{
     uint32_t zero;
 } __attribute__((packed));
 
-
-
 struct gdt_ptr
 {
 	uint16_t limit;
@@ -105,29 +103,25 @@ struct tss_entry_struct {
 	uint16_t iomap_base;
 } __attribute__((packed));
 
-struct tss_entry_struct tss_entry;
+static struct tss_entry_struct tss_entry;
 
-
-void set_tss_rsp(uint64_t ptr) {
-    tss_entry.rsp0 = ptr;
+void set_tss_rsp(uint64_t *ptr) {
+    tss_entry.rsp0 =(uint64_t) ptr;
 }
-void idt_set_gate(int num, uint64_t base, uint8_t type_attr)
-{
-	idt[num].offset_1 = (uint16_t) (base & 0x0000FFFF);
-	idt[num].offset_2 = (uint16_t) ((base  & 0xFFFF0000)>>16);
-	idt[num].offset_3 = (uint32_t) ((base  & 0xFFFFFFFF00000000)>>32);
+static void idt_set_gate(int num, void (*base)(), uint8_t type_attr) {
+	idt[num].offset_1 = (uint16_t) ((uint64_t)base & 0x0000FFFF);
+	idt[num].offset_2 = (uint16_t) (((uint64_t)base  & 0xFFFF0000)>>16);
+	idt[num].offset_3 = (uint32_t) (((uint64_t)base  & 0xFFFFFFFF00000000)>>32);
     idt[num].type_attr = type_attr;
     idt[num].selector = 0x8;
     idt[num].zero = 0;
     idt[num].ist = 0;
 
 }
-#define IDT_PANIC(i)  idt_set_gate(i, (uint64_t) panic_handler_##i ,INT_GATE)
 
+#define IDT_PANIC(i)  idt_set_gate(i,panic_handler_##i ,INT_GATE)
 
-void idt_install(void)
-{
-    int i;
+void idt_install(void) {
     ip_t.base = (uint64_t)&idt;
     ip_t.limit = (sizeof(struct idt_entry) *256)-1;
 
@@ -167,19 +161,17 @@ void idt_install(void)
     idt_set_gate(0x80,usermode_int ,INT_GATE_USER);
 
     //setup other ints
-    idt_set_gate(32,(uint64_t )timer_handler,INT_GATE);
-    idt_set_gate(33,(uint64_t )kbd_handler,INT_GATE);
-    idt_set_gate(36,(uint64_t )serial_handler,INT_GATE);
-    idt_set_gate(64,(uint64_t )rtc_handler,INT_GATE);
+    idt_set_gate(32,timer_handler,INT_GATE);
+    idt_set_gate(33,kbd_handler,INT_GATE);
+    idt_set_gate(36,serial_handler,INT_GATE);
+    idt_set_gate(64,rtc_handler,INT_GATE);
               
     //write to cpu
     idt_flush();
-
 }
  
 // Very simple: fills a GDT entry using the parameters
-void gdt_set_gate(int num, uint64_t base, uint64_t limit, uint8_t access, uint8_t gran)
-{
+void gdt_set_gate(int num, uint64_t base, uint64_t limit, uint8_t access, uint8_t gran) {
 	gdt[num].base_low = (uint16_t) (base & 0xFFFF);
 	gdt[num].base_middle = (uint8_t) (base >> 16) & 0xFF;
 	gdt[num].base_high = (uint8_t) (base >> 24) & 0xFF;
@@ -191,23 +183,19 @@ void gdt_set_gate(int num, uint64_t base, uint64_t limit, uint8_t access, uint8_
 	gdt[num].access = access;
 }
 
-void gdt_tss_set_gate(int num, uint64_t base, uint64_t limit, uint8_t access, uint8_t gran)
-{
+void gdt_tss_set_gate(int num, uint64_t base) {
 	gdt[num].limit_low = (uint16_t) ((base &  0x0000FFFF00000000)>>32);
 	gdt[num].base_low = (uint16_t) ((base & 0xFFFF000000000000)>>48);
 }
  
- 
 // Sets our 3 gates and installs the real GDT through the assembler function
-void gdt_install()
-{
+void gdt_install() {
 	gp.limit = (sizeof(struct gdt_entry) * 7) - 1;
 	gp.base = (uint64_t)&gdt;
 
     uint64_t base = (uint64_t) &tss_entry;
 	uint32_t limit = sizeof tss_entry;
 
- 
 	gdt_set_gate(0, 0, 0, 0, 0);
 	gdt_set_gate(1, 0, 0xFFFFFFFFffffffff, 0x9A, 0x20);
 	gdt_set_gate(2, 0, 0xFFFFFFFFffffffff, 0x92, 0x0);
@@ -216,7 +204,7 @@ void gdt_install()
 
     //Note GDT tss gate is two entries wide. use special function to set upper 32-64 bits of base addr
     gdt_set_gate(5, base, limit, 0xe9, 0x00);
-    gdt_tss_set_gate(6, base, limit, 0xe9, 0x00);
+    gdt_tss_set_gate(6, base);
 
     //TODO: These will change
 	tss_entry.rsp0 = 0xffffffffbf000000; // Set the kernel stack pointer.
@@ -224,23 +212,15 @@ void gdt_install()
 
     //jump_usermode();
 	gdt_flush();
-
-
 }
-void gdt64_install()
-{
+void gdt64_install() {
     gp.limit = (sizeof(struct gdt_entry) * 5) - 1;
     gp.base = (uint64_t)&gdt;
-
-    uint32_t base = (uint32_t) &tss_entry;
-	uint32_t limit = sizeof tss_entry;
 
     gdt_set_gate(0, 0, 0, 0, 0);
     gdt_set_gate(1, 0, 0, 0x9A, 0x20);
     gdt_set_gate(2, 0, 0, 0x9A, 0x0);
-
     gdt_flush();
-
 }
 
 

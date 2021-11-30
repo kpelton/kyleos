@@ -5,8 +5,8 @@
 #define SCHED_MAX_NAME 32
 #define KTHREAD_STACK_SIZE 0x8000
 
-void kthread_add(unsigned long *fptr,char * name);
-void user_process_add(unsigned long *fptr,char * name);
+void kthread_add(void (*fptr)(),char * name);
+void user_process_add(void (*fptr)(),char * name);
 void schedule();
 void sched_stats();
 void ksleepm(unsigned int ms);

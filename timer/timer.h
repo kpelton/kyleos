@@ -9,6 +9,8 @@ enum timer_states{
     TIMER_MAX_STATE
 };
 
+extern const char *str_timer_states[];
+
 struct basic_timer {
     //Start time in jiffies
     unsigned int start_time;

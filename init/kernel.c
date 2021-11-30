@@ -48,7 +48,6 @@ void ksleep(unsigned int sec)
 }
 void test_sleep()
 {
-    int i=0;
     for(;;) {
         asm("sti");
         ksleepm(1000);
@@ -59,16 +58,15 @@ void test_sleep()
 
 void idle_loop()
 {
-    int i=0;
     for(;;) {
-        schedule();
-        //asm("hlt");
+        //schedule();
+        asm("hlt");
     }
 }
 void kernel(void)
 {
     kprintf("Ted Wheeler OS has booted\n");
-    kthread_add(&idle_loop, "Idle loop");
+    kthread_add(idle_loop, "Idle loop");
     user_process_add(&test_user_function,"Test userspace3");
 	kthread_add(&start_dshell,"D Shell");
 

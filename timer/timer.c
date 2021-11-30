@@ -2,6 +2,16 @@
 #include <timer/timer.h>
 #include <irq/irq.h>
 
+
+//States the timer can be in
+const char *str_timer_states[] = {
+    "TIMER_EXPIRED",
+    "TIMER_RUNNING",
+    "TIMER_STOPPED",
+    "TIMER_UNUSED",
+    "TIMER_MAX_STATE",
+};
+
 int update_timer(struct basic_timer* t) 
 {
     if (t->state == TIMER_RUNNING) {
@@ -12,6 +22,7 @@ int update_timer(struct basic_timer* t)
         }
     }
     return 0;
+
 }
 
 struct basic_timer new_timer(unsigned int ms) 
