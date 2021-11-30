@@ -1,6 +1,7 @@
 #ifndef PIT_H
 #define PIT_H
+#include <include/types.h>
 void pit_init();
-unsigned int read_jiffies();
+uint32_t read_jiffies();
 void timer_irq();
 #endif

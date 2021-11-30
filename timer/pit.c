@@ -1,7 +1,8 @@
 #include <asm/asm.h>
 #include <irq/irq.h>
 #include <sched/sched.h>
-static unsigned int jiffies=0;
+#include <timer/pit.h>
+static uint32_t jiffies=0;
 
 void pit_init(void) {
     outb(0x43,0x34);
@@ -10,7 +11,7 @@ void pit_init(void) {
     outb(0x40,0x2e);
 }
 
-unsigned int read_jiffies()
+uint32_t read_jiffies()
 {
     return jiffies;
 }
