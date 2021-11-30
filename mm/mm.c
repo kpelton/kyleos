@@ -22,9 +22,9 @@ void * kmalloc(unsigned int p_size)
         if (size <= lptr->size && lptr->free == 1 ) {
             lptr->free = 0;
             if ((unsigned long)lptr->addr  < 0xffffffff80000000) {
-                kprint_hex("old alloc ",(unsigned long) &lptr->addr);
-                kprint_hex("old alloc ",(unsigned long) &lptr->addr);
-                kprint_hex("mem corrution detected ",(unsigned long) &lptr->addr);
+                kprintf("old alloc %x\n",(unsigned long) &lptr->addr);
+                kprintf("old alloc %x\n",(unsigned long) &lptr->addr);
+                kprintf("mem corrution detected %x\n",(unsigned long) &lptr->addr);
                 continue;
             }
             return lptr->addr;

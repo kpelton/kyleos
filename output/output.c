@@ -2,24 +2,22 @@
 #include <output/uart.h>
 #include <output/output.h>
 #include <asm/asm.h>
-
-void output_init()
-{
+#include <include/stdarg.h>
+void output_init() {
     vga_clear();
     serial_init();
 }
 
-int kpow(int base,int exp)
-{
+int kpow(int base,int exp) {
     int i;
     int val = 1;
     for (i=0; i<exp; i++)
         val*= base;
     return val;
 }
+
 //only handles >=0
-int atoi(char* str)
-{
+int atoi(char* str) {
     char * ptr = str;
     int size = 1;
     int i;
@@ -42,8 +40,8 @@ int atoi(char* str)
     }
     return val;
 }
-char * kstrcpy(char *dest, const char *src)
-{
+
+char * kstrcpy(char *dest, const char *src) {
     int i;
     for (i=0; src[i] != '\0'; i++) 
         dest[i] = src[i];
@@ -51,8 +49,7 @@ char * kstrcpy(char *dest, const char *src)
     return dest;
 }
 
-char * kstrncpy(char *dest, const char *src,int bytes)
-{
+char * kstrncpy(char *dest, const char *src,int bytes) {
     int i;
     for (i=0; i <bytes; i++) {
         dest[i] = src[i];
@@ -60,12 +57,10 @@ char * kstrncpy(char *dest, const char *src,int bytes)
             break;
         }
     }
-     
     return dest;
 }
 
-int kstrcmp(char *dest, const char *src)
-{
+int kstrcmp(char *dest, const char *src) {
     int i;
     for (i=0; (src[i] != '\0' || dest[i] !='\0' ) ; i++) 
         if (src[i] != dest[i]) {
@@ -74,8 +69,7 @@ int kstrcmp(char *dest, const char *src)
     return 0;
 }
 
-char * itoa( unsigned long value, char * str, int base )
-{
+char * itoa( unsigned long value, char * str, int base ) {
     char * rc;
     char * ptr;
     char * low;
@@ -156,23 +150,6 @@ void print_regs(unsigned long exception,unsigned long rip) {
     print_reg("cr4",dump.cr4);
     kprintf("\n");
 
-
-}
-void kprint_hex(char *desc, unsigned long val)
-{
-    char buffer[20];
-    kprintf(desc);
-    itoa(val,buffer,16);
-    kprintf(buffer);
-    kprintf("\n");
-}
-void kprint_dec(char *desc, unsigned long val)
-{
-    char buffer[20];
-    kprintf(desc);
-    itoa(val,buffer,10);
-    kprintf(buffer);
-    kprintf("\n");
 }
 
 static void puts( char *str) {
@@ -224,15 +201,11 @@ void kprintf(char *format, ...)
     va_end(arguments);
 }
 
-
-
-void read_input(char * dest)
-{
+void read_input(char * dest) {
      serial_read_input(dest);
 }
 
-int kstrlen(char *str)
-{
+int kstrlen(char *str) {
     char *str_p;
     str_p= str;
     int len=0;
