@@ -10,10 +10,10 @@ static unsigned int next_task = 0;
 static int  prev_task = -1;
 static int pid = 1;
 
-void switch_to(unsigned long rsp,unsigned long addr);
-void resume_p(unsigned long rsp,unsigned long rbp);
-static const char process_types_str [PROCESS_TYPES_LEN][100] = {"Kernel","User"};
-static const char task_type_str [TASK_STATE_NUM][100] = {"RUNNING","READY","NEW","BLOCKED","DONE"};
+void switch_to(unsigned long *rsp,unsigned long *addr);
+void resume_p(unsigned long *rsp,unsigned long *rbp);
+static const char process_types_str [PROCESS_TYPES_LEN][20] = {"Kernel","User"};
+static const char task_type_str [TASK_STATE_NUM][20] = {"RUNNING","READY","NEW","BLOCKED","DONE"};
 
 void ksleepm(unsigned int ms) {
     struct ktask *process = get_current_process();
@@ -23,22 +23,16 @@ void ksleepm(unsigned int ms) {
 	//asm("sti");
 }
 
-void kthread_add(void (*fptr)(),char * name)
-{
+void kthread_add(void (*fptr)(),char * name) {
 	struct ktask *t;
 	unsigned long stack_low;
 	t = &ktasks[max_task];
 
-	//kprintf("Allocating Stack\n");
 	stack_low = (unsigned long) kmalloc(KTHREAD_STACK_SIZE);
 	max_task += 1;
-
-	//kprint_hex("Stack addr 0x",stack_low);
-	//kprint_hex("Stack ptr  0x",stack_low+ KTHREAD_STACK_SIZE);
-	//kprint_hex("start ptr  0x",fptr);
 	t->state = TASK_NEW;
-	t->start_addr = fptr;
-	t->start_stack = stack_low+ KTHREAD_STACK_SIZE;
+	t->start_addr = (unsigned long *) fptr;
+	t->start_stack =(unsigned long *) ( stack_low + KTHREAD_STACK_SIZE);
 	t->pid = pid;
 	t->type = KERNEL_PROCESS;
     t->timer.state = TIMER_UNUSED;
@@ -51,8 +45,7 @@ struct ktask* get_current_process() {
     return &ktasks[prev_task];
 }
 
-void user_process_add(void (*fptr)(),char * name)
-{
+void user_process_add(void (*fptr)(),char * name) {
 	struct ktask *t;
 	unsigned long stack_low;
 	unsigned long user_stack_low;
@@ -67,9 +60,9 @@ void user_process_add(void (*fptr)(),char * name)
 	//kprint_hex("Stack ptr  0x",stack_low+ KTHREAD_STACK_SIZE);
 	//kprint_hex("start ptr  0x",fptr);
 	t->state = TASK_NEW;
-	t->start_addr = fptr;
-	t->start_stack = stack_low + KTHREAD_STACK_SIZE;
-	t->user_start_stack = user_stack_low + KTHREAD_STACK_SIZE;
+	t->start_addr = (unsigned long *) fptr;
+	t->start_stack = (unsigned long *) (stack_low + KTHREAD_STACK_SIZE);
+	t->user_start_stack = (unsigned long *) (user_stack_low + KTHREAD_STACK_SIZE);
 	t->pid = pid;
 	t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
@@ -78,9 +71,8 @@ void user_process_add(void (*fptr)(),char * name)
 	pid+=1;
 }
 
-void sched_stats()
-{
-	int i;
+void sched_stats() {
+	unsigned int i;
 
 	for (i=0; i<max_task; i++) {
 		kprintf("PID %d\n",ktasks[i].pid);
@@ -94,10 +86,8 @@ void sched_stats()
 	}
 }
 
-void schedule()
-{
-    int i = next_task;
-    int x = pid +i;
+void schedule() {
+    unsigned int i = next_task;
     asm("cli");   
     if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED) {
         ktasks[prev_task].state = TASK_READY;
@@ -117,7 +107,6 @@ void schedule()
             return;
         }
 
-       
         prev_task=i;
 
         if (ktasks[i].state == TASK_NEW && ktasks[i].type == KERNEL_PROCESS) {
