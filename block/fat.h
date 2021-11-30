@@ -1,74 +1,75 @@
 #ifndef FAT_H
 #define FAT_H
 #include <block/ata.h>
+#include <include/types.h>
 
 typedef struct fat_extBS_32
 {
-	//extended fat32 stuff
-	unsigned int		table_size_32;
-	unsigned short		extended_flags;
-	unsigned short		fat_version;
-	unsigned int		root_cluster;
-	unsigned short		fat_info;
-	unsigned short		backup_BS_sector;
-	unsigned char 		reserved_0[12];
-	unsigned char		drive_number;
-	unsigned char 		reserved_1;
-	unsigned char		boot_signature;
-	unsigned int 		volume_id;
-	unsigned char		volume_label[11];
-	unsigned char		fat_type_label[8];
+    //extended fat32 stuff
+    uint32_t        table_size_32;
+    uint16_t        extended_flags;
+    uint16_t        fat_version;
+    uint32_t        root_cluster;
+    uint16_t        fat_info;
+    uint16_t        backup_BS_sector;
+    uint8_t         reserved_0[12];
+    uint8_t         drive_number;
+    uint8_t         reserved_1;
+    uint8_t         boot_signature;
+    uint32_t        volume_id;
+    uint8_t         volume_label[11];
+    uint8_t         fat_type_label[8];
  
 }__attribute__((packed)) fat_extBS_32_t;
  
 typedef struct fat_extBS_16
 {
-	//extended fat12 and fat16 stuff
-	unsigned char		bios_drive_num;
-	unsigned char		reserved1;
-	unsigned char		boot_signature;
-	unsigned int		volume_id;
-	unsigned char		volume_label[11];
-	unsigned char		fat_type_label[8];
+    //extended fat12 and fat16 stuff
+    uint8_t        bios_drive_num;
+    uint8_t        reserved1;
+    uint8_t        boot_signature;
+    uint32_t        volume_id;
+    uint8_t        volume_label[11];
+    uint8_t        fat_type_label[8];
  
 }__attribute__((packed)) fat_extBS_16_t;
  
 typedef struct fat_BS
 {
-	unsigned char 		bootjmp[3];
-	unsigned char 		oem_name[8];
-	unsigned short 	        bytes_per_sector;
-	unsigned char		sectors_per_cluster;
-	unsigned short		reserved_sector_count;
-	unsigned char		table_count;
-	unsigned short		root_entry_count;
-	unsigned short		total_sectors_16;
-	unsigned char		media_type;
-	unsigned short		table_size_16;
-	unsigned short		sectors_per_track;
-	unsigned short		head_side_count;
-	unsigned int 		hidden_sector_count;
-	unsigned int 		total_sectors_32;
+    uint8_t         bootjmp[3];
+    uint8_t         oem_name[8];
+    uint16_t             bytes_per_sector;
+    uint8_t        sectors_per_cluster;
+    uint16_t        reserved_sector_count;
+    uint8_t        table_count;
+    uint16_t        root_entry_count;
+    uint16_t        total_sectors_16;
+    uint8_t        media_type;
+    uint16_t        table_size_16;
+    uint16_t        sectors_per_track;
+    uint16_t        head_side_count;
+    uint32_t         hidden_sector_count;
+    uint32_t         total_sectors_32;
  
-	//this will be cast to it's specific type once the driver actually knows what type of FAT this is.
-	unsigned char		extended_section[54];
+    //this will be cast to it's specific type once the driver actually knows what type of FAT this is.
+    uint8_t        extended_section[54];
  
 }__attribute__((packed)) fat_BS_t;
 
 typedef struct std_fat_8_3_fmt
 {
-	unsigned char 		fname[11];
-	unsigned char 		attribute;
-	unsigned char 	    nt_resv;
-	unsigned char		create_time_secs;
-	unsigned short		create_time;
-	unsigned short      create_date;
-	unsigned short		access_date;
-	unsigned short		high_cluster;
-	unsigned short      modification_time;
-	unsigned short      modification_date;
-	unsigned short		low_cluster;
-	unsigned int		file_size;
+    uint8_t         fname[11];
+    uint8_t         attribute;
+    uint8_t         nt_resv;
+    uint8_t        create_time_secs;
+    uint16_t        create_time;
+    uint16_t      create_date;
+    uint16_t        access_date;
+    uint16_t        high_cluster;
+    uint16_t      modification_time;
+    uint16_t      modification_date;
+    uint16_t        low_cluster;
+    uint32_t        file_size;
  
 }__attribute__((packed)) std_fat_8_3_fmt;
 
@@ -77,9 +78,9 @@ struct fatFS
     struct fat_extBS_32 fat_boot_ext_32;
     struct fat_BS fat_boot;
     struct mbr_info mbr_info;
-    unsigned int fat_size;
-    unsigned int first_data_sector;
-    unsigned int first_fat_sector;
+    uint32_t fat_size;
+    uint32_t first_data_sector;
+    uint32_t first_fat_sector;
 };
 
 int fat_init(struct mbr_info mbr_entry);

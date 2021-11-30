@@ -4,10 +4,10 @@
 #include <output/output.h>
 #include <mm/mm.h>
 #define NULL 0
-static void read_directory(unsigned int sec, struct dnode *dir, struct vfs_device *dev);
+static void read_directory(uint32_t sec, struct dnode *dir, struct vfs_device *dev);
 
-static void read_file(unsigned int cluster, unsigned int first_fat_sector, unsigned int first_data_sector);
-static inline unsigned int clust2sec(unsigned int cluster, struct fatFS *fs);
+static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t first_data_sector);
+static inline uint32_t clust2sec(uint32_t cluster, struct fatFS *fs);
 void read_inode_file(struct inode *i_node);
 
 struct dnode *fat_read_root_dir(struct vfs_device *dev);
@@ -65,7 +65,7 @@ int fat_init(struct mbr_info mbr_entry)
     vfs_register_device(vfs_dev);
     return 0;
 }
-static inline unsigned int clust2sec(unsigned int cluster, struct fatFS *fs)
+static inline uint32_t clust2sec(uint32_t cluster, struct fatFS *fs)
 {
     if (cluster == 0)
     {
@@ -102,7 +102,7 @@ struct dnode *read_inode_dir(struct inode *i_node)
     kstrncpy(dir->root_inode->i_name, i_node->i_name,256);
 
     kstrncpy(dir->i_name, i_node->i_name,256);
-    unsigned int sec = clust2sec(i_node->i_ino, i_node->dev->finfo.fat);
+    uint32_t sec = clust2sec(i_node->i_ino, i_node->dev->finfo.fat);
     read_directory(sec, dir, i_node->dev);
     return dir;
 }
@@ -112,7 +112,7 @@ void read_inode_file(struct inode *i_node)
     read_file(i_node->i_ino, i_node->dev->finfo.fat->first_fat_sector,
               i_node->dev->finfo.fat->first_data_sector);
 }
-static void read_cluster(unsigned int cluster_start, unsigned char *dest)
+static void read_cluster(uint32_t cluster_start, uint8_t *dest)
 {
     int i;
     for (i = 0; i < 8; i++)
@@ -121,17 +121,17 @@ static void read_cluster(unsigned int cluster_start, unsigned char *dest)
     }
 }
 
-static unsigned int read_fat_ptr(unsigned int cluster_num, unsigned int first_fat_sector)
+static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector)
 {
     //from osdev
-    unsigned char FAT_table[512];
-    unsigned int fat_offset = cluster_num * 4;
-    unsigned int fat_sector = first_fat_sector + (fat_offset / 512);
-    unsigned int ent_offset = fat_offset % 512;
+    uint8_t FAT_table[512];
+    uint32_t fat_offset = cluster_num * 4;
+    uint32_t fat_sector = first_fat_sector + (fat_offset / 512);
+    uint32_t ent_offset = fat_offset % 512;
 
     read_sec(fat_sector, FAT_table);
 
-    unsigned int table_value = (FAT_table[ent_offset + 3] << 24 |
+    uint32_t table_value = (FAT_table[ent_offset + 3] << 24 |
                                 FAT_table[ent_offset + 2] << 16 |
                                 FAT_table[ent_offset + 1] << 8 |
                                 FAT_table[ent_offset]) &
@@ -140,10 +140,10 @@ static unsigned int read_fat_ptr(unsigned int cluster_num, unsigned int first_fa
     return table_value;
 }
 
-static void read_file(unsigned int cluster, unsigned int first_fat_sector, unsigned int first_data_sector)
+static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t first_data_sector)
 {
-    unsigned char cluster_dest[4097];
-    unsigned int clust = cluster;
+    uint8_t cluster_dest[4097];
+    uint32_t clust = cluster;
     cluster_dest[4096] = '\0';
     while (clust < FAT_END_OF_CHAIN)
     {
@@ -152,7 +152,7 @@ static void read_file(unsigned int cluster, unsigned int first_fat_sector, unsig
         kprintf((char *)cluster_dest);
     }
 }
-static void fat_read_lfilename(char longfname [], unsigned char *dir_ptr) 
+static void fat_read_lfilename(char longfname [], uint8_t *dir_ptr) 
 {
     int j=0;
     int i=0;
@@ -174,7 +174,7 @@ static void fat_read_lfilename(char longfname [], unsigned char *dir_ptr)
 
 }
 static struct inode_list* fat_read_std_fmt(struct inode_list* tail,struct dnode *dir, 
-                                           struct vfs_device *dev, unsigned char *dir_ptr, 
+                                           struct vfs_device *dev, uint8_t *dir_ptr, 
                                            int using_lfname, char *longfname)
 {
     std_fat_8_3_fmt *file;
@@ -224,13 +224,13 @@ static struct inode_list* fat_read_std_fmt(struct inode_list* tail,struct dnode 
 
 }
 
-static void read_directory(unsigned int sec, struct dnode *dir, struct vfs_device *dev)
+static void read_directory(uint32_t sec, struct dnode *dir, struct vfs_device *dev)
 {
-    unsigned char cluster[4096];
-    unsigned char *dir_ptr = cluster;
+    uint8_t cluster[4096];
+    uint8_t *dir_ptr = cluster;
     int k=0;
     int using_lfname = 0;
-    unsigned int clust = dir->root_inode->i_ino;
+    uint32_t clust = dir->root_inode->i_ino;
 
     char longfname[FAT_MAX_FNAME];
     struct inode_list *tail = NULL;

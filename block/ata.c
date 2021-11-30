@@ -29,8 +29,8 @@ struct mbr_info fs1;
 
 
 
-unsigned char read_status(void) {
-    unsigned char status;
+uint8_t read_status(void) {
+    uint8_t status;
     status = inb(PRIMARY + STATUS_REG);
     return status;
 }
@@ -38,10 +38,10 @@ unsigned char read_status(void) {
 void print_drive_status(void) {
     kprintf("ATA STATUS:0x%x\n",read_status());
 }
-int write_sec(unsigned int sec,void *buffer  )
+int write_sec(uint32_t sec,void *buffer  )
 {
     short *data =0;
-    unsigned char status;
+    uint8_t status;
     int i;
     data = buffer;
 
@@ -79,9 +79,9 @@ int write_sec(unsigned int sec,void *buffer  )
 
     return 0;
 }
-int read_sec(unsigned int sec,void *buffer  ) {
+int read_sec(uint32_t sec,void *buffer  ) {
     short *data =0;
-    unsigned char status;
+    uint8_t status;
     int i;
     data = buffer;
 #ifdef ATA_DEBUG
@@ -118,10 +118,10 @@ int read_sec(unsigned int sec,void *buffer  ) {
 
 void ata_init(void)
 {
-    unsigned int part_start;
-    unsigned int part_size;
-    unsigned short valid_mbr;
-    unsigned short part_type;
+    uint32_t part_start;
+    uint32_t part_size;
+    uint16_t valid_mbr;
+    uint16_t part_type;
 
     char mbr[512];
     kprintf("ATA init\n");

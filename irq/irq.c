@@ -22,7 +22,7 @@
 #define ICW4_BUF_SLAVE	0x08		/* Buffered mode/slave */
 #define ICW4_BUF_MASTER	0x0C		/* Buffered mode/master */
 #define ICW4_SFNM	0x10		/* Special fully nested (not) */
-void PIC_sendEOI(unsigned char irq)
+void PIC_sendEOI(  uint8_t irq)
 {
 	if(irq >= 8)
 		outb(PIC2_COMMAND,PIC_EOI);
@@ -31,9 +31,9 @@ void PIC_sendEOI(unsigned char irq)
 }
 
 
-void PIC_remap(int offset1, int offset2)
+static void PIC_remap(uint8_t offset1, uint8_t offset2)
 {
-	unsigned char a1, a2;
+	  uint8_t a1, a2;
  
 	a1 = inb(PIC1_DATA);                        // save masks
 	a2 = inb(PIC2_DATA);
@@ -59,10 +59,10 @@ void PIC_remap(int offset1, int offset2)
 	outb(PIC2_DATA, a2);
 }
 
-void IRQ_set_mask(unsigned char IRQline)
+void IRQ_set_mask(uint8_t IRQline)
 {
-    unsigned short port;
-    unsigned char value;
+      uint16_t port;
+      uint8_t value;
  
     if(IRQline < 8) {
         port = PIC1_DATA;
@@ -74,10 +74,10 @@ void IRQ_set_mask(unsigned char IRQline)
     outb(port, value);        
 }
  
-void IRQ_clear_mask(unsigned char IRQline)
+void IRQ_clear_mask(uint8_t IRQline)
 {
-    unsigned short port;
-    unsigned char value;
+      uint16_t port;
+      uint8_t value;
     if(IRQline < 8) {
         port = PIC1_DATA;
     } else {
@@ -107,7 +107,7 @@ void PIC_init(void)
 void kbd_irq()
 {
    //char buffer[8];
-   //unsigned char scancode;
+   //  uint8_t scancode;
    //scancode = inb(0x60);
 
    PIC_sendEOI(1);
