@@ -255,6 +255,8 @@ for(;;) {
             sched_stats();
         }else if (kstrcmp(buffer,"time\n") == 0) {
             print_time();
+        }else if (kstrcmp(buffer,"sleep\n") == 0) {
+            ksleepm(10000);
         } else {
             kprintf("Unknown command:");
             kprintf(buffer);
