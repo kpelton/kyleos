@@ -67,10 +67,17 @@ void kernel(void)
 {
     kprintf("Ted Wheeler OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
-    user_process_add(&test_user_function,"Test userspace3");
+   // for(int i=0; i<100; i++)
+   // user_process_add(&test_user_function,"Test userspace3");
+ 
+
 	kthread_add(&start_dshell,"D Shell");
 
-    asm("sti; run: hlt; jmp run");
+    asm("sti");
+    while(1) {
+        asm("sti");
+
+    }
 }
 
 void kinit(void)

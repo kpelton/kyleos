@@ -2,15 +2,23 @@
 #include <irq/irq.h>
 #include <sched/sched.h>
 #include <timer/pit.h>
+#include <output/output.h>
+#define PIT_DATA_PORT_0 0x40
+#define PIT_CMD_REG 0x43
+//Set PIT to rate generater mode and lo/hi acess byte
+#define PIT_RATE_LO_HI_ACCESS 0x34
+#define PIT_FREQ 1193182
+#define PIT_DIVIDER_VAL PIT_FREQ/TICK_HZ
+//jiffies will in increased at a interval of TICK_HZ/HZ should be ~1ms
 static uint32_t jiffies=0;
 
 void pit_init(void) {
-    outb(0x43,0x34);
-    //set 100hz 11931 0x2e9b
-   // outb(0x40,0x9b);
-    //outb(0x40,0x2e);
-    outb(0x40,0xa9);
-    outb(0x40,0x4);
+    kprintf("PIT init\n");
+    kprintf("PIT divider:%d\n",PIT_DIVIDER_VAL);
+    kprintf("Tick interval:%d HZ\n",HZ);
+    outb(PIT_CMD_REG,PIT_RATE_LO_HI_ACCESS);
+    outb(PIT_DATA_PORT_0,PIT_DIVIDER_VAL &0xff);
+    outb(PIT_DATA_PORT_0,(PIT_DIVIDER_VAL & 0xff00) >>8);
 }
 
 uint32_t read_jiffies()
@@ -20,10 +28,9 @@ uint32_t read_jiffies()
 
 void timer_irq()
 {
-   jiffies+=1;
    PIC_sendEOI(1);
-   //kprintf("timer\n");
-   //Tick scheduler
-   if (jiffies %10 == 0)
+
+   jiffies++;
+   if (jiffies % (TICK_HZ/HZ) == 0)
         schedule();
 }

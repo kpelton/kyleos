@@ -10,7 +10,7 @@
 #include <timer/rtc.h>
 
 
-char WHEELER_PROMPT[] = "Ted Wheeler OS |0:";
+char WHEELER_PROMPT[] = "Kyle OS |0:";
 
 char * dir_stack[100][256];
 int top_dir_stack = -1;
@@ -255,8 +255,12 @@ for(;;) {
             sched_stats();
         }else if (kstrcmp(buffer,"time\n") == 0) {
             print_time();
-        }else if (kstrcmp(buffer,"sleep\n") == 0) {
+        }else if (kstrcmp(buffer,"sleep 10\n") == 0) {
             ksleepm(10000);
+        }else if (kstrcmp(buffer,"sleep 5\n") == 0) {
+            ksleepm(5000);
+        }else if (kstrcmp(buffer,"sleep 1\n") == 0) {
+            ksleepm(1000);
         } else {
             kprintf("Unknown command:");
             kprintf(buffer);

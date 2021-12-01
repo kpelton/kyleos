@@ -51,10 +51,10 @@ test_user_function:
 
 [global usermode_int] ;
 usermode_int:
-    mov rdi,1000
+    mov rdi,10000
     call ksleepm
     mov rdi,HelloString
-    ;;call kprintf
+    ;call kprintf
     ;jmp panic_handler
     mov ax, (4 * 8)
 	mov ds, ax
@@ -75,7 +75,7 @@ jump_usermode:
 	; set up the stack frame iret expects
 	push (4 * 8) | 3 ; data selector
 	push rsi ; current esp
-    push 0x203
+    pushf
 	push (3 * 8) | 3 ; code selector (ring 3 code with bottom 2 bits set for ring 3)
 	push rdi ; instruction address to return to
     sti
@@ -94,7 +94,6 @@ std_handler:
     iretq
 [global kbd_handler] ; global int handler
 kbd_handler:
-    cli
     push rax
     push rbx
     push rcx
@@ -132,11 +131,11 @@ kbd_handler:
     pop rcx
     pop rbx
     pop rax
-    sti
     iretq
+
 [global timer_handler] ; global int handler
 timer_handler:
-    cli
+    
     push rax
     push rbx
     push rcx
@@ -175,12 +174,10 @@ timer_handler:
     pop rcx
     pop rbx
     pop rax
-    sti
     iretq
 
 [global serial_handler] ; global int handler
 serial_handler:
-    cli
     push rax
     push rbx
     push rcx
@@ -218,13 +215,10 @@ serial_handler:
     pop rcx
     pop rbx
     pop rax
-    sti
-
     iretq
 
 [global rtc_handler] ; global int handler
 rtc_handler:
-    cli
     push rax
     push rbx
     push rcx
@@ -262,7 +256,6 @@ rtc_handler:
     pop rcx
     pop rbx
     pop rax
-    sti
     iretq
 
 

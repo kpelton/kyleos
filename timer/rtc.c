@@ -59,11 +59,10 @@ void rtc_irq() {
     if (!(registerB & 0x02) && (hour & 0x80)) {
         hour = ((hour & 0x7F) + 12) % 24;
     }
-
     for(i=8; i >=0; i--) {
 
         if (hour > 23)
-            hour = 23;
+            hour = 24;
         else
             hour -= 1;
     }

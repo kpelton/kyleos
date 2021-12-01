@@ -88,7 +88,6 @@ void sched_stats() {
 
 void schedule() {
     uint32_t i = next_task;
-    asm("cli");   
     if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED) {
         ktasks[prev_task].state = TASK_READY;
         //save old stack
