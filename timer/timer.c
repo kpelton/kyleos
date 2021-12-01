@@ -29,10 +29,8 @@ struct basic_timer new_timer(uint32_t ms)
 
     t.start_time = read_jiffies();
     //TODO: expired time is realtive to PIT HZ this is garbage
-    if ( ms < 100 )
-        t.end_time = t.start_time + 1;
-    else 
-        t.end_time = t.start_time + ms /10;
+
+    t.end_time = t.start_time + ms ;
     t.state = TIMER_RUNNING;
     return t;
 }
