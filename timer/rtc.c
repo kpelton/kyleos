@@ -62,7 +62,7 @@ void rtc_irq() {
     for(i=8; i >=0; i--) {
 
         if (hour > 23)
-            hour = 24;
+            hour = 23;
         else
             hour -= 1;
     }

@@ -21,4 +21,5 @@ struct basic_timer {
 
 int update_timer(struct basic_timer *t);
 struct basic_timer new_timer(uint32_t ms);
+void timer_system_init();
 #endif

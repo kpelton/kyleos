@@ -8,8 +8,7 @@
 #include <timer/pit.h>
 #include <block/vfs.h>
 #include <sched/sched.h>
-#include <timer/rtc.h>
-#include <timer/pit.h>
+#include <timer/timer.h>
 #include <init/dshell.h>
 
 
@@ -92,7 +91,6 @@ void kinit(void)
     kprintf("Installing idt\n");
     idt_install();
     PIC_init();
-    pit_init();
     kprintf("PIC init done\n");
 
     kprintf("MM init\n");
@@ -102,13 +100,9 @@ void kinit(void)
     //need to setup kernel stack after paging is setup
     asm("mov $0xffffffffbf000000,%rsp");
     kprintf("Switch to kernel tables/stack done.\n");
-    rtc_init();
     kprintf("RTC init done\n");
     ata_init();
-    //IRQ_set_mask(0);//timer
-    
-    //jump_usermode();
-
+    timer_system_init();
     kernel();
 }
 void kmain(void)

@@ -1,6 +1,8 @@
 #include <output/output.h>
 #include <timer/timer.h>
 #include <irq/irq.h>
+#include <timer/pit.h>
+#include <timer/rtc.h>
 
 //States the timer can be in
 const char *str_timer_states[] = {
@@ -10,6 +12,11 @@ const char *str_timer_states[] = {
     "TIMER_UNUSED",
     "TIMER_MAX_STATE",
 };
+
+void timer_system_init() {
+    pit_init();
+    rtc_init();
+}
 
 int update_timer(struct basic_timer* t) 
 {
