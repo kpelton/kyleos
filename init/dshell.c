@@ -28,7 +28,7 @@ static void push_dir_stack(char *dir)
     kstrcpy( (char*)dir_stack[top_dir_stack],dir);
 }
 
-static char * pop_dir_stack() 
+static char * pop_dir_stack()
 {
     char *val;
     if (top_dir_stack == -1){ 
@@ -249,6 +249,8 @@ for(;;) {
             mm_print_stats();
         }else if (kstrcmp(buffer,"panic\n") == 0) {
             print_regs(0xdeadbeef,0xdeadbeef);
+        }else if (kstrcmp(buffer,"fatalpanic\n") == 0) {
+            panic("Kernel Halted");
         }else if (kstrcmp(buffer,"jiffies\n") == 0) {
             kprintf("Jiffies: %d\n",read_jiffies());
         }else if (kstrcmp(buffer,"sched\n") == 0) {

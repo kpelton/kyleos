@@ -18,7 +18,7 @@ void pit_init(void) {
     kprintf("Tick interval:%d HZ\n",HZ);
     outb(PIT_CMD_REG,PIT_RATE_LO_HI_ACCESS);
     outb(PIT_DATA_PORT_0,PIT_DIVIDER_VAL &0xff);
-    outb(PIT_DATA_PORT_0,(PIT_DIVIDER_VAL & 0xff00) >>8);
+    outb(PIT_DATA_PORT_0,PIT_DIVIDER_VAL>>8);
 }
 
 uint32_t read_jiffies()

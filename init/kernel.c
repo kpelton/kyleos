@@ -92,7 +92,6 @@ void kinit(void)
     idt_install();
     PIC_init();
     kprintf("PIC init done\n");
-
     kprintf("MM init\n");
     setup_paging();
     //user mode test
@@ -113,7 +112,12 @@ void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
     uint32_t offset = 0;
     uint64_t addr;
     uint64_t len;
+
     kprintf("Multiboot header_loc:%x magic:%x\n",mb_info,multiboot_magic);
+
+    if (multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC)
+        panic("MULTIBOOT_BOOTLOADER_MAGIC was not passed to kernel correctly");
+
     header = *((struct multiboot_info *) mb_info);
     while (offset < header.mmap_length)  {
         entry = *(struct multiboot_mmap_entry *)( (uint64_t)header.mmap_addr + offset);

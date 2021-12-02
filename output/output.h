@@ -12,6 +12,6 @@ void output_init();
 int kstrcmp(char *dest, const char *src);
 int kstrlen(char *str);
 void read_input(char * dest);
-
+void panic(char* msg);
 
 #endif

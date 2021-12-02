@@ -213,3 +213,12 @@ int kstrlen(char *str) {
         len++;
     return len;
 }
+
+void panic(char *msg)
+{
+    kprintf(msg);
+    print_regs(0xdeadbeef,0xdeadbeef);
+    asm("cli");
+    asm("hlt");
+
+}
