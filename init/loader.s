@@ -58,6 +58,10 @@ GDT64:                           ; Global Descriptor Table (64-bit).
 ;Map higher half and and first 2mb 
 kernel_bootstrap:
     cli
+    ; Move magic value and multiboot header inti edi,rsi which will be the parameters into kmain
+    mov esi,eax
+    ;jmp $
+
     mov edi, 0x1000    ; Set the destination index to 0x1000.
     mov cr3, edi       ; Set control register 3 to the destination index.
     xor eax, eax       ; Nullify the A-register.
@@ -101,6 +105,8 @@ Realm64:
     mov rax, rsp
     add rax, 0xffffffff80000000   ;Set stack to higher half scheme
     mov rsp,rax 
+    ; Move magic value and multiboot header inti edi,rsi which will be the parameters into kmain
+    mov edi,ebx
     mov rax, strict qword kmain
     jmp rax
 

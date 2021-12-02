@@ -1,8 +1,8 @@
 #include <mm/paging.h>
+#include <include/types.h>
 // 512 entries
 #define addr_start 0xffffffff80000000
 #define PAGE_TAB 511 //MAP 128mb TO KERNEL SPACE
-typedef  unsigned long long uint64_t;
 
 uint64_t pml4[512] __attribute__((aligned(0x20))); // must be aligned to (at least)0x20, ...
 uint64_t page_dir_ptr_tab[512] __attribute__((aligned(0x20))); // must be aligned to (at least)0x20, ...

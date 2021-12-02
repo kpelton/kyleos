@@ -10,7 +10,8 @@
 #include <sched/sched.h>
 #include <timer/timer.h>
 #include <init/dshell.h>
-
+#include <include/multiboot.h>
+#include <include/types.h>
 
 void test_user_function ();
 void print_vendor()
@@ -81,7 +82,6 @@ void kernel(void)
 
 void kinit(void)
 {
-    output_init();
     kprintf("Booting.......\n");
     kprintf("Ted Wheeler OS.......\n");
     kprintf("Copyright:Kyle Pelton 2020-2021 all rights reserved\n");
@@ -105,8 +105,24 @@ void kinit(void)
     timer_system_init();
     kernel();
 }
-void kmain(void)
+void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
 {
+    output_init();
+    struct multiboot_info header;
+    struct multiboot_mmap_entry entry;
+    uint32_t offset = 0;
+    uint64_t addr;
+    uint64_t len;
+    kprintf("Multiboot header_loc:%x magic:%x\n",mb_info,multiboot_magic);
+    header = *((struct multiboot_info *) mb_info);
+    while (offset < header.mmap_length)  {
+        entry = *(struct multiboot_mmap_entry *)( (uint64_t)header.mmap_addr + offset);
+        addr = ((uint64_t)(entry.addr_high))<<32|entry.addr_low;
+        len = ((uint64_t)(entry.len_high))<<32  | entry.len_low;
+        kprintf("addr:%x-%x\n",addr,(addr+len)-1);
+        kprintf("entry_type:%x\n\n",entry.type);
+        offset+=sizeof(struct multiboot_mmap_entry);
+    }
     kinit();
 }
 
