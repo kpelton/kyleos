@@ -111,7 +111,7 @@ static void print_reg(char * name,unsigned long val)
 void print_regs(unsigned long exception,unsigned long rip) {
     struct RegDump dump;
     char buffer[50];
-    kprintf("\n\nTed Wheeler took a dump on the sidewalk\nREGISTER DUMP\n=============\n");
+    kprintf("\n\nUnhandled Exception\nREGISTER DUMP\n=============\n");
     kprintf("EXCEPTION:");
     itoa(exception,buffer,16);
     kprintf("0x");

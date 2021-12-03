@@ -65,10 +65,10 @@ void idle_loop()
 }
 void kernel(void)
 {
-    kprintf("Ted Wheeler OS has booted\n");
+    kprintf("Kyle OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
-   // for(int i=0; i<100; i++)
-   // user_process_add(&test_user_function,"Test userspace3");
+    for(int i=0; i<3; i++)
+     user_process_add(&test_user_function,"Test userspace3");
  
 
 	kthread_add(&start_dshell,"D Shell");
@@ -83,7 +83,7 @@ void kernel(void)
 void kinit(void)
 {
     kprintf("Booting.......\n");
-    kprintf("Ted Wheeler OS.......\n");
+    kprintf("Kyle OS.......\n");
     kprintf("Copyright:Kyle Pelton 2020-2021 all rights reserved\n");
     kprintf("Install GDT\n");
     gdt_install();
@@ -104,15 +104,16 @@ void kinit(void)
     timer_system_init();
     kernel();
 }
+
 void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
 {
-    output_init();
     struct multiboot_info header;
     struct multiboot_mmap_entry entry;
     uint32_t offset = 0;
     uint64_t addr;
     uint64_t len;
 
+    output_init();
     kprintf("Multiboot header_loc:%x magic:%x\n",mb_info,multiboot_magic);
 
     if (multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC)
@@ -121,11 +122,13 @@ void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
     header = *((struct multiboot_info *) mb_info);
     while (offset < header.mmap_length)  {
         entry = *(struct multiboot_mmap_entry *)( (uint64_t)header.mmap_addr + offset);
-        addr = ((uint64_t)(entry.addr_high))<<32|entry.addr_low;
+        addr = ((uint64_t)(entry.addr_high))<<32 | entry.addr_low;
         len = ((uint64_t)(entry.len_high))<<32  | entry.len_low;
+        if (entry.type != MULTIBOOT_MEMORY_RESERVED)
+            kprintf("entry_type:%x\n\n",entry.type);
         kprintf("addr:%x-%x\n",addr,(addr+len)-1);
-        kprintf("entry_type:%x\n\n",entry.type);
-        offset+=sizeof(struct multiboot_mmap_entry);
+
+        offset += sizeof(struct multiboot_mmap_entry);
     }
     kinit();
 }
