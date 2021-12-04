@@ -5,6 +5,7 @@
 #include <irq/irq.h>
 #include <mm/paging.h>
 #include <mm/mm.h>
+#include <mm/pmem.h>
 #include <timer/pit.h>
 #include <block/vfs.h>
 #include <sched/sched.h>
@@ -107,11 +108,6 @@ void kinit(void)
 
 void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
 {
-    struct multiboot_info header;
-    struct multiboot_mmap_entry entry;
-    uint32_t offset = 0;
-    uint64_t addr;
-    uint64_t len;
 
     output_init();
     kprintf("Multiboot header_loc:%x magic:%x\n",mb_info,multiboot_magic);
@@ -119,17 +115,8 @@ void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
     if (multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC)
         panic("MULTIBOOT_BOOTLOADER_MAGIC was not passed to kernel correctly");
 
-    header = *((struct multiboot_info *) mb_info);
-    while (offset < header.mmap_length)  {
-        entry = *(struct multiboot_mmap_entry *)( (uint64_t)header.mmap_addr + offset);
-        addr = ((uint64_t)(entry.addr_high))<<32 | entry.addr_low;
-        len = ((uint64_t)(entry.len_high))<<32  | entry.len_low;
-        if (entry.type != MULTIBOOT_MEMORY_RESERVED)
-            kprintf("entry_type:%x\n\n",entry.type);
-        kprintf("addr:%x-%x\n",addr,(addr+len)-1);
 
-        offset += sizeof(struct multiboot_mmap_entry);
-    }
+    phys_mem_early_init(mb_info);
     kinit();
 }
 

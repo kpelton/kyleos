@@ -60,29 +60,28 @@ void kfree(void *ptr)
     if (lptr->addr == ptr) {
             lptr->free = 1;
     } else {
-        kprintf("Memory courrption detected on free\n");
+        panic("Memory courrption detected on free\n");
     }
 }
 
 void mm_print_stats()
 {
 
-        struct  mm_block *lptr = head;
-        unsigned long size = 0;
-        unsigned long ll_size = 0;
-        
-        while(lptr != 0) {
-            size +=sizeof(struct mm_block);
-            if (lptr->free == 0)
-                size += lptr->size;
-           // kprint_hex("Used Memory        0x", lptr->addr);
-           // kprint_hex("   Size            0x", lptr->size);
-           // kprint_hex("   free          0x", lptr->free);
-            ll_size +=1;
-            lptr = lptr->next;
+    struct  mm_block *lptr = head;
+    unsigned long size = 0;
+    unsigned long ll_size = 0;
 
-        }
-        
+    while(lptr != 0) {
+        size +=sizeof(struct mm_block);
+        if (lptr->free == 0)
+            size += lptr->size;
+        // kprint_hex("Used Memory        0x", lptr->addr);
+        // kprint_hex("   Size            0x", lptr->size);
+        // kprint_hex("   free          0x", lptr->free);
+        ll_size +=1;
+        lptr = lptr->next;
+    }
+
     kprintf("Total Used Memory     %dK\n", size/1024);
     kprintf("LL nodes              %d\n", ll_size);
     kprintf("LL node size          %dK\n", (ll_size*sizeof(struct mm_block)) /1024);
