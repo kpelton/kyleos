@@ -25,7 +25,7 @@ init: init/kernel.o init/loader.o init/tables.o init/dshell.o
 irq: irq/irq.o
 	$(MAKE) -C irq
 
-mm: mm/mm.o mm/paging.o
+mm: mm/mm.o mm/paging.o mm/pmem.o
 	$(MAKE) -C mm
 
 sched: sched/sched.o
