@@ -95,10 +95,11 @@ void kinit(void)
     kprintf("PIC init done\n");
     kprintf("MM init\n");
     setup_paging();
+    phys_mem_init();
     //user mode test
     mm_init();
     //need to setup kernel stack after paging is setup
-    asm("mov $0xffffffffbf000000,%rsp");
+    //asm("mov $0xffffffffbf000000,%rsp");
     kprintf("Switch to kernel tables/stack done.\n");
     kprintf("RTC init done\n");
     ata_init();

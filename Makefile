@@ -58,8 +58,9 @@ test-log: kernel32.bin
 kvm-test: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -serial stdio -enable-kvm 2>log
 
-
 test-c: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -display none -serial stdio 2>log
 debug: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -hda test-hd.img -serial stdio -s -S
+gdb: kernel.bin
+	gdb -ex "target remote localhost:1234" kernel.bin
