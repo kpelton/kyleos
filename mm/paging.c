@@ -4,13 +4,14 @@
 #define addr_start 0xffffffff80000000
 #define PAGE_TAB 511 //MAP 128mb TO KERNEL SPACE
 
+
 uint64_t pml4[512] __attribute__((aligned(0x20))); // must be aligned to (at least)0x20, ...
 uint64_t page_dir_ptr_tab[512] __attribute__((aligned(0x20))); // must be aligned to (at least)0x20, ...
 uint64_t page_dir[512] __attribute__((aligned(0x1000)));  // must be aligned to page boundary
 uint64_t page_tab[PAGE_TAB][512] __attribute__((aligned(0x1000)));
 
 
-void fill_dir(uint64_t startaddr,uint64_t * dir)
+static void early_fill_dir(uint64_t startaddr,uint64_t * dir)
 {
     uint64_t address = startaddr;
     int i=0;
@@ -20,7 +21,7 @@ void fill_dir(uint64_t startaddr,uint64_t * dir)
     }
 }
 
-void setup_paging()
+void early_setup_paging()
 {
     //set each entry to not present
     uint64_t i = 0;
@@ -33,7 +34,7 @@ void setup_paging()
     j=0;
     for(i = 0; i < PAGE_TAB; i++) {
         page_dir[i] = ((uint64_t)&page_tab[j] -addr_start)| 7; //set the page table into the PD and mark it present/writable
-        fill_dir((0x200000*j),page_tab[j]);
+        early_fill_dir((0x200000*j),page_tab[j]);
         j+=1;
     }
     address =(uint64_t) &pml4 - addr_start;

@@ -1,5 +1,7 @@
 #include "mm.h"
 #include <output/output.h>
+#include <include/types.h>
+#include <mm/pmem.h>
 
 char * kernel_heap;
 #define FREE 1
@@ -11,7 +13,7 @@ static struct  mm_block * tail = 0;
 void * kmalloc(unsigned int p_size)
 {
     //kprint_hex("MM Allocating ",size)
-    unsigned long * ret;
+    uint64_t* ret;
     struct  mm_block *lptr = head;
     unsigned int size = p_size;
     //first loop for a free block that is already allocated
@@ -75,9 +77,7 @@ void mm_print_stats()
         size +=sizeof(struct mm_block);
         if (lptr->free == 0)
             size += lptr->size;
-        // kprint_hex("Used Memory        0x", lptr->addr);
-        // kprint_hex("   Size            0x", lptr->size);
-        // kprint_hex("   free          0x", lptr->free);
+
         ll_size +=1;
         lptr = lptr->next;
     }
@@ -91,6 +91,8 @@ void mm_print_stats()
 
 void mm_init()
 {
+
+    //alloc_block;
     kernel_heap =  (char *) &_kernel_end + 0x8;
 }
 

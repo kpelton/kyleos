@@ -3,7 +3,6 @@
 #include <mm/mm.h>
 #include <output/output.h>
 
-#define BLOCK_SIZE 4096
 #define BIT_SIZE 64
 #define MAX_PHYS_ZONES 10
 #define PHYS_MEM_START 0x100000
@@ -63,8 +62,6 @@ int pmem_addr_get_status(uint64_t addr, uint64_t *bitmap)
     bit  = get_bit_in_block(bit);
 
     kprintf("addr, BITMAP,%x %x\n",addr,bitmap);
-
-  
     uint64_t val = bitmap[block] & (1UL << bit);
 
     return val >= 1;
@@ -75,8 +72,6 @@ void pmem_addr_set_block(uint64_t addr, uint64_t *bitmap)
     uint64_t bit = get_bit_in_map(addr);
     uint64_t block = get_block(bit);
     bit  = get_bit_in_block(bit);
-
-
     bitmap[block] |=  1UL <<bit;
 }
 
@@ -92,6 +87,49 @@ void pmem_addr_set_region(uint64_t addr, uint64_t size, uint64_t *bitmap)
             break;
         size-=BLOCK_SIZE;
     }   
+}
+
+uint64_t pmem_addr_find_first_free_block(uint64_t size,uint64_t *bitmap)
+{
+    uint64_t i;
+    uint64_t addr=0;
+    uint64_t val;
+    for (i=0; i<get_block_count(size); i++) {
+        if (bitmap[i] < 0xffffffffffffffff){
+            val = bitmap[i];
+            //find where the bit is set
+            while (val & 1)  {
+                addr+=BLOCK_SIZE;
+                val>>=1;
+            }
+            return addr;
+        }
+
+        addr+=BLOCK_SIZE*BIT_SIZE;
+    }
+    kprintf("WARNING could not find enough phys memory");
+    return 0;
+}
+
+uint64_t pmem_addr_find_first_chunk(uint64_t size,uint64_t chunk_size, uint64_t *bitmap)
+{
+    uint64_t i;
+    uint64_t addr=0;
+    uint64_t found_size;
+    for (i=0; i<get_block_count(size); i++) {
+
+        if (bitmap[i] == 0x0){
+            found_size+=(BLOCK_SIZE*BIT_SIZE);
+            if(found_size >= chunk_size ) {
+                return addr;
+            }
+        }else{
+            found_size = 0;
+        }
+        addr+=BLOCK_SIZE*BIT_SIZE;
+    }
+    kprintf("WARNING could not find enough phys memory");
+    return 0;
 }
 
 void pmem_addr_free_block(uint64_t addr, uint64_t *bitmap) 
@@ -115,6 +153,7 @@ uint64_t *pmem_alloc_bitmap(uint64_t size, uint64_t *size_allocated, void *memor
    }
     return bitmap;
 }
+
 void phys_mem_reserve_inital_region(uint64_t kernel_bitmap_size) {
     
     uint64_t i;
@@ -128,16 +167,19 @@ void phys_mem_reserve_inital_region(uint64_t kernel_bitmap_size) {
     
 }
 
+void *pmem_alloc_block(unsigned int size_in_pages) {
+    return (void *)pmem_addr_find_first_chunk(phys_mem_zones[3].len,size_in_pages,phys_mem_zones[3].bitmap);
+}
+
 void phys_mem_init() {
 
     //fix allignment issues here;
-    uint64_t *alloc_location =  &_kernel_end + 0x500;
+    uint64_t *alloc_location =  &_kernel_end ;
     uint64_t *initial_alloc_location = alloc_location;
     uint64_t size;
     uint64_t addr;
     uint64_t alloc_size; 
     uint64_t total_size; 
-    int status;
 
     for (int i=0; i != phys_max_found_zone; i++) {   
         if (phys_mem_zones[i].type != PMEM_RESERVED) {
@@ -176,8 +218,6 @@ void phys_mem_early_init(uint64_t  mb_info) {
     uint64_t addr,max_addr;
     uint64_t len;
 
-
-
     for(i=0; i<MAX_PHYS_ZONES; i++)
         phys_mem_zones[i].in_use = 0;
     
@@ -210,8 +250,6 @@ void phys_mem_early_init(uint64_t  mb_info) {
         else {
             phys_mem_zones[i].location = PMEM_LOC_HI_MEM;
         }
-
-
 
         kprintf("addr:%x-%x\n",addr,(addr+len)-1);
         kprintf("entry_type:%s\n",phys_mem_zones[i].type == PMEM_RESERVED ? "reserved":"avail");
