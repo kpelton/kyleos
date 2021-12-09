@@ -4,7 +4,7 @@
 #include <output/output.h>
 
 #define BIT_SIZE 64
-#define MAX_PHYS_ZONES 10
+#define MAX_PHYS_ZONES 256
 #define PHYS_MEM_START 0x100000
 extern unsigned long _kernel_end;
 
@@ -170,24 +170,25 @@ void phys_mem_reserve_inital_region(uint64_t kernel_bitmap_size) {
 }
 
 void *pmem_alloc_block(unsigned int size_in_pages) {
-    uint64_t addr = pmem_addr_find_first_chunk(phys_mem_zones[3].len,size_in_pages,phys_mem_zones[3].bitmap);
+    uint64_t addr = pmem_addr_find_first_chunk(phys_mem_zones[phys_first_region].len,
+                                            size_in_pages,phys_mem_zones[phys_first_region].bitmap);
 
     if (addr != 0) {
-        pmem_addr_set_region(addr,size_in_pages,phys_mem_zones[3].bitmap);
+        pmem_addr_set_region(addr,size_in_pages,phys_mem_zones[phys_first_region].bitmap);
     }
     //We need to add the base address here because all bitmaps start at 0
-    return (void *)addr +phys_mem_zones[3].base_addr;
+    return (void *)addr +phys_mem_zones[phys_first_region].base_addr;
 
 }
 
 void *pmem_alloc_page() {
-    uint64_t addr = pmem_addr_find_first_free_block(phys_mem_zones[3].len,phys_mem_zones[3].bitmap);
+    uint64_t addr = pmem_addr_find_first_free_block(phys_mem_zones[phys_first_region].len,phys_mem_zones[phys_first_region].bitmap);
 
     if (addr != 0) {
-        pmem_addr_set_block(addr,phys_mem_zones[3].bitmap);
+        pmem_addr_set_block(addr,phys_mem_zones[phys_first_region].bitmap);
     }
     //We need to add the base address here because all bitmaps start at 0
-    return (void *)addr +phys_mem_zones[3].base_addr;
+    return (void *)addr +phys_mem_zones[phys_first_region].base_addr;
 
 }
 
@@ -225,15 +226,15 @@ void phys_mem_init() {
     total_size =  ((uint64_t)&_kernel_end - 0xffffffff80000000)+alloc_size + 4096;
     phys_mem_reserve_inital_region(total_size);
     kprintf("Inital region is using %d B out of %d B\n",
-                        get_used_page_count(phys_mem_zones[3].len,phys_mem_zones[3].bitmap)*4096,
-                        (phys_mem_zones[3].len/4096) * 4096);
+                        get_used_page_count(phys_mem_zones[phys_first_region].len,phys_mem_zones[phys_first_region].bitmap)*4096,
+                        (phys_mem_zones[phys_first_region].len/4096) * 4096);
 
 }
 
 void phys_mem_print_usage() {
     kprintf("Below 4G region is using %d B out of %d B\n",
-                    get_used_page_count(phys_mem_zones[3].len,phys_mem_zones[3].bitmap)*4096,
-                    (phys_mem_zones[3].len/4096) * 4096);
+                    get_used_page_count(phys_mem_zones[phys_first_region].len,phys_mem_zones[phys_first_region].bitmap)*4096,
+                    (phys_mem_zones[phys_first_region].len/4096) * 4096);
 }
 
 void phys_mem_early_init(uint64_t  mb_info) {
