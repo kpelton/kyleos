@@ -2,17 +2,19 @@
 #include <output/output.h>
 #include <include/types.h>
 #include <mm/pmem.h>
+#include <mm/paging.h>
 
 char * kernel_heap;
 #define FREE 1
-#define USED 1
+#define USED 0
 #define MIN_SIZE 64
 
-static struct  mm_block * head = 0;
-static struct  mm_block * tail = 0;
+static struct  mm_block *head=0;
+static struct  mm_block *tail=0;
+
 void * kmalloc(unsigned int p_size)
 {
-    //kprint_hex("MM Allocating ",size)
+    //kprintf("MM Allocating 0x%x 0x%x\n",p_size,head);
     uint64_t* ret;
     struct  mm_block *lptr = head;
     unsigned int size = p_size;
@@ -21,8 +23,8 @@ void * kmalloc(unsigned int p_size)
         size = MIN_SIZE;
 
     while(lptr != 0) {
-        if (size <= lptr->size && lptr->free == 1 ) {
-            lptr->free = 0;
+        if (size <= lptr->size && lptr->free == FREE ) {
+            lptr->free =USED ;
             if ((unsigned long)lptr->addr  < 0xffffffff80000000) {
                 kprintf("old alloc %x\n",(unsigned long) &lptr->addr);
                 kprintf("old alloc %x\n",(unsigned long) &lptr->addr);
@@ -33,7 +35,7 @@ void * kmalloc(unsigned int p_size)
         }
         lptr = lptr->next;
     } 
-
+    //TODO: Add allignment
     struct  mm_block *ptr = (void *) kernel_heap;
     kernel_heap+=sizeof(struct mm_block);
     ret = (void *) kernel_heap;
@@ -46,7 +48,7 @@ void * kmalloc(unsigned int p_size)
     }
     ptr->size = size;
     ptr->next = 0;
-    ptr->free = 0;
+    ptr->free = USED;
     ptr->addr = ret;
     //kprint_hex("Alloc ",size);
     //kprint_hex("Alloc 0x",ret);
@@ -91,8 +93,8 @@ void mm_print_stats()
 
 void mm_init()
 {
-
-    //alloc_block;
-    kernel_heap =  (char *) &_kernel_end + 0x8;
+    setup_paging();
+    kernel_heap =  (char *) KERN_PHYS_TO_VIRT(pmem_alloc_block(4096));
+    paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_heap),4096);
 }
 

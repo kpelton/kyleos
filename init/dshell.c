@@ -8,6 +8,7 @@
 #include <block/vfs.h>
 #include <sched/sched.h>
 #include <timer/rtc.h>
+#include <mm/pmem.h>
 
 
 char WHEELER_PROMPT[] = "Kyle OS |0:";
@@ -247,6 +248,7 @@ for(;;) {
         }
         else if (kstrcmp(buffer,"mem\n") == 0) {
             mm_print_stats();
+            phys_mem_print_usage();
         }else if (kstrcmp(buffer,"panic\n") == 0) {
             print_regs(0xdeadbeef,0xdeadbeef);
         }else if (kstrcmp(buffer,"fatalpanic\n") == 0) {

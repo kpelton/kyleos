@@ -64,12 +64,19 @@ void idle_loop()
         asm("hlt");
     }
 }
+bool setup_kernel_stack(){
+        kprintf("Allocating stack\n");
+        uint64_t kernel_stack = KERN_PHYS_TO_VIRT(pmem_alloc_block(16));
+        paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_stack),16);
+        asm volatile("movq %%rsp ,%0" : "=g"(kernel_stack));
+        return true;
+}
 void kernel(void)
 {
     kprintf("Kyle OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
-    //for(int i=0; i<3; i++)
-    /// user_process_add(&test_user_function,"Test userspace3");
+    for(int i=0; i<3; i++)
+        user_process_add(&test_user_function,"Test userspace3");
  
 
 	kthread_add(&start_dshell,"D Shell");
@@ -89,16 +96,22 @@ void kinit(void)
     kprintf("Install GDT\n");
     gdt_install();
     tss_flush();
-    kprintf("Installing idt\n");
+
     idt_install();
     PIC_init();
+    kprintf("interrupts are done\n");
     kprintf("PIC init done\n");
-    kprintf("MM init\n");
     early_setup_paging();
+    kprintf("Early page init done\n");
     phys_mem_init();
+    kprintf("Phys Init mem done\n");
     //user mode test
     mm_init();
-    kprintf("Switch to kernel tables/stack done.\n");
+     kprintf("Allocating stack\n");
+     uint64_t kernel_stack = KERN_PHYS_TO_VIRT(pmem_alloc_block(32));
+     paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_stack),32);
+    asm volatile("movq %0,%%rsp " : : "r"(kernel_stack+4096*32));
+    kprintf("MM init done\n");
     kprintf("RTC init done\n");
     ata_init();
     timer_system_init();
@@ -113,7 +126,6 @@ void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
 
     if (multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC)
         panic("MULTIBOOT_BOOTLOADER_MAGIC was not passed to kernel correctly");
-
 
     phys_mem_early_init(mb_info);
     kinit();
