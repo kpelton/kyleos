@@ -13,6 +13,7 @@
 #include <init/dshell.h>
 #include <include/multiboot.h>
 #include <include/types.h>
+#define STACK_PAGES 128
 
 void test_user_function ();
 void print_vendor()
@@ -75,13 +76,13 @@ void kernel(void)
 {
     kprintf("Kyle OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
-    for(int i=0; i<3; i++)
         user_process_add(&test_user_function,"Test userspace3");
  
 
 	kthread_add(&start_dshell,"D Shell");
 
     asm("sti");
+
     while(1) {
         asm("sti");
 
@@ -96,23 +97,24 @@ void kinit(void)
     kprintf("Install GDT\n");
     gdt_install();
     tss_flush();
-
     idt_install();
-    PIC_init();
+
     kprintf("interrupts are done\n");
-    kprintf("PIC init done\n");
+
     early_setup_paging();
     kprintf("Early page init done\n");
     phys_mem_init();
     kprintf("Phys Init mem done\n");
     //user mode test
     mm_init();
-     kprintf("Allocating stack\n");
-     uint64_t kernel_stack = KERN_PHYS_TO_VIRT(pmem_alloc_block(32));
-     paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_stack),32);
-    asm volatile("movq %0,%%rsp " : : "r"(kernel_stack+4096*32));
+    kprintf("Allocating stack\n");
+    uint64_t kernel_stack = KERN_PHYS_TO_VIRT(pmem_alloc_block(STACK_PAGES));
+    paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_stack),STACK_PAGES);
+    kprintf("Stack start %x Stack %x\n",kernel_stack,kernel_stack+4096*STACK_PAGES);
+    asm volatile("movq %0,%%rsp " : : "r"(kernel_stack+4096*STACK_PAGES));
     kprintf("MM init done\n");
-    kprintf("RTC init done\n");
+    PIC_init();
+    kprintf("PIC init done\n");
     ata_init();
     timer_system_init();
     kernel();

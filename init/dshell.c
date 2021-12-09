@@ -11,10 +11,10 @@
 #include <mm/pmem.h>
 
 
-char WHEELER_PROMPT[] = "Kyle OS |0:";
+static const char OS_PROMPT[] = "Kyle OS |0:";
 
-char * dir_stack[100][256];
-int top_dir_stack = -1;
+static char * dir_stack[100][256];
+static int top_dir_stack = -1;
 
 static void push_dir_stack(char *dir) 
 {
@@ -127,7 +127,7 @@ static void shell_cat(char cmd[], struct dnode *dptr) {
 }
 
 void print_prompt() {
-    kprintf(WHEELER_PROMPT);
+    kprintf((char *)OS_PROMPT);
     for(int i=0; i<=top_dir_stack; i++)
     {
         kprintf((char *)dir_stack[i]);

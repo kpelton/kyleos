@@ -5,7 +5,6 @@
 #include <mm/mm.h>
 #define NULL 0
 static void read_directory(uint32_t sec, struct dnode *dir, struct vfs_device *dev);
-
 static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t first_data_sector);
 static inline uint32_t clust2sec(uint32_t cluster, struct fatFS *fs);
 void read_inode_file(struct inode *i_node);
@@ -152,6 +151,7 @@ static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t firs
         kprintf((char *)cluster_dest);
     }
 }
+
 static void fat_read_lfilename(char longfname [], uint8_t *dir_ptr) 
 {
     int j=0;
@@ -173,6 +173,7 @@ static void fat_read_lfilename(char longfname [], uint8_t *dir_ptr)
     }
 
 }
+
 static struct inode_list* fat_read_std_fmt(struct inode_list* tail,struct dnode *dir, 
                                            struct vfs_device *dev, uint8_t *dir_ptr, 
                                            int using_lfname, char *longfname)
