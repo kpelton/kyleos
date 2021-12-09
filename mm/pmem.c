@@ -4,7 +4,7 @@
 #include <output/output.h>
 
 #define BIT_SIZE 64
-#define MAX_PHYS_ZONES 256
+#define MAX_PHYS_ZONES 0xff
 #define PHYS_MEM_START 0x100000
 extern unsigned long _kernel_end;
 
