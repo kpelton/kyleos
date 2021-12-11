@@ -7,6 +7,7 @@
 char * kernel_heap;
 #define FREE 1
 #define USED 0
+//TODO: Align this on cacheline boundry
 #define MIN_SIZE 64
 
 static struct  mm_block *head=0;

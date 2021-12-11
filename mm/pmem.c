@@ -144,6 +144,7 @@ void pmem_addr_free_block(uint64_t addr, uint64_t *bitmap)
 
 //size: how 
 uint64_t *pmem_alloc_bitmap(uint64_t size, uint64_t *size_allocated, void *memory_loc) {
+    //TODO: Allocate bitmap on 64b boundry. This will be slow
     uint64_t count = get_block_count(size);
     uint64_t *bitmap = (uint64_t *) memory_loc;
     *size_allocated = (count*(BIT_SIZE/8));
