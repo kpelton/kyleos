@@ -7,11 +7,13 @@
 char * kernel_heap;
 #define FREE 1
 #define USED 0
+//heap size in pages
+#define HEAP_SIZE 4096
 //TODO: Align this on cacheline boundry
-#define MIN_SIZE 64
 
 static struct  mm_block *head=0;
 static struct  mm_block *tail=0;
+static uint64_t total_used = 0;
 
 void * kmalloc(unsigned int p_size)
 {
@@ -19,9 +21,7 @@ void * kmalloc(unsigned int p_size)
     uint64_t* ret;
     struct  mm_block *lptr = head;
     unsigned int size = p_size;
-    //first loop for a free block that is already allocated
-    if (p_size < MIN_SIZE)
-        size = MIN_SIZE;
+    size+=MM_MIN_SIZE - (size % MM_MIN_SIZE);
 
     while(lptr != 0) {
         if (size <= lptr->size && lptr->free == FREE ) {
@@ -39,6 +39,7 @@ void * kmalloc(unsigned int p_size)
     //TODO: Add allignment
     struct  mm_block *ptr = (void *) kernel_heap;
     kernel_heap+=sizeof(struct mm_block);
+    total_used +=sizeof(struct mm_block);
     ret = (void *) kernel_heap;
     if (head== 0) {
         head = ptr;
@@ -53,8 +54,8 @@ void * kmalloc(unsigned int p_size)
     ptr->addr = ret;
     //kprint_hex("Alloc ",size);
     //kprint_hex("Alloc 0x",ret);
-
     kernel_heap+=size;
+    total_used +=size;
     return ret;
 
 }
@@ -90,12 +91,13 @@ void mm_print_stats()
     kprintf("LL node size          %dK\n", (ll_size*sizeof(struct mm_block)) /1024);
     kprintf("End of kernel         0x%x\n", (unsigned long) &_kernel_end);
     kprintf("Start of kernel       0x%x\n",0xffffffff80000000);
+    kprintf("Total allocated         %d out of %d\n",total_used,HEAP_SIZE*4096);
 }
 
 void mm_init()
 {
     setup_paging();
-    kernel_heap =  (char *) KERN_PHYS_TO_VIRT(pmem_alloc_block(4096));
-    paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_heap),4096);
+    kernel_heap =  (char *) KERN_PHYS_TO_VIRT(pmem_alloc_block(HEAP_SIZE));
+    paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_heap),HEAP_SIZE);
 }
 
