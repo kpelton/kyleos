@@ -115,7 +115,7 @@ void kinit(void)
     kprintf("MM init done\n");
     PIC_init();
     kprintf("PIC init done\n");
-    ata_init();
+//    ata_init();
     timer_system_init();
     kernel();
 }
