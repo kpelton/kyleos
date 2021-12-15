@@ -31,7 +31,7 @@ mm: mm/mm.o mm/paging.o mm/pmem.o
 sched: sched/sched.o
 	$(MAKE) -C sched
 
-output: output/output.o output/vga.o output/uart.o
+output: output/output.o output/vga.o output/uart.o output/keyboard.o output/input.o
 	$(MAKE) -C output
 
 timer: timer/pit.o timer/timer.o timer/rtc.o

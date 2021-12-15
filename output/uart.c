@@ -44,25 +44,7 @@ void serial_irq()
     char output[2];
     outb(PORT + 3, 0x00); //dlab = 0 
     in = inb(PORT);
-    if (in == '\r')
-        in = '\n';
-
-    INTERNAL_SERIAL_BUFFER[SERIAL_CURRENT_PLACE] = in;
-    
-    SERIAL_CURRENT_PLACE +=1;
-    if (in == '\n') {
-        INTERNAL_SERIAL_BUFFER[SERIAL_CURRENT_PLACE] = '\0';  
-        kstrcpy(SERIAL_BUFFER,INTERNAL_SERIAL_BUFFER);
-        for (int i=0; i<MAX_CHARS; i++) 
-            INTERNAL_SERIAL_BUFFER[i] = '\0';
-        SERIAL_CURRENT_PLACE=0;
-    }
-    if (SERIAL_CURRENT_PLACE == MAX_CHARS-1 )
-        SERIAL_CURRENT_PLACE = 0;
-
-    output[0] = in;
-    output[1] = '\0';
-    kprintf(output);
+    input_add_char(in);
     PIC_sendEOI(1);
 
 }
