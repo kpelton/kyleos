@@ -1,6 +1,7 @@
 #include <output/vga.h>
 #include <output/uart.h>
 #include <output/output.h>
+#include <output/input.h>
 #include <asm/asm.h>
 #include <include/stdarg.h>
 void output_init() {
@@ -202,7 +203,7 @@ void kprintf(char *format, ...)
 }
 
 void read_input(char * dest) {
-     serial_read_input(dest);
+     input_read(dest);
 }
 
 int kstrlen(char *str) {

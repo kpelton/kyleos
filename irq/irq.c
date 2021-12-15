@@ -1,5 +1,6 @@
 #include <asm/asm.h>
-#include <output/output.h> 
+#include <output/output.h>
+#include <output/keyboard.h> 
 #include <irq/irq.h>
 #include <sched/sched.h>
 
@@ -92,8 +93,8 @@ void PIC_init(void) {
    PIC_remap(32,64);
    for(i=0; i<20; i++)
      IRQ_set_mask(i);
-
-   //IRQ_clear_mask(1); //kbd
+   PIC_sendEOI(1);
+   IRQ_clear_mask(1); //kbd
    IRQ_clear_mask(0);//timer
    IRQ_clear_mask(4); //uart
    IRQ_clear_mask(8); //rtc
@@ -105,7 +106,7 @@ void kbd_irq() {
    //char buffer[8];
    //  uint8_t scancode;
    //scancode = inb(0x60);
-
+  keyboard_irq();
    PIC_sendEOI(1);
 
 

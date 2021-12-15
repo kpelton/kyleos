@@ -1,5 +1,6 @@
 #include <asm/asm.h>
 #include <output/output.h>
+#include <output/input.h>
 #include <init/tables.h>
 #include <block/ata.h>
 #include <irq/irq.h>

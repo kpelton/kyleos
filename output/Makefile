@@ -9,6 +9,11 @@ uart.o:  uart.c uart.h
 vga.o:  vga.c vga.h
 	$(CC) $(CFLAGS) -o $@ -c vga.c
 
+keyboard.o:  keyboard.c keyboard.h
+	$(CC) $(CFLAGS) -o $@ -c keyboard.c
+
+input.o:  input.c input.h
+	$(CC) $(CFLAGS) -o $@ -c input.c
 
 
 clean:
