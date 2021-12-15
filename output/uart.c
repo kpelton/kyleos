@@ -1,12 +1,9 @@
 #include <asm/asm.h>
 #include <irq/irq.h>
 #include <output/output.h>
+#include <output/input.h>
 #define PORT 0x3f8   /* COM1 */
 #define MAX_CHARS 512
-static char SERIAL_BUFFER[MAX_CHARS] = {'\0'};
-static char INTERNAL_SERIAL_BUFFER[MAX_CHARS];
-
-static int SERIAL_CURRENT_PLACE;
 
 void serial_kprintf(char* str)
 {
@@ -27,26 +24,15 @@ void serial_init()
    outb(PORT + 2, 0xC7);    // Enable FIFO, clear them, with 14-byte threshold
    outb(PORT + 1, 0x1);    // IRQs enabled, RTS/DSR set
    serial_kprintf("\033c");
-   for (int i = 0; i<MAX_CHARS; i++ )
-        SERIAL_BUFFER[i] = '\0';
-}
-void serial_read_input(char* dest)
-{
-    kstrcpy(dest,SERIAL_BUFFER);
-    for (int i=0; i<MAX_CHARS; i++) 
-        SERIAL_BUFFER[i] = '\0';
 }
 
 void serial_irq()
 {
-
     char in;
-    char output[2];
     outb(PORT + 3, 0x00); //dlab = 0 
     in = inb(PORT);
     input_add_char(in);
     PIC_sendEOI(1);
-
 }
 
 
