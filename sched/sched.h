@@ -2,6 +2,7 @@
 #define SCHED_H
 #include <timer/timer.h>
 #include <include/types.h>
+#include <mm/paging.h>
 #define SCHED_MAX_TASKS 1024
 #define SCHED_MAX_NAME 32
 #define KTHREAD_STACK_SIZE 0x8000
@@ -39,6 +40,7 @@ struct ktask{
 	uint64_t *s_rsp;
 	uint64_t *s_rbp;
 	uint64_t context_switches;
+	uint64_t *pg_tbl;
     struct basic_timer timer;
 };
 

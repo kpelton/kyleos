@@ -102,12 +102,4 @@ void PIC_init(void) {
    //enable time update interrupt
 }
 
-void kbd_irq() {
-   //char buffer[8];
-   //  uint8_t scancode;
-   //scancode = inb(0x60);
-  keyboard_irq();
-   PIC_sendEOI(1);
 
-
-}

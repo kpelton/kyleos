@@ -1,3 +1,4 @@
+#include <output/output.h>
 #define MAX_CHARS 512
 static char input_buffer[MAX_CHARS] = {'\0'};
 static char internal_input_buffer[MAX_CHARS];

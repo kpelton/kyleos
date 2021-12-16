@@ -40,7 +40,16 @@ test_user_function2:
     ret
 [global test_user_function]
 test_user_function:
-    add eax,123
+    mov rax,123
+    int 0x80
+    ;sti
+    call test_user_function2
+    jmp test_user_function
+    ret
+
+[global test_user_function5]
+test_user_function5:
+    mov rax,1
     int 0x80
     ;sti
     call test_user_function2
@@ -51,7 +60,7 @@ test_user_function:
 
 [global usermode_int] ;
 usermode_int:
-    mov rdi,1000
+    mov rdi,rax
     call ksleepm
     mov rdi,HelloString
     ;call kprintf

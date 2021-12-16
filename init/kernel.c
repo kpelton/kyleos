@@ -16,6 +16,7 @@
 #define STACK_PAGES 128
 
 void test_user_function ();
+void test_user_function5 ();
 void print_vendor()
 {
     unsigned int  b,c,d;
@@ -76,8 +77,17 @@ void kernel(void)
 {
     kprintf("Kyle OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
+        user_process_add(&test_user_function5,"Test userspace3");
         user_process_add(&test_user_function,"Test userspace3");
- 
+        user_process_add(&test_user_function5,"Test userspace3");
+        user_process_add(&test_user_function,"Test userspace3");
+                user_process_add(&test_user_function5,"Test userspace3");
+        user_process_add(&test_user_function,"Test userspace3");
+        user_process_add(&test_user_function5,"Test userspace3");
+        user_process_add(&test_user_function,"Test userspace3");
+                user_process_add(&test_user_function5,"Test userspace3");
+        user_process_add(&test_user_function5,"Test userspace3");
+\
 
 	kthread_add(&start_dshell,"D Shell");
 
@@ -107,17 +117,21 @@ void kinit(void)
     kprintf("Phys Init mem done\n");
     //user mode test
     mm_init();
+    
     kprintf("Allocating stack\n");
     uint64_t kernel_stack = KERN_PHYS_TO_VIRT(pmem_alloc_block(STACK_PAGES));
     paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_stack),STACK_PAGES);
     kprintf("Stack start %x Stack %x\n",kernel_stack,kernel_stack+4096*STACK_PAGES);
     asm volatile("movq %0,%%rsp " : : "r"(kernel_stack+4096*STACK_PAGES));
+
     kprintf("MM init done\n");
     PIC_init();
     kprintf("PIC init done\n");
 //    ata_init();
     timer_system_init();
+
     kernel();
+    
 }
 
 void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
