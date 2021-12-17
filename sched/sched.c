@@ -54,16 +54,16 @@ void user_process_add(void (*fptr)(),char *name) {
 
 	//kprintf("Allocating Stack\n");
 	stack_low = (uint64_t) kmalloc(KTHREAD_STACK_SIZE);
-	user_stack_low = (uint64_t) kmalloc(KTHREAD_STACK_SIZE);
+	user_stack_low = (uint64_t) KERN_PHYS_TO_VIRT(pmem_alloc_page());
 	t->pg_tbl = (uint64_t *) kmalloc(sizeof(struct pg_tbl));
 	user_setup_paging(t->pg_tbl,fptr,0,100);
-	paging_map_user_range(t->pg_tbl,user_stack_low,0x8000,8);
+	paging_map_user_range(t->pg_tbl,user_stack_low,0x6000000,8);
 	max_task += 1;
 
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t)fptr-addr_start;
 	t->start_stack = (uint64_t *) (stack_low + KTHREAD_STACK_SIZE);
-	t->user_start_stack = (uint64_t *) (0x8000 + KTHREAD_STACK_SIZE);
+	t->user_start_stack = (uint64_t *) (0x6000000 + KTHREAD_STACK_SIZE);
 	t->pid = pid;
 	t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;

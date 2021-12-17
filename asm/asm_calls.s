@@ -49,7 +49,7 @@ test_user_function:
 
 [global test_user_function5]
 test_user_function5:
-    mov rax,1
+    mov rax,10000
     int 0x80
     ;sti
     call test_user_function2
