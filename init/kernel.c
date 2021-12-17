@@ -81,22 +81,7 @@ void kernel(void)
         user_process_add(&test_user_function5,"Test userspace3");
         user_process_add(&test_user_function5,"Test userspace3");
         user_process_add(&test_user_function5,"Test userspace3");
-        user_process_add(&test_user_function5,"Test userspace3");
-        user_process_add(&test_user_function5,"Test userspace3");
-        user_process_add(&test_user_function5,"Test userspace3");
-      user_process_add(&test_user_function5,"Test userspace3");
-        user_process_add(&test_user_function5,"Test userspace3");
-        user_process_add(&test_user_function5,"Test userspace3");
-        user_process_add(&test_user_function5,"Test userspace3");
-        user_process_add(&test_user_function5,"Test userspace3");
-        user_process_add(&test_user_function5,"Test userspace3");
-        user_process_add(&test_user_function5,"Test userspace3");
-
-               user_process_add(&test_user_function5,"Test userspace3");
-        user_process_add(&test_user_function5,"Test userspace3");
-        user_process_add(&test_user_function5,"Test userspace3");
-
-
+   
 
 	kthread_add(&start_dshell,"D Shell");
 

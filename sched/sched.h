@@ -40,7 +40,7 @@ struct ktask{
 	uint64_t *s_rsp;
 	uint64_t *s_rbp;
 	uint64_t context_switches;
-	uint64_t *pg_tbl;
+	struct pg_tbl *mm;
     struct basic_timer timer;
 };
 

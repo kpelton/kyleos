@@ -4,6 +4,7 @@
 #include <timer/timer.h>
 #include <mm/paging.h>
 #include <mm/mm.h>
+#include <mm/pmem.h>
 
 static struct ktask ktasks[SCHED_MAX_TASKS];
 static uint32_t max_task = 0;
@@ -28,7 +29,7 @@ void kthread_add(void (*fptr)(),char * name) {
 	struct ktask *t;
 	uint64_t stack_low;
 	t = &ktasks[max_task];
-	t->pg_tbl = NULL;
+	t->mm = NULL;
 	stack_low = (uint64_t) kmalloc(KTHREAD_STACK_SIZE);
 	max_task += 1;
 	t->state = TASK_NEW;
@@ -55,13 +56,13 @@ void user_process_add(void (*fptr)(),char *name) {
 	//kprintf("Allocating Stack\n");
 	stack_low = (uint64_t) kmalloc(KTHREAD_STACK_SIZE);
 	user_stack_low = (uint64_t) KERN_PHYS_TO_VIRT(pmem_alloc_page());
-	t->pg_tbl = (uint64_t *) kmalloc(sizeof(struct pg_tbl));
-	user_setup_paging(t->pg_tbl,fptr,0,100);
-	paging_map_user_range(t->pg_tbl,user_stack_low,0x6000000,8);
+	t->mm = (struct pg_tbl *) kmalloc(sizeof(struct pg_tbl));
+	user_setup_paging(t->mm,(uint64_t)fptr,0,100);
+	paging_map_user_range(t->mm,user_stack_low,0x6000000,8);
 	max_task += 1;
 
 	t->state = TASK_NEW;
-	t->start_addr = (uint64_t)fptr-addr_start;
+	t->start_addr = (uint64_t *)fptr-addr_start;
 	t->start_stack = (uint64_t *) (stack_low + KTHREAD_STACK_SIZE);
 	t->user_start_stack = (uint64_t *) (0x6000000 + KTHREAD_STACK_SIZE);
 	t->pid = pid;
@@ -115,7 +116,7 @@ void schedule() {
         else if (ktasks[i].state == TASK_NEW && ktasks[i].type == USER_PROCESS) {
             ktasks[i].state = TASK_RUNNING;
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
-			user_switch_paging(ktasks[i].pg_tbl);
+			user_switch_paging(ktasks[i].mm);
 			
             jump_usermode((uint64_t)ktasks[i].start_addr &0xfff,ktasks[i].user_start_stack);
         }
@@ -125,7 +126,7 @@ void schedule() {
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
 			
 			if (ktasks[i].type == USER_PROCESS){
-				user_switch_paging(ktasks[i].pg_tbl);
+				user_switch_paging(ktasks[i].mm);
 			}
 			resume_p(ktasks[i].s_rsp,ktasks[i].s_rbp);
 

@@ -151,7 +151,6 @@ void user_switch_paging(    struct pg_tbl *pg) {
 
 }
 void kernel_switch_paging() {
-        kernel_pml4[0] =  0;
 
         uint64_t address = (uint64_t)kernel_pml4 - addr_start;
 
