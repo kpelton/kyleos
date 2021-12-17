@@ -3,6 +3,7 @@
 #include <include/types.h>
 #define addr_start 0xffffffff80000000
 struct pg_tbl {
+    uint64_t  *page_dir_tab;
     uint64_t  *page_dir;
     uint64_t  **page_tbl;
 };

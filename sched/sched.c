@@ -57,13 +57,13 @@ void user_process_add(void (*fptr)(),char *name) {
 	user_stack_low = (uint64_t) kmalloc(KTHREAD_STACK_SIZE);
 	t->pg_tbl = (uint64_t *) kmalloc(sizeof(struct pg_tbl));
 	user_setup_paging(t->pg_tbl,fptr,0,100);
-	paging_map_user_range(t->pg_tbl,user_stack_low,0x80000,8);
+	paging_map_user_range(t->pg_tbl,user_stack_low,0x8000,8);
 	max_task += 1;
 
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t)fptr-addr_start;
 	t->start_stack = (uint64_t *) (stack_low + KTHREAD_STACK_SIZE);
-	t->user_start_stack = (uint64_t *) (0x80000 + KTHREAD_STACK_SIZE);
+	t->user_start_stack = (uint64_t *) (0x8000 + KTHREAD_STACK_SIZE);
 	t->pid = pid;
 	t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
@@ -109,6 +109,7 @@ void schedule() {
         prev_task=i;
         if (ktasks[i].state == TASK_NEW && ktasks[i].type == KERNEL_PROCESS) {
             ktasks[i].state = TASK_RUNNING;
+			//kernel_switch_paging();
             switch_to(ktasks[i].start_stack,ktasks[i].start_addr);
         }
         else if (ktasks[i].state == TASK_NEW && ktasks[i].type == USER_PROCESS) {
@@ -122,9 +123,12 @@ void schedule() {
             ktasks[i].state = TASK_RUNNING;
             ktasks[i].context_switches += 1;
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
-			if (ktasks[i].type == USER_PROCESS)
+			
+			if (ktasks[i].type == USER_PROCESS){
 				user_switch_paging(ktasks[i].pg_tbl);
+			}
 			resume_p(ktasks[i].s_rsp,ktasks[i].s_rbp);
+
         }	
         return;
     }

@@ -75,7 +75,7 @@ bool paging_map_kernel_range(uint64_t start, uint64_t len) {
         tbl = VIRT_TO_PAGE_DIR(virt_curr_addr);
         offset =  VIRT_TO_PAGE_TAB(virt_curr_addr);
         //kprintf("%x, %x  %x %x\n",virt_curr_addr,phys_curr_addr,tbl,offset);
-        kernel_page_dir[tbl] = KERN_VIRT_TO_PHYS(page_tbl[tbl]) | 3;
+        kernel_page_dir[tbl] = KERN_VIRT_TO_PHYS(page_tbl[tbl]) &0xfffffffffffff000 | 3;
         page_tbl[tbl][offset] = phys_curr_addr |3;
         phys_curr_addr +=0x1000;
         virt_curr_addr +=0x1000;
@@ -91,13 +91,13 @@ bool paging_map_user_range(struct pg_tbl *pg,uint64_t start,uint64_t virt_start,
     uint64_t phys_curr_addr = KERN_VIRT_TO_PHYS(start);
     uint16_t tbl;
     uint16_t offset;
-
+    asm("cli");
     while (phys_curr_addr < KERN_VIRT_TO_PHYS(start) + (len*4096)) {
         tbl = VIRT_TO_PAGE_DIR(virt_curr_addr);
         offset =  VIRT_TO_PAGE_TAB(virt_curr_addr);
-        //kprintf("%x, %x  %x %x\n",virt_curr_addr,phys_curr_addr,tbl,offset);
+        kprintf("%x, %x  %x %x\n",virt_curr_addr,phys_curr_addr,tbl,offset);
         pg->page_dir[tbl] = KERN_VIRT_TO_PHYS(pg->page_tbl[tbl]) | 7;
-        pg->page_tbl[tbl][offset] = phys_curr_addr |7;
+        pg->page_tbl[tbl][offset] = phys_curr_addr &0xfffffffffffff000  |7;
         phys_curr_addr +=0x1000;
         virt_curr_addr +=0x1000;
 
@@ -111,11 +111,13 @@ bool user_setup_paging(struct pg_tbl *pg,uint64_t start, uint64_t virt_start,uin
     int j;
     uint64_t count;
     uint64_t curr_addr = start - addr_start;
-
+    pg->page_dir_tab = (uint64_t *) KERN_PHYS_TO_VIRT(pmem_alloc_page());
     pg->page_dir = (uint64_t *) KERN_PHYS_TO_VIRT(pmem_alloc_page());
     pg->page_tbl = (uint64_t **) KERN_PHYS_TO_VIRT(pmem_alloc_page());
     paging_map_kernel_range(KERN_VIRT_TO_PHYS(pg->page_tbl), 1);
     paging_map_kernel_range(KERN_VIRT_TO_PHYS(pg->page_dir), 1);
+    paging_map_kernel_range(KERN_VIRT_TO_PHYS(pg->page_dir_tab), 1);
+    pg->page_dir_tab[0] = KERN_VIRT_TO_PHYS(pg->page_dir) | 7;
 
     for (i=0; i!=1; i++) {
         pg->page_tbl[i] = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_page());
@@ -142,30 +144,20 @@ bool user_setup_paging(struct pg_tbl *pg,uint64_t start, uint64_t virt_start,uin
 }
 
 void user_switch_paging(    struct pg_tbl *pg) {
-        kernel_pml4[0] =  KERN_VIRT_TO_PHYS(kernel_page_dir_tab) | 7;
-        kernel_page_dir_tab[0] = KERN_VIRT_TO_PHYS(pg->page_dir) | 7;
+        asm("cli");
+        kernel_pml4[0] =  KERN_VIRT_TO_PHYS(pg->page_dir_tab) | 7;
 
         uint64_t address = (uint64_t)kernel_pml4 - addr_start;
 
-    asm volatile("cli; \
-            movq %0 ,%%cr3; \
-            "
-                 :
-                 : "r"(address));
+
     //kprintf("%x\n",KERN_VIRT_TO_PHYS(pg->page_dir));
 
 }
 void kernel_switch_paging() {
         kernel_pml4[0] =  0;
-        kernel_page_dir_tab[0] = 0;
 
         uint64_t address = (uint64_t)kernel_pml4 - addr_start;
 
-    asm volatile("cli; \
-            movq %0 ,%%cr3; \
-            "
-                 :
-                 : "r"(address));
     //kprintf("%x\n",KERN_VIRT_TO_PHYS(pg->page_dir));
 
 }
