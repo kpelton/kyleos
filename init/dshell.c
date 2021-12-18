@@ -174,7 +174,6 @@ void start_dshell() {
     char buffer[512];
     char *cptr = NULL;
     int pid;
-    char atoibuffer[512];
     struct dnode *dptr;
     struct dnode *dptr1;
     dptr = vfs_read_root_dir("0:/"); 
@@ -254,7 +253,7 @@ for(;;) {
                 && buffer[2] == 'l' && buffer[3] == 'l'
                 && buffer[4] == ' ' && buffer[5] != '\n') {
                 cptr = buffer+5;
-                while(*cptr != '\n' && cptr != '\0') {           
+                while(*cptr != '\n' && *cptr != '\0') {           
                     cptr++;
                 }
                 *cptr = '\0';
@@ -285,7 +284,7 @@ for(;;) {
         }else if (kstrcmp(buffer,"sleep 1\n") == 0) {
             ksleepm(1000);
         }else if (kstrcmp(buffer,"addproc\n") == 0) {
-      user_process_add(&test_user_function5,"Test userspace3");
+            user_process_add(&test_user_function5,"Test userspace3");
         } else {
             kprintf("Unknown command:");
             kprintf(buffer);

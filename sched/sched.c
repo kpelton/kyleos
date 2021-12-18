@@ -110,23 +110,24 @@ bool sched_process_kill(int pid) {
 	return false;
 }
 
-
 void sched_stats() {
 	uint32_t i;
 
 	for (i=0; i<SCHED_MAX_TASKS; i++) {
-		if (ktasks[i].pid == -1 )
-			continue;
-		kprintf("PID %d\n",ktasks[i].pid);
-		kprintf("  name:%s\n",ktasks[i].name);
-		kprintf("  stack:           0x%x\n",ktasks[i].start_stack);
-		kprintf("  stack end:       0x%x\n",ktasks[i].start_stack-KTHREAD_STACK_SIZE);
-		kprintf("  Process State:   %s\n",task_type_str[ktasks[i].state]);
-		kprintf("  context switches:0x%x\n",ktasks[i].context_switches);
-		kprintf("  Process Type:    %s\n",process_types_str[ktasks[i].type]);
-		kprintf("  Sleep state:     %s\n",str_timer_states[ktasks[i].timer.state]);
+		if (ktasks[i].pid != -1 ) {
+
+			kprintf("PID %d\n",ktasks[i].pid);
+			kprintf("  name:%s\n",ktasks[i].name);
+			kprintf("  stack:           0x%x\n",ktasks[i].start_stack);
+			kprintf("  stack end:       0x%x\n",ktasks[i].start_stack-KTHREAD_STACK_SIZE);
+			kprintf("  Process State:   %s\n",task_type_str[ktasks[i].state]);
+			kprintf("  context switches:0x%x\n",ktasks[i].context_switches);
+			kprintf("  Process Type:    %s\n",process_types_str[ktasks[i].type]);
+			kprintf("  Sleep state:     %s\n",str_timer_states[ktasks[i].timer.state]);
+		}
 	}
 }
+
 static int find_next_task(int current_task) {
 
 	int i = current_task;
