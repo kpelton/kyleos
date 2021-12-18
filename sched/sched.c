@@ -25,16 +25,25 @@ void ksleepm(uint32_t ms) {
 	//asm("sti");
 }
 
+void sched_init() {
+	int i;
+	for (i=0; i<SCHED_MAX_TASKS; i++) 
+		ktasks[i].pid = -1;
+}
+
 void kthread_add(void (*fptr)(),char * name) {
 	struct ktask *t;
-	uint64_t stack_low;
+
+
 	t = &ktasks[max_task];
 	t->mm = NULL;
-	stack_low = (uint64_t) kmalloc(KTHREAD_STACK_SIZE);
+	t->stack_alloc = (uint64_t) kmalloc(KTHREAD_STACK_SIZE);
 	max_task += 1;
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t *) fptr;
-	t->start_stack =(uint64_t *) ( stack_low + KTHREAD_STACK_SIZE);
+	t->start_stack =(uint64_t *) ( t->stack_alloc + KTHREAD_STACK_SIZE);
+	t->user_stack_alloc = NULL;
+	t->user_start_stack = NULL;
 	t->pid = pid;
 	t->type = KERNEL_PROCESS;
     t->timer.state = TIMER_UNUSED;
@@ -49,22 +58,22 @@ struct ktask* get_current_process() {
 
 void user_process_add(void (*fptr)(),char *name) {
 	struct ktask *t;
-	uint64_t stack_low;
-	uint64_t user_stack_low;
+
 	t = &ktasks[max_task];
 
 	//kprintf("Allocating Stack\n");
-	stack_low = (uint64_t) kmalloc(KTHREAD_STACK_SIZE);
-	user_stack_low = (uint64_t) KERN_PHYS_TO_VIRT(pmem_alloc_page());
+	t->stack_alloc = (uint64_t) kmalloc(KTHREAD_STACK_SIZE);
+	t->user_stack_alloc = (uint64_t) KERN_PHYS_TO_VIRT(pmem_alloc_page());
 	t->mm = (struct pg_tbl *) kmalloc(sizeof(struct pg_tbl));
 	user_setup_paging(t->mm,(uint64_t)fptr,0,100);
-	paging_map_user_range(t->mm,user_stack_low,0x6000000,8);
+	paging_map_user_range(t->mm,t->user_stack_alloc ,0x60000,1);
+
 	max_task += 1;
 
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t *)fptr-addr_start;
-	t->start_stack = (uint64_t *) (stack_low + KTHREAD_STACK_SIZE);
-	t->user_start_stack = (uint64_t *) (0x6000000 + KTHREAD_STACK_SIZE);
+	t->start_stack = (uint64_t *) (t->stack_alloc + KTHREAD_STACK_SIZE);
+	t->user_start_stack = (uint64_t *) (0x60000  + 2000);
 	t->pid = pid;
 	t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
@@ -73,10 +82,41 @@ void user_process_add(void (*fptr)(),char *name) {
 	pid+=1;
 }
 
+bool sched_process_kill(int pid) {
+	int i;
+	kprintf("Killing %d\n",pid);
+	for (i=0; i<SCHED_MAX_TASKS; i++) {
+
+		if (ktasks[i].pid != -1 && ktasks[i].pid == pid){
+
+			struct ktask *t;
+			uint64_t stack_low;
+			uint64_t user_stack_low;
+			t = &ktasks[i];
+			
+			if(t->type == USER_PROCESS) {
+				paging_free_pg_tbl(t->mm);
+				kfree(t->mm);
+				t->mm = NULL;
+			}
+			kfree(t->stack_alloc);
+			kprintf("Killed %d\n",t->pid);
+
+			t->state = TASK_DONE;
+			t->pid = -1;
+			return true;
+		}
+	}
+	return false;
+}
+
+
 void sched_stats() {
 	uint32_t i;
 
-	for (i=0; i<max_task; i++) {
+	for (i=0; i<SCHED_MAX_TASKS; i++) {
+		if (ktasks[i].pid == -1 )
+			continue;
 		kprintf("PID %d\n",ktasks[i].pid);
 		kprintf("  name:%s\n",ktasks[i].name);
 		kprintf("  stack:           0x%x\n",ktasks[i].start_stack);
@@ -87,18 +127,40 @@ void sched_stats() {
 		kprintf("  Sleep state:     %s\n",str_timer_states[ktasks[i].timer.state]);
 	}
 }
+static int find_next_task(int current_task) {
+
+	int i = current_task;
+	int found_task = -1;
+	int trys = 0;
+	while(found_task == -1) {
+		
+		i = (i + 1) %SCHED_MAX_TASKS; 
+		if (ktasks[i].pid != -1) {
+			found_task = i;
+		}
+		trys++;
+		if (trys == SCHED_MAX_TASKS)
+			panic("Could not find a task to run!");
+	}
+	
+	return found_task;
+
+}
 
 void schedule() {
     uint32_t i = next_task;
-    if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED) {
+
+    if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED 
+		&& ktasks[prev_task].state != TASK_DONE ) {
         ktasks[prev_task].state = TASK_READY;
         //save old stack
         asm volatile("movq %%rsp ,%0" : "=g"(ktasks[prev_task].s_rsp));
         asm volatile("movq %%rbp ,%0" : "=g"(ktasks[prev_task].s_rbp));
     }
- 
-    for (i = next_task; i < max_task; i++) {
-        next_task = (next_task +1) %max_task;
+
+
+
+        next_task = find_next_task(i);
         
         if (update_timer(&ktasks[i].timer)) {
             ktasks[i].state = TASK_READY;
@@ -107,6 +169,7 @@ void schedule() {
             ktasks[i].state = TASK_BLOCKED;
             return;
         }
+
         prev_task=i;
         if (ktasks[i].state == TASK_NEW && ktasks[i].type == KERNEL_PROCESS) {
             ktasks[i].state = TASK_RUNNING;
@@ -130,7 +193,7 @@ void schedule() {
 			}
 			resume_p(ktasks[i].s_rsp,ktasks[i].s_rbp);
 
-        }	
-        return;
-    }
+    }else{
+		kprintf("fail\n");
+	}
 }

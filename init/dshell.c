@@ -11,7 +11,7 @@
 #include <timer/rtc.h>
 #include <mm/pmem.h>
 
-
+void test_user_function5 ();
 static const char OS_PROMPT[] = "Kyle OS |0:";
 
 static char * dir_stack[100][256];
@@ -172,6 +172,9 @@ void print_time() {
 void start_dshell() {
 
     char buffer[512];
+    char *cptr = NULL;
+    int pid;
+    char atoibuffer[512];
     struct dnode *dptr;
     struct dnode *dptr1;
     dptr = vfs_read_root_dir("0:/"); 
@@ -247,6 +250,21 @@ for(;;) {
             shell_cat(buffer,dptr1);
             vfs_free_dnode(dptr1);
         }
+        else if (buffer[0] == 'k' && buffer[1] == 'i' 
+                && buffer[2] == 'l' && buffer[3] == 'l'
+                && buffer[4] == ' ' && buffer[5] != '\n') {
+                cptr = buffer+5;
+                while(*cptr != '\n' && cptr != '\0') {           
+                    cptr++;
+                }
+                *cptr = '\0';
+                pid = atoi(buffer+5);
+                if (sched_process_kill(pid) == false)
+                    kprintf("Kill failed\n");
+
+        }
+
+
         else if (kstrcmp(buffer,"mem\n") == 0) {
             mm_print_stats();
             phys_mem_print_usage();
@@ -266,6 +284,8 @@ for(;;) {
             ksleepm(5000);
         }else if (kstrcmp(buffer,"sleep 1\n") == 0) {
             ksleepm(1000);
+        }else if (kstrcmp(buffer,"addproc\n") == 0) {
+      user_process_add(&test_user_function5,"Test userspace3");
         } else {
             kprintf("Unknown command:");
             kprintf(buffer);

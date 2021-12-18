@@ -49,7 +49,7 @@ test_user_function:
 
 [global test_user_function5]
 test_user_function5:
-    mov rax,1000000
+    mov rax,100
     int 0x80
     ;sti
     call test_user_function2
@@ -63,7 +63,7 @@ usermode_int:
     mov rdi,rax
     call ksleepm
     mov rdi,HelloString
-    ;call kprintf
+    call kprintf
     ;jmp panic_handler
     mov ax, (4 * 8)
 	mov ds, ax

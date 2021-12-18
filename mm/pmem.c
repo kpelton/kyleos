@@ -182,6 +182,11 @@ void *pmem_alloc_block(unsigned int size_in_pages) {
 
 }
 
+void pmem_free_block(uint64_t baddr) {
+    uint64_t diff = baddr - phys_mem_zones[phys_first_region].base_addr;
+    pmem_addr_free_block(diff,phys_mem_zones[phys_first_region].bitmap);
+}
+
 void *pmem_alloc_page() {
     uint64_t addr = pmem_addr_find_first_free_block(phys_mem_zones[phys_first_region].len,phys_mem_zones[phys_first_region].bitmap);
 
