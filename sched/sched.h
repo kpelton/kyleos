@@ -13,6 +13,8 @@ void schedule();
 void sched_stats();
 void ksleepm(uint32_t ms);
 struct ktask* get_current_process();
+bool sched_process_kill(int pid);
+void sched_init();
 enum sched_states {
 	TASK_RUNNING,
 	TASK_READY,
@@ -34,13 +36,15 @@ struct ktask{
 	char name[SCHED_MAX_NAME];
 	uint8_t state;
 	uint8_t type;
+	uint64_t *stack_alloc;
 	uint64_t *start_stack;
+	uint64_t *user_stack_alloc;
 	uint64_t *user_start_stack;
 	uint64_t *start_addr;
 	uint64_t *s_rsp;
 	uint64_t *s_rbp;
 	uint64_t context_switches;
-	uint64_t *pg_tbl;
+	struct pg_tbl *mm;
     struct basic_timer timer;
 };
 

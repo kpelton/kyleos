@@ -17,7 +17,6 @@ static uint64_t total_used = 0;
 
 void * kmalloc(unsigned int p_size)
 {
-    //kprintf("MM Allocating 0x%x 0x%x\n",p_size,head);
     uint64_t* ret;
     struct  mm_block *lptr = head;
     unsigned int size = p_size;
@@ -32,6 +31,8 @@ void * kmalloc(unsigned int p_size)
                 kprintf("mem corrution detected %x\n",(unsigned long) &lptr->addr);
                 continue;
             }
+            //kprintf("MM Allocating 0x%x 0x%x\n",p_size,lptr->addr);
+
             return lptr->addr;
         }
         lptr = lptr->next;
