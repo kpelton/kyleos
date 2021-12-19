@@ -41,7 +41,7 @@ void kthread_add(void (*fptr)(),char * name) {
 	max_task += 1;
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t *) fptr;
-	t->start_stack =(uint64_t *) ( t->stack_alloc + KTHREAD_STACK_SIZE);
+	t->start_stack =(uint64_t *) ( (uint64_t) t->stack_alloc + KTHREAD_STACK_SIZE);
 	t->user_stack_alloc = NULL;
 	t->user_start_stack = NULL;
 	t->pid = pid;
@@ -65,15 +65,15 @@ void user_process_add(void (*fptr)(),char *name) {
 	t->stack_alloc = (uint64_t) kmalloc(KTHREAD_STACK_SIZE);
 	t->user_stack_alloc = (uint64_t) KERN_PHYS_TO_VIRT(pmem_alloc_page());
 	t->mm = (struct pg_tbl *) kmalloc(sizeof(struct pg_tbl));
-	user_setup_paging(t->mm,(uint64_t)fptr,0,100);
+	paging_user_setup(t->mm,(uint64_t)fptr,0,100);
 	paging_map_user_range(t->mm,t->user_stack_alloc ,0x60000,1);
 
 	max_task += 1;
 
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t *)fptr-addr_start;
-	t->start_stack = (uint64_t *) (t->stack_alloc + KTHREAD_STACK_SIZE);
-	t->user_start_stack = (uint64_t *) (0x60000  + 2000);
+	t->start_stack = (uint64_t *) ((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE);
+	t->user_start_stack = (uint64_t *) (0x60000  + 1024);
 	t->pid = pid;
 	t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;

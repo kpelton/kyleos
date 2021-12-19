@@ -113,7 +113,7 @@ bool paging_free_pg_tbl(struct pg_tbl *pg)
 
     return true;
 }
-bool user_setup_paging(struct pg_tbl *pg, uint64_t start, uint64_t virt_start, uint64_t len)
+bool paging_user_setup(struct pg_tbl *pg, uint64_t start, uint64_t virt_start, uint64_t len)
 {
     int i;
     int j;

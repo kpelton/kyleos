@@ -31,7 +31,7 @@ void * kmalloc(unsigned int p_size)
                 kprintf("mem corrution detected %x\n",(unsigned long) &lptr->addr);
                 continue;
             }
-            kprintf("MM Allocating 0x%x 0x%x\n",p_size,lptr->addr);
+            //kprintf("MM Allocating 0x%x 0x%x\n",p_size,lptr->addr);
 
             return lptr->addr;
         }
