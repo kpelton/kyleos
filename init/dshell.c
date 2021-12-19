@@ -174,12 +174,12 @@ void start_dshell() {
     char buffer[512];
     char *cptr = NULL;
     int pid;
-    struct dnode *dptr;
-    struct dnode *dptr1;
+    //struct dnode *dptr;
+    //struct dnode *dptr1;
 //    dptr = vfs_read_root_dir("0:/"); 
-    struct dnode *olddptr=dptr;
-    struct inode *pwd = dptr->root_inode;
-    struct inode *oldpwd=pwd;
+    //struct dnode *olddptr=dptr;
+    //struct inode *pwd = dptr->root_inode;
+    //struct inode *oldpwd=pwd;
     push_dir_stack("/");
     print_prompt();
 
