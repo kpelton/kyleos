@@ -10,8 +10,7 @@
 #define VIRT_TO_PAGE_DIR(x) ((0x3fe00000 & x) >> 21) & 0x1ff
 #define VIRT_TO_PAGE_TAB(x) (((0x1ff000 & x) >> 12) & 0x1ff)
 #define VIRT_TO_PTE(x) ((0xfff & x) & 0xfff)
-#define KERN_PHYS_TO_VIRT(x) ((uint64_t)addr_start + (uint64_t)x)
-#define KERN_VIRT_TO_PHYS(x) ((uint64_t)x - (uint64_t)addr_start)
+
 
 uint64_t initial_pml4[512] __attribute__((aligned(0x20)));         // must be aligned to (at least)0x20, ...
 uint64_t initial_page_dir_tab[512] __attribute__((aligned(0x20))); // must be aligned to (at least)0x20, ...
@@ -73,7 +72,7 @@ bool paging_map_kernel_range(uint64_t start, uint64_t len)
         tbl = VIRT_TO_PAGE_DIR(virt_curr_addr);
         offset = VIRT_TO_PAGE_TAB(virt_curr_addr);
         //kprintf("%x, %x  %x %x\n",virt_curr_addr,phys_curr_addr,tbl,offset);
-        kernel_page_dir[tbl] = KERN_VIRT_TO_PHYS(page_tbl[tbl]) & 0xfffffffffffff000 | 3;
+        kernel_page_dir[tbl] = (KERN_VIRT_TO_PHYS(page_tbl[tbl]) & 0xfffffffffffff000) | 3;
         page_tbl[tbl][offset] = phys_curr_addr | 3;
         phys_curr_addr += 0x1000;
         virt_curr_addr += 0x1000;
@@ -94,7 +93,7 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
         offset = VIRT_TO_PAGE_TAB(virt_curr_addr);
         //kprintf("%x, %x  %x %x\n",virt_curr_addr,phys_curr_addr,tbl,offset);
         pg->page_dir[tbl] = KERN_VIRT_TO_PHYS(pg->page_tbl[tbl]) | 7;
-        pg->page_tbl[tbl][offset] = phys_curr_addr & 0xfffffffffffff000 | 7;
+        pg->page_tbl[tbl][offset] = (phys_curr_addr & 0xfffffffffffff000) | 7;
         phys_curr_addr += 0x1000;
         virt_curr_addr += 0x1000;
     }
@@ -117,7 +116,6 @@ bool paging_user_setup(struct pg_tbl *pg, uint64_t start, uint64_t virt_start, u
 {
     int i;
     int j;
-    uint64_t count;
     uint64_t curr_addr = start - addr_start;
     pg->page_dir_tab = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_page());
     pg->page_dir = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_page());
@@ -157,14 +155,11 @@ void user_switch_paging(struct pg_tbl *pg)
 {
     kernel_pml4[0] = KERN_VIRT_TO_PHYS(pg->page_dir_tab) | 7;
 
-    uint64_t address = (uint64_t)kernel_pml4 - addr_start;
-
     //kprintf("%x\n",KERN_VIRT_TO_PHYS(pg->page_dir));
 }
 void kernel_switch_paging()
 {
 
-    uint64_t address = (uint64_t)kernel_pml4 - addr_start;
 
     //kprintf("%x\n",KERN_VIRT_TO_PHYS(pg->page_dir));
 }

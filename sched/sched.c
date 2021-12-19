@@ -39,7 +39,7 @@ void kthread_add(void (*fptr)(), char *name)
 
 	t = &ktasks[max_task];
 	t->mm = NULL;
-	t->stack_alloc = (uint64_t)kmalloc(KTHREAD_STACK_SIZE);
+	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
 	max_task += 1;
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t *)fptr;
@@ -66,11 +66,11 @@ void user_process_add(void (*fptr)(), char *name)
 	t = &ktasks[max_task];
 
 	//kprintf("Allocating Stack\n");
-	t->stack_alloc = (uint64_t)kmalloc(KTHREAD_STACK_SIZE);
-	t->user_stack_alloc = (uint64_t)KERN_PHYS_TO_VIRT(pmem_alloc_page());
+	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
+	t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_page());
 	t->mm = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
 	paging_user_setup(t->mm, (uint64_t)fptr, 0, 100);
-	paging_map_user_range(t->mm, t->user_stack_alloc, 0x60000, 1);
+	paging_map_user_range(t->mm,(uint64_t) t->user_stack_alloc, 0x60000, 1);
 
 	max_task += 1;
 
@@ -97,8 +97,6 @@ bool sched_process_kill(int pid)
 		{
 
 			struct ktask *t;
-			uint64_t stack_low;
-			uint64_t user_stack_low;
 			t = &ktasks[i];
 
 			if (t->type == USER_PROCESS)
