@@ -6,6 +6,9 @@
 #include <mm/mm.h>
 #include <mm/pmem.h>
 
+#define USER_STACK_VADDR 0x30000000
+#define USER_STACK_SIZE 4096
+
 static struct ktask ktasks[SCHED_MAX_TASKS];
 static uint32_t max_task = 0;
 static uint32_t next_task = 0;
@@ -70,14 +73,14 @@ void user_process_add(void (*fptr)(), char *name)
 	t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_page());
 	t->mm = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
 	paging_user_setup(t->mm, (uint64_t)fptr, 0, 100);
-	paging_map_user_range(t->mm,(uint64_t) t->user_stack_alloc, 0x60000, 1);
+	paging_map_user_range(t->mm,(uint64_t) t->user_stack_alloc, USER_STACK_VADDR, 1);
 
 	max_task += 1;
 
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t *)fptr - addr_start;
 	t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE);
-	t->user_start_stack = (uint64_t *)(0x60000 + 1024);
+	t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + USER_STACK_SIZE );
 	t->pid = pid;
 	t->type = USER_PROCESS;
 	t->timer.state = TIMER_UNUSED;
