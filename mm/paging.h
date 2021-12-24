@@ -2,6 +2,7 @@
 #define PAGING_H
 #include <include/types.h>
 #define addr_start 0xffffffff80000000
+#define phys_memmap_start 0xffff888000000000
 struct pg_tbl {
     uint64_t  *pml4;
 };
@@ -16,7 +17,7 @@ void kernel_switch_paging();
 #define KERN_PHYS_TO_VIRT(x) ((uint64_t)addr_start + (uint64_t)x)
 #define KERN_VIRT_TO_PHYS(x) ((uint64_t) x - (uint64_t)addr_start)
 
-#define KERN_PHYS_TO_PVIRT(x) ((uint64_t)0xffff888000000000 + (uint64_t)x)
-#define KERN_PVIRT_TO_PHYS(x) ((uint64_t) x - (uint64_t)0xffff888000000000)
+#define KERN_PHYS_TO_PVIRT(x) ((uint64_t)phys_memmap_start + (uint64_t)x)
+#define KERN_PVIRT_TO_PHYS(x) ((uint64_t) x - (uint64_t)phys_memmap_start)
 
 #endif

@@ -34,6 +34,7 @@ uint64_t *pmem_alloc_bitmap(uint64_t size, uint64_t *size_allocated, void *memor
 void phys_mem_early_init(uint64_t  mb_info);
 void *pmem_alloc_block(unsigned int size_in_pages);
 void pmem_free_block(uint64_t baddr);
+void *pmem_alloc_zero_page();
 void *pmem_alloc_page();
 void phys_mem_print_usage();
 void phys_mem_init();
