@@ -78,10 +78,11 @@ void kernel(void)
     kprintf("Kyle OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
       user_process_add(&test_user_function5,"Test userspace3");
-       // user_process_add(&test_user_function5,"Test userspace3");
-    
+      	kthread_add(&start_dshell,"D Shell");
+   user_process_add(&test_user_function5,"Test userspace3");
+   user_process_add(&test_user_function5,"Test userspace3");
 
-	kthread_add(&start_dshell,"D Shell");
+
 
     asm("sti");
 

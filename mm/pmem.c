@@ -1,6 +1,7 @@
 #include <include/types.h>
 #include <mm/pmem.h>
 #include <mm/mm.h>
+#include <mm/paging.h>
 #include <output/output.h>
 
 #define BIT_SIZE 64
@@ -73,19 +74,19 @@ void pmem_addr_set_block(uint64_t addr, uint64_t *bitmap)
     uint64_t block = get_block(bit);
     bit  = get_bit_in_block(bit);
     bitmap[block] |=  1UL <<bit;
+    //kprintf("pmem Marking 0x%x\n",addr);
 }
 
 void pmem_addr_set_region(uint64_t addr, uint64_t size, uint64_t *bitmap) 
 {
-    while (size !=  0) {
+    uint64_t curr_size = size;
+    kprintf("pmem_addr_set_region 0x%x 0x%d\n",addr,curr_size);
+    while (curr_size >  0) {
         pmem_addr_set_block(addr,bitmap);
-        //kprintf("setting %x %x at %x\n",addr, (addr+size)-1,bitmap);
+        //kprintf("pmem setting %x %x \n",addr,curr_size);
 
         addr+=BLOCK_SIZE;
-        //IF the address is unaligned
-        if (size-BLOCK_SIZE > size)
-            break;
-        size-=BLOCK_SIZE;
+        curr_size-=1;
     }   
 }
 
@@ -187,6 +188,15 @@ void pmem_free_block(uint64_t baddr) {
     pmem_addr_free_block(diff,phys_mem_zones[phys_first_region].bitmap);
 }
 
+static uint64_t* zero_page(uint64_t *addr) {
+    int i;
+    uint64_t *pvirt_addr =KERN_PHYS_TO_PVIRT(addr);
+    for(i=0; i<512; i++) {
+        pvirt_addr[i] =0;
+    } 
+    return addr;
+}
+
 void *pmem_alloc_page() {
     uint64_t addr = pmem_addr_find_first_free_block(phys_mem_zones[phys_first_region].len,phys_mem_zones[phys_first_region].bitmap);
 
@@ -194,10 +204,14 @@ void *pmem_alloc_page() {
         pmem_addr_set_block(addr,phys_mem_zones[phys_first_region].bitmap);
     }
     //We need to add the base address here because all bitmaps start at 0
+    kprintf("Alloc 0x%x\n",addr +phys_mem_zones[phys_first_region].base_addr);
     return (void *)addr +phys_mem_zones[phys_first_region].base_addr;
 
 }
 
+void *pmem_alloc_zero_page() {
+    return zero_page(pmem_alloc_page());
+}
 
 void phys_mem_init() {
 
@@ -230,7 +244,7 @@ void phys_mem_init() {
     kprintf("alloc_location %x\n",alloc_location);
     alloc_size  = alloc_location - initial_alloc_location;
     total_size =  ((uint64_t)&_kernel_end - 0xffffffff80000000)+alloc_size + 4096;
-    phys_mem_reserve_inital_region(total_size);
+    phys_mem_reserve_inital_region((total_size/4096)+1);
     kprintf("Inital region is using %d B out of %d B\n",
                         get_used_page_count(phys_mem_zones[phys_first_region].len,phys_mem_zones[phys_first_region].bitmap)*4096,
                         (phys_mem_zones[phys_first_region].len/4096) * 4096);
