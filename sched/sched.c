@@ -111,6 +111,7 @@ bool sched_process_kill(int pid)
 				t->mm = NULL;
 			}
 			kfree(t->stack_alloc);
+			pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc));
 			kprintf("Killed %d\n", t->pid);
 
 			t->state = TASK_DONE;
