@@ -169,17 +169,22 @@ void user_switch_paging(struct pg_tbl *pg)
 
    // kprintf("switching to pml4 0x%x\n",pg->pml4);
     //return;
-    pg->pml4[511] = kernel_pml4[511];
-    pg->pml4[273] = kernel_pml4[273];
-
+    int i = 0;
+    for (i=0; i<20; i++) {
+        if ((pg->pml4[i] & 1) == 1)
+            kernel_pml4[i] = pg->pml4[i];
+        else
+            kernel_pml4[i] = 0;
+    }
+/*
     //    kprintf("pml4 0x%x %x\n",address,pg->pml4);
     asm volatile("movq %0 ,%%cr3; \
             "
                  :
                  : "r"(address));
-
+/
      //  kprintf("user switch\n");
-
+*/
 }
 void kernel_switch_paging()
 {

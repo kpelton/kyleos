@@ -74,7 +74,7 @@ void pmem_addr_set_block(uint64_t addr, uint64_t *bitmap)
     uint64_t block = get_block(bit);
     bit  = get_bit_in_block(bit);
     bitmap[block] |=  1UL <<bit;
-    //kprintf("pmem Marking 0x%x\n",addr);
+    kprintf("pmem Marking 0x%x\n",addr);
 }
 
 void pmem_addr_set_region(uint64_t addr, uint64_t size, uint64_t *bitmap) 
