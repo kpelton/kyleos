@@ -210,7 +210,14 @@ for(;;) {
     return;
 */
 
-
+void kthread_test()
+{
+    for(;;) {
+        kprintf("test frok kthread!\n");
+        ksleepm(1000);
+    }
+}
+    
 //
     while (1) { 
         for(int i =0; i<512; i++)
@@ -255,6 +262,9 @@ for(;;) {
             ksleepm(1000);
         }else if (kstrcmp(buffer,"addproc\n") == 0) {
             user_process_add(&test_user_function5,"Test userspace3");
+            //asm("cli;hlt");
+        }else if (kstrcmp(buffer,"addkproc\n") == 0) {
+            kthread_add(kthread_test, "kthread");
         } else {
             kprintf("Unknown command:");
             kprintf(buffer);

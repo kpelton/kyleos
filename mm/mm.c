@@ -54,7 +54,7 @@ void * kmalloc(unsigned int p_size)
     ptr->free = USED;
     ptr->addr = ret;
     //kprint_hex("Alloc ",size);
-    //kprint_hex("Alloc 0x",ret);
+   // kprintf("MM Alloc 0x%x %x\n",KERN_VIRT_TO_PHYS(ret),size);
     kernel_heap+=size;
     total_used +=size;
     return ret;
@@ -98,7 +98,9 @@ void mm_print_stats()
 void mm_init()
 {
     setup_paging();
-    kernel_heap =  (char *) KERN_PHYS_TO_VIRT(pmem_alloc_block(HEAP_SIZE));
+    char * heap_loc = pmem_alloc_block(HEAP_SIZE);
+    kprintf("Heap Loc:0x%x\n",heap_loc);
+    kernel_heap =  (char *) KERN_PHYS_TO_VIRT(heap_loc);
     paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_heap),HEAP_SIZE);
 }
 

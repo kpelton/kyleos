@@ -41,7 +41,7 @@ test_user_function2:
 [global test_user_function]
 test_user_function:
     mov rax,123
-    int 0x80
+    ;;int 0x80
     ;sti
     call test_user_function2
     jmp test_user_function
@@ -49,11 +49,11 @@ test_user_function:
 
 [global test_user_function5]
 test_user_function5:
-    mov rax,100
+    mov rax,1000
     int 0x80
     ;sti
-    call test_user_function2
-    jmp test_user_function
+    ;;call test_user_function2
+    jmp test_user_function5
     ret
 
 
@@ -69,6 +69,7 @@ usermode_int:
 	mov ds, ax
 	mov es, ax 
 	mov fs, ax 
+    sti
     iretq
 
 [global jump_usermode]

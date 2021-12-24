@@ -6,6 +6,9 @@
 #include <mm/mm.h>
 #include <mm/pmem.h>
 
+#define USER_STACK_VADDR 0x6400000000
+#define USER_STACK_SIZE 4096
+
 static struct ktask ktasks[SCHED_MAX_TASKS];
 static uint32_t max_task = 0;
 static uint32_t next_task = 0;
@@ -39,7 +42,7 @@ void kthread_add(void (*fptr)(), char *name)
 
 	t = &ktasks[max_task];
 	t->mm = NULL;
-	t->stack_alloc = (uint64_t)kmalloc(KTHREAD_STACK_SIZE);
+	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
 	max_task += 1;
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t *)fptr;
@@ -62,28 +65,30 @@ struct ktask *get_current_process()
 void user_process_add(void (*fptr)(), char *name)
 {
 	struct ktask *t;
-
 	t = &ktasks[max_task];
 
 	//kprintf("Allocating Stack\n");
-	t->stack_alloc = (uint64_t)kmalloc(KTHREAD_STACK_SIZE);
-	t->user_stack_alloc = (uint64_t)KERN_PHYS_TO_VIRT(pmem_alloc_page());
+	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
+	t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_zero_page());
 	t->mm = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
-	paging_user_setup(t->mm, (uint64_t)fptr, 0, 100);
-	paging_map_user_range(t->mm, t->user_stack_alloc, 0x60000, 1);
+	t->mm->pml4 = (uint64_t *)KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
+	kprintf("sched pml4 %x\n",t->mm->pml4);
+	paging_map_user_range(t->mm,(uint64_t) (uint64_t)fptr, 0, 1);
+	paging_map_user_range(t->mm,(uint64_t) t->user_stack_alloc, USER_STACK_VADDR,(USER_STACK_SIZE/4096));
 
 	max_task += 1;
 
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t *)fptr - addr_start;
 	t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE);
-	t->user_start_stack = (uint64_t *)(0x60000 + 1024);
+	t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + 2048 );
 	t->pid = pid;
 	t->type = USER_PROCESS;
 	t->timer.state = TIMER_UNUSED;
 	kstrcpy(t->name, name);
 	t->context_switches = 0;
 	pid += 1;
+
 }
 
 bool sched_process_kill(int pid)
@@ -97,8 +102,6 @@ bool sched_process_kill(int pid)
 		{
 
 			struct ktask *t;
-			uint64_t stack_low;
-			uint64_t user_stack_low;
 			t = &ktasks[i];
 
 			if (t->type == USER_PROCESS)
@@ -179,8 +182,9 @@ static void update_timers()
 
 void schedule()
 {
+	asm("cli");
+	//kprintf("schedule\n");
 	bool success = false;
-
 	if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_DONE)
 	{
 		ktasks[prev_task].state = TASK_READY;
@@ -202,7 +206,6 @@ void schedule()
 		if (ktasks[i].state == TASK_NEW && ktasks[i].type == KERNEL_PROCESS)
 		{
 			ktasks[i].state = TASK_RUNNING;
-			//kernel_switch_paging();
 			switch_to(ktasks[i].start_stack, ktasks[i].start_addr);
 			success = true;
 		}
