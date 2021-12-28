@@ -141,6 +141,8 @@ void pmem_addr_free_block(uint64_t addr, uint64_t *bitmap)
     uint64_t block = get_block(bit);
     bit  = get_bit_in_block(bit);
     bitmap[block] &=  ~(1UL <<bit);
+    kprintf("pmem Clearing 0x%x\n",addr);
+
 }
 
 //size: how 

@@ -10,10 +10,9 @@
 #define USER_STACK_SIZE 4096
 
 static struct ktask ktasks[SCHED_MAX_TASKS];
-static uint32_t max_task = 0;
 static uint32_t next_task = 0;
 static int prev_task = -1;
-static int pid = 1;
+static int pid = 0;
 
 void switch_to(uint64_t *rsp, uint64_t *addr);
 void resume_p(uint64_t *rsp, uint64_t *rbp);
@@ -36,14 +35,34 @@ void sched_init()
 		ktasks[i].pid = -1;
 }
 
+static int find_free_task()
+{
+
+	int i = 0;
+	int found_task = ktasks[i].pid;
+	int trys = 0;
+	while (found_task != -1)
+	{
+		i = (i + 1) % SCHED_MAX_TASKS;
+		found_task = ktasks[i].pid;
+		trys++;
+		if (trys == SCHED_MAX_TASKS * 2)
+			panic("No free tasks");
+	//kprintf("t:%d %d\n",found_task,i);
+
+
+	}
+	//kprintf("f:%d\n",i);
+	return i;
+}
+
 void kthread_add(void (*fptr)(), char *name)
 {
 	struct ktask *t;
 
-	t = &ktasks[max_task];
+	t = &ktasks[find_free_task()];
 	t->mm = NULL;
 	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
-	max_task += 1;
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t *)fptr;
 	t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE);
@@ -62,10 +81,11 @@ struct ktask *get_current_process()
 	return &ktasks[prev_task];
 }
 
-void user_process_add(void (*fptr)(), char *name)
+int user_process_add(void (*fptr)(), char *name)
 {
 	struct ktask *t;
-	t = &ktasks[max_task];
+	t = &ktasks[find_free_task()];
+	int pid_ret;
 
 	//kprintf("Allocating Stack\n");
 	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
@@ -76,7 +96,6 @@ void user_process_add(void (*fptr)(), char *name)
 	paging_map_user_range(t->mm,(uint64_t) (uint64_t)fptr, 0, 1);
 	paging_map_user_range(t->mm,(uint64_t) t->user_stack_alloc, USER_STACK_VADDR,(USER_STACK_SIZE/4096));
 
-	max_task += 1;
 
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t *)fptr - addr_start;
@@ -87,7 +106,9 @@ void user_process_add(void (*fptr)(), char *name)
 	t->timer.state = TIMER_UNUSED;
 	kstrcpy(t->name, name);
 	t->context_switches = 0;
+	pid_ret = pid;
 	pid += 1;
+	return pid_ret;
 
 }
 
@@ -142,6 +163,8 @@ void sched_stats()
 		}
 	}
 }
+
+
 
 static int find_next_task(int current_task)
 {
