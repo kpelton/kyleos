@@ -8,7 +8,7 @@
 #define KTHREAD_STACK_SIZE 0x8000
 
 void kthread_add(void (*fptr)(),char * name);
-void user_process_add(void (*fptr)(),char * name);
+int user_process_add(void (*fptr)(),char * name);
 void schedule();
 void sched_stats();
 void ksleepm(uint32_t ms);

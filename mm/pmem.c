@@ -74,7 +74,7 @@ void pmem_addr_set_block(uint64_t addr, uint64_t *bitmap)
     uint64_t block = get_block(bit);
     bit  = get_bit_in_block(bit);
     bitmap[block] |=  1UL <<bit;
-    //kprintf("pmem Marking 0x%x\n",addr);
+    kprintf("pmem Marking 0x%x\n",addr);
 }
 
 void pmem_addr_set_region(uint64_t addr, uint64_t size, uint64_t *bitmap) 
@@ -141,6 +141,8 @@ void pmem_addr_free_block(uint64_t addr, uint64_t *bitmap)
     uint64_t block = get_block(bit);
     bit  = get_bit_in_block(bit);
     bitmap[block] &=  ~(1UL <<bit);
+    kprintf("pmem Clearing 0x%x\n",addr);
+
 }
 
 //size: how 
@@ -190,7 +192,7 @@ void pmem_free_block(uint64_t baddr) {
 
 static uint64_t* zero_page(uint64_t *addr) {
     int i;
-    uint64_t *pvirt_addr =KERN_PHYS_TO_PVIRT(addr);
+    uint64_t *pvirt_addr = (uint64_t *) KERN_PHYS_TO_PVIRT(addr);
     for(i=0; i<512; i++) {
         pvirt_addr[i] =0;
     } 

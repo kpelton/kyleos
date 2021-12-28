@@ -66,7 +66,6 @@ bool paging_map_kernel_range(uint64_t start, uint64_t len)
 
     uint64_t virt_curr_addr = KERN_PHYS_TO_VIRT(start);
     uint64_t phys_curr_addr = start;
-    uint16_t tbl;
     uint16_t offset;
     uint64_t *curr;
 
@@ -77,20 +76,20 @@ bool paging_map_kernel_range(uint64_t start, uint64_t len)
         if ((pkernel_pml4[offset] & 1) == 0) {
             pkernel_pml4[offset] = (uint64_t)pmem_alloc_zero_page() | 3;
         }
-        curr = KERN_PHYS_TO_PVIRT(pkernel_pml4[offset] & 0xffffffffffffff00);
+        curr = (uint64_t *)KERN_PHYS_TO_PVIRT((pkernel_pml4[offset] & 0xffffffffffffff00));
         offset = VIRT_TO_PAGE_DIR_TAB_ADDR(virt_curr_addr);
         //kprintf("0x%x\n",curr);
         if ((curr[offset] & 1) == 0) {
             curr[offset] = (uint64_t)pmem_alloc_zero_page() |3 ;
         }
-        curr = KERN_PHYS_TO_PVIRT(curr[offset] & 0xffffffffffffff00);
+        curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & 0xffffffffffffff00));
 
         //kprintf("0x%x\n",curr);
         offset = VIRT_TO_PAGE_DIR(virt_curr_addr);
         if ((curr[offset] & 1) == 0) {
             curr[offset] = (uint64_t)pmem_alloc_zero_page() |3 ;
         }
-        curr = KERN_PHYS_TO_PVIRT(curr[offset] & 0xffffffffffffff00);
+        curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & 0xffffffffffffff00));
         offset = VIRT_TO_PAGE_TAB(virt_curr_addr);
         //kprintf("%d\n",offset);
         curr[offset] = phys_curr_addr | 3;
@@ -105,26 +104,25 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
 
     uint64_t virt_curr_addr = virt_start;
     uint64_t phys_curr_addr = KERN_VIRT_TO_PHYS(start);
-    uint16_t tbl;
     uint16_t offset;
     uint64_t *curr = pg->pml4;
-    kprintf("call base pml4 %x\n",pg->pml4);
+   // kprintf("call base pml4 %x\n",pg->pml4);
     while (phys_curr_addr < KERN_VIRT_TO_PHYS(start) + (len * 4096))
     {
         curr = pg->pml4;
         offset = VIRT_TO_PML4_ADDR(virt_curr_addr);
-        kprintf("pml4 %x %x %x\n",curr,curr[offset],offset);
+       // kprintf("pml4 %x %x %x\n",curr,curr[offset],offset);
 
         //Add checks here if we are out of the user range
         if ((curr[offset] & 1) == 0) {
-                    kprintf("Writing to %x\n",curr+offset);
+               //     kprintf("Writing to %x\n",curr+offset);
 
             curr[offset] = (uint64_t)pmem_alloc_zero_page()| 7;
-            kprintf("new pagedirtab %x %x\n",curr[offset],offset);
+            //kprintf("new pagedirtab %x %x\n",curr[offset],offset);
         }
-        curr = KERN_PHYS_TO_PVIRT(curr[offset] & 0xffffffffffffff00);
+        curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & 0xffffffffffffff00));
         offset = VIRT_TO_PAGE_DIR_TAB_ADDR(virt_curr_addr);
-        kprintf("page_tab %x %x %x\n",curr,curr[offset],offset);
+       // kprintf("page_tab %x %x %x\n",curr,curr[offset],offset);
 
 
         if ((curr[offset] & 1) == 0) {
@@ -132,21 +130,21 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
 
             curr[offset] = (uint64_t)pmem_alloc_zero_page() |7 ;
         }
-        curr = KERN_PHYS_TO_PVIRT(curr[offset] & 0xffffffffffffff00);
+        curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & 0xffffffffffffff00));
         offset = VIRT_TO_PAGE_DIR(virt_curr_addr);
-        kprintf("page_dir %x %x %x\n",curr,curr[offset],offset);
-                kprintf("done1\n");
+       /// kprintf("page_dir %x %x %x\n",curr,curr[offset],offset);
+        //        kprintf("done1\n");
         if ((curr[offset] & 1) == 0) {
-                            kprintf("done2\n");
-        kprintf("Writing to %x\n",curr+offset);
+       //                     kprintf("done2\n");
+      //  kprintf("Writing to %x\n",curr+offset);
             curr[offset] = (uint64_t)pmem_alloc_zero_page() |7 ;
         }
-                kprintf("done\n");
+           //     kprintf("done\n");
 
-        curr = KERN_PHYS_TO_PVIRT(curr[offset] & 0xffffffffffffff00);
+        curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & 0xffffffffffffff00));
         offset = VIRT_TO_PAGE_TAB(virt_curr_addr);
-        kprintf("page\n");
-        kprintf("Writing to %x\n",curr+offset);
+      //  kprintf("page\n");
+      //  kprintf("Writing to %x\n",curr+offset);
         curr[offset] = phys_curr_addr | 7;
 
         phys_curr_addr += 0x1000;
@@ -155,31 +153,73 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
     return true;
 
 }
+
+static void paging_free_page_dir(uint64_t* pgdir_addr) {
+    int i;
+
+    for (i=0; i<512; i++) {
+        if((pgdir_addr[i]  &1) != 0) {
+            kprintf("free pgdir %x\n",pgdir_addr[i] & 0xffffffffffffff00 );
+            pmem_free_block(pgdir_addr[i] & 0xffffffffffffff00);
+        } 
+    }
+}
+
+static void paging_free_page_tab(uint64_t* pgtb_addr) {
+    int i;
+
+    for (i=0; i<512; i++) {
+        if((pgtb_addr[i]  &1) != 0) {
+            paging_free_page_dir((uint64_t*)KERN_PHYS_TO_PVIRT((pgtb_addr[i] & 0xffffffffffffff00)));
+            kprintf("free pgtab %x\n",pgtb_addr[i] & 0xffffffffffffff00 );
+            pmem_free_block(pgtb_addr[i] & 0xffffffffffffff00);
+        } 
+    }
+}
+
+static void paging_free_pml4(uint64_t* pml4_addr) {
+    int i;
+
+    for (i=0; i<512; i++) {
+        if((pml4_addr[i]  &1) != 0) {
+            paging_free_page_tab((uint64_t*) KERN_PHYS_TO_PVIRT((pml4_addr[i] & 0xffffffffffffff00)));
+            kprintf("free pml4 %x\n",pml4_addr[i] & 0xffffffffffffff00 );
+            pmem_free_block(pml4_addr[i] & 0xffffffffffffff00);
+        } 
+
+    }
+    pmem_free_block((KERN_PVIRT_TO_PHYS(pml4_addr) & 0xffffffffffffff00));
+}
+
 bool paging_free_pg_tbl(struct pg_tbl *pg)
 {
     //TODO: implement this
-
+    kprintf("free %x\n",pg->pml4);
+    paging_free_pml4(pg->pml4);
     return true;
 }
 
-
 void user_switch_paging(struct pg_tbl *pg)
 {
-    uint64_t address = KERN_PVIRT_TO_PHYS(pg->pml4);
 
    // kprintf("switching to pml4 0x%x\n",pg->pml4);
     //return;
-    pg->pml4[511] = kernel_pml4[511];
-    pg->pml4[273] = kernel_pml4[273];
-
+    int i = 0;
+    for (i=0; i<20; i++) {
+        if ((pg->pml4[i] & 1) == 1)
+            kernel_pml4[i] = pg->pml4[i];
+        else
+            kernel_pml4[i] = 0;
+    }
+/*
     //    kprintf("pml4 0x%x %x\n",address,pg->pml4);
     asm volatile("movq %0 ,%%cr3; \
             "
                  :
                  : "r"(address));
-
+/
      //  kprintf("user switch\n");
-
+*/
 }
 void kernel_switch_paging()
 {
@@ -193,6 +233,7 @@ void kernel_switch_paging()
 
     kprintf("kern switch\n");
 }
+
 bool setup_paging()
 {
     uint64_t address;
@@ -250,7 +291,7 @@ bool setup_paging()
             "
                  :
                  : "r"(address));
-    pkernel_pml4 = KERN_PHYS_TO_PVIRT(KERN_VIRT_TO_PHYS(kernel_pml4));
+    pkernel_pml4 = (uint64_t *) KERN_PHYS_TO_PVIRT(KERN_VIRT_TO_PHYS(kernel_pml4));
     kprintf("Switch to late kernel pages done\n");
 
     return true;
