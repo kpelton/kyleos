@@ -195,9 +195,8 @@ void pmem_free_block(uint64_t baddr) {
 static uint64_t* zero_page(uint64_t *addr) {
     int i;
     uint64_t *pvirt_addr = (uint64_t *) KERN_PHYS_TO_PVIRT(addr);
-    for(i=0; i<512; i++) {
-        pvirt_addr[i] =0;
-    } 
+    for(i=0; i<512; i++)
+        pvirt_addr[i] = 0;
     return addr;
 }
 
