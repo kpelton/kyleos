@@ -74,7 +74,9 @@ void pmem_addr_set_block(uint64_t addr, uint64_t *bitmap)
     uint64_t block = get_block(bit);
     bit  = get_bit_in_block(bit);
     bitmap[block] |=  1UL <<bit;
+#ifdef PMEM_DEBUG
     kprintf("pmem Marking 0x%x\n",addr);
+#endif
 }
 
 void pmem_addr_set_region(uint64_t addr, uint64_t size, uint64_t *bitmap) 
@@ -206,7 +208,9 @@ void *pmem_alloc_page() {
         pmem_addr_set_block(addr,phys_mem_zones[phys_first_region].bitmap);
     }
     //We need to add the base address here because all bitmaps start at 0
+#ifdef PMEM_DEBUG
     kprintf("Alloc 0x%x\n",addr +phys_mem_zones[phys_first_region].base_addr);
+#endif
     return (void *)addr +phys_mem_zones[phys_first_region].base_addr;
 
 }

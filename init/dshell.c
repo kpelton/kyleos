@@ -235,9 +235,10 @@ void kthread_test()
                 }
                 *cptr = '\0';
                 pid = atoi(buffer+5);
+                asm("cli");
                 if (sched_process_kill(pid) == false)
                     kprintf("Kill failed\n");
-
+                asm("sti");
         }
 
 

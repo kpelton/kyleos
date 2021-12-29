@@ -143,7 +143,7 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
 
 
         if ((curr[offset] & 1) == 0) {
-                    kprintf("Writing to %x\n",curr+offset);
+                    //kprintf("Writing to %x\n",curr+offset);
 
             curr[offset] = (uint64_t)pmem_alloc_zero_page() |7 ;
         }
