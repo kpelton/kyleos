@@ -41,7 +41,7 @@ static void early_fill_dir(uint64_t startaddr, uint64_t *dir)
     int i = 0;
     for (i = 0; i < 512; i++)
     {
-        dir[i] = address | 0x7; // map address and mark it present/writable
+        dir[i] = address | KERNEL_PAGE; // map address and mark it present/writable
         address = address + 0x1000;
     }
 }
@@ -63,6 +63,8 @@ void early_setup_paging()
         early_fill_dir((0x200000 * j), initial_page_tab[j]);
         j += 1;
     }
+    //Setup initial 1-1 virt-to phys-mem mapping
+    //Map first 512GB
     initial_pml4[PHYS_MEM_MAP_START] = KERN_VIRT_TO_PHYS(&initial_iden_page_dir_tab) | KERNEL_PAGE;
     address = 0;
     for(i=0; i<512; i++) {

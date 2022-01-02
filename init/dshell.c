@@ -11,38 +11,45 @@
 #include <timer/rtc.h>
 #include <mm/pmem.h>
 
-void test_user_function5 ();
+void test_user_function5();
 static const char OS_PROMPT[] = "Kyle OS |0:";
 
-static char * dir_stack[100][256];
+static char *dir_stack[100][256];
 static int top_dir_stack = -1;
 
-static void push_dir_stack(char *dir) 
+static void push_dir_stack(char *dir)
 {
-    if (top_dir_stack == -1) {
+    if (top_dir_stack == -1)
+    {
         top_dir_stack = 0;
-    } else if (top_dir_stack == 99) {
+    }
+    else if (top_dir_stack == 99)
+    {
         kprintf("Dir stack full");
         return;
-    }else {
+    }
+    else
+    {
         top_dir_stack++;
     }
-    kstrcpy( (char*)dir_stack[top_dir_stack],dir);
+    kstrcpy((char *)dir_stack[top_dir_stack], dir);
 }
 
-static char * pop_dir_stack()
+static char *pop_dir_stack()
 {
     char *val;
-    if (top_dir_stack == -1){ 
+    if (top_dir_stack == -1)
+    {
         kprintf("dirstack empty");
         return 0;
     }
-    val = (char *) dir_stack[top_dir_stack];
-    top_dir_stack -=1;
+    val = (char *)dir_stack[top_dir_stack];
+    top_dir_stack -= 1;
     return val;
 }
 
-static void print_dir(struct inode* pwd) {
+static void print_dir(struct inode *pwd)
+{
     struct inode_list *ptr;
     struct dnode *dptr;
 
@@ -50,66 +57,73 @@ static void print_dir(struct inode* pwd) {
     if (dptr == 0)
         goto error;
     ptr = dptr->head;
-    while (ptr != 0) {
+    while (ptr != 0)
+    {
         kprintf(ptr->current->i_name);
-        if (ptr->current->i_type == I_DIR) {
+        if (ptr->current->i_type == I_DIR)
+        {
             kprintf(" DIR");
-        } else {
+        }
+        else
+        {
             kprintf(" FILE ");
-    }
-        kprintf("  size=%d\n",ptr->current->file_size);
-        ptr= ptr->next;
+        }
+        kprintf("  size=%d\n", ptr->current->file_size);
+        ptr = ptr->next;
     }
     vfs_free_dnode(dptr);
-    error:
+error:
     return;
-
 }
-struct inode *  shell_cd(char cmd[], struct dnode *dptr) {
+struct inode *shell_cd(char cmd[], struct dnode *dptr)
+{
     struct inode_list *ptr;
     char *cmdptr = cmd;
     char *nptr = cmd;
     //Find directory
-    while(*cmdptr != ' ')
+    while (*cmdptr != ' ')
         cmdptr++;
     cmdptr++;
     nptr = cmdptr;
     //Take out newline
-    while(*nptr != '\n')
+    while (*nptr != '\n')
         nptr++;
     *nptr = '\0';
 
-
     ptr = dptr->head;
-    while (ptr != 0) {
-        if (ptr->current->i_type == I_DIR) {
-            if (kstrcmp(cmdptr,ptr->current->i_name) == 0)
+    while (ptr != 0)
+    {
+        if (ptr->current->i_type == I_DIR)
+        {
+            if (kstrcmp(cmdptr, ptr->current->i_name) == 0)
                 return ptr->current;
-        } 
-        ptr= ptr->next;
+        }
+        ptr = ptr->next;
     }
     kprintf("bad directoy\n");
     return 0;
 }
 
-static void shell_cat(char cmd[], struct dnode *dptr) {
+static void shell_cat(char cmd[], struct dnode *dptr)
+{
     struct inode_list *ptr;
     char *cmdptr = cmd;
     char *nptr = cmd;
     //Find directory
-    while(*cmdptr != ' ')
+    while (*cmdptr != ' ')
         cmdptr++;
     cmdptr++;
     nptr = cmdptr;
     //Take out newline
-    while(*nptr != '\n')
+    while (*nptr != '\n')
         nptr++;
     *nptr = '\0';
 
-
     ptr = dptr->head;
-    while (ptr != 0) {
-        if (ptr->current->i_type == I_FILE) {
+    while (ptr != 0)
+    {
+        if (ptr->current->i_type == I_FILE)
+        {
             /*
             kprintf("Comparing ");
             kprintf(ptr->current->i_name);
@@ -117,33 +131,37 @@ static void shell_cat(char cmd[], struct dnode *dptr) {
             kprintf(cmdptr);
             kprintf("\n");
             */
-            if (kstrcmp(cmdptr,ptr->current->i_name) == 0) {
+            if (kstrcmp(cmdptr, ptr->current->i_name) == 0)
+            {
                 vfs_read_inode_file(ptr->current);
                 return;
             }
-        } 
-        ptr= ptr->next;
+        }
+        ptr = ptr->next;
     }
     kprintf("bad file\n");
 }
 
-void print_prompt() {
+void print_prompt()
+{
     kprintf((char *)OS_PROMPT);
-    for(int i=0; i<=top_dir_stack; i++)
+    for (int i = 0; i <= top_dir_stack; i++)
     {
         kprintf((char *)dir_stack[i]);
-        if (i==top_dir_stack)
-                kprintf(">");
+        if (i == top_dir_stack)
+            kprintf(">");
         else if (i > 0)
             kprintf("/");
     }
 }
 
-void fs_test() {
+void fs_test()
+{
     struct dnode *dptr;
     struct dnode *dptr1;
-    dptr = vfs_read_root_dir("0:/"); 
-    for(;;) {
+    dptr = vfs_read_root_dir("0:/");
+    for (;;)
+    {
         asm("sti");
         struct dnode *dptr2;
 
@@ -160,34 +178,119 @@ void fs_test() {
         ksleepm(10);
         //ksleepm(1000);
     }
-    return; 
-
+    return;
 }
-void print_time() {
+void print_time()
+{
     struct sys_time current_time = get_time();
     //TODO: figure out why this is showing hex
-    kprintf("%d:%x:%x\n",current_time.hour,current_time.min,current_time.sec);
+    kprintf("%d:%d:%d %d/%d/%d\n", current_time.hour, current_time.min,
+            current_time.sec, current_time.month, current_time.day, current_time.year);
 }
 
-void start_dshell() {
+int kstrstr(char *base, char *delim)
+{
+    char *baseptr = base;
+    int kstart = 0;
+    if (!base || !delim || !*base || !*delim)
+        return -1;
+    int val = 0;
+    while (*baseptr)
+    {
+        if (*baseptr && *delim && *baseptr == *delim)
+        {
+            val = kstart;
+        }
+        while (*baseptr && *delim && *baseptr == *delim)
+        {
+
+            baseptr++;
+            delim++;
+            if (!*delim)
+            {
+                return val;
+            }
+            val++;
+        }
+        baseptr++;
+        kstart++;
+    }
+    return -1;
+}
+
+struct inode * read_path(char *path, struct dnode *pwd,enum inode_type type)
+{
+    int end = 0;
+    char *blah = path;
+    char buffer[1024];
+    struct inode_list *ptr;
+    struct dnode *dptr = pwd;
+    //if (*blah == '/')
+    //    return;
+
+    while (end != -1)
+    {
+        end = kstrstr(blah, "/");
+        kprintf("%d %s\n", end, blah);
+        if (end >= 0)
+        {
+            kstrncpy(buffer, blah, end);
+            buffer[end] = '\0';
+            blah += end + 1;
+        }
+        //printf("%s\n",blah);
+        ptr = dptr->head;
+        while (ptr)
+        {
+            //kprintf("%s %s\n",ptr->current->i_name,buffer);
+
+            if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
+            {
+                if (dptr != pwd)
+                    vfs_free_dnode(dptr);
+                dptr = vfs_read_inode_dir(ptr->current);
+                break;
+            }
+            ptr = ptr->next;
+        }
+    }
+
+    ptr = dptr->head;
+    while (ptr)
+    {
+        //kprintf("%s\n",ptr->current->i_name);
+        if (kstrcmp(ptr->current->i_name, blah) == 0 && ptr->current->i_type == type) {
+
+            vfs_free_dnode(dptr);
+            return ptr->current;
+        }
+        ptr = ptr->next;
+    }
+    vfs_free_dnode(dptr);
+    return NULL;
+}
+
+void start_dshell()
+{
 
     char buffer[512];
     char *cptr = NULL;
     int pid;
     struct dnode *dptr;
     struct dnode *dptr1;
-    dptr = vfs_read_root_dir("0:/"); 
-    struct dnode *olddptr=dptr;
+    dptr = vfs_read_root_dir("0:/");
+    struct dnode *olddptr = dptr;
     struct inode *pwd = dptr->root_inode;
-    struct inode *oldpwd=pwd;
+    struct inode *oldpwd = pwd;
+    struct inode *itmp;
     push_dir_stack("/");
     print_prompt();
 
     //write_sec(0,buffer2);
-   // asm("test: jmp test");
-//debug
+    // asm("test: jmp test");
+    //debug
     asm("sti");
-/*
+    /*
 for(;;) {
 
     struct dnode *dptr2;
@@ -209,94 +312,150 @@ for(;;) {
 }
     return;
 */
-
-void kthread_test()
-{
-    for(;;) {
-        kprintf("test frok kthread!\n");
-        ksleepm(1000);
+    void kthread_test()
+    {
+        for (;;)
+        {
+            kprintf("test frok kthread!\n");
+            ksleepm(1000);
+        }
     }
-}
-    
-//
-    while (1) { 
-        for(int i =0; i<512; i++)
-            buffer[i]= '\0';
+
+    //
+    while (1)
+    {
+        for (int i = 0; i < 512; i++)
+            buffer[i] = '\0';
         read_input(buffer);
-        if (buffer[0] == '\0') {
+        if (buffer[0] == '\0')
+        {
             continue;
         }
-        if (kstrcmp(buffer,"ls\n") == 0) {
+        if (kstrcmp(buffer, "ls\n") == 0)
+        {
 
             print_dir(pwd);
         }
-        else if (buffer[0] == 'c' && buffer[1] == 'd' 
-                && buffer[2] == ' ' && buffer[3] != '\n') {
+        else if (buffer[0] == 'l'  && buffer[1] == 's'  && buffer[2] == ' ' && buffer[3] != '\n')
+        {
+            cptr = buffer + 3;
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+            }
+            *cptr = '\0';
             dptr = vfs_read_inode_dir(pwd);
-            pwd = shell_cd(buffer,dptr);
+            itmp = read_path(buffer + 3, dptr,I_DIR);
+            if(itmp != NULL) {
+                print_dir(itmp);
+
+                //vfs_free_dnode(dptr);
+            }else
+            {
+                kprintf("ls failed\n");
+            }
+        }
+        else if (buffer[0] == 'c' && buffer[1] == 'd' && buffer[2] == ' ' && buffer[3] != '\n')
+        {
+            dptr = vfs_read_inode_dir(pwd);
+            pwd = shell_cd(buffer, dptr);
             //If failure
-            if (pwd == 0) {
+            if (pwd == 0)
+            {
                 pwd = oldpwd;
-            } else {
+            }
+            else
+            {
                 vfs_free_dnode(olddptr);
-                if (buffer[3] == '.' && buffer[4] == '.' && kstrcmp(dptr->i_name,"/") !=0 && oldpwd != pwd)
+                if (buffer[3] == '.' && buffer[4] == '.' && kstrcmp(dptr->i_name, "/") != 0 && oldpwd != pwd)
                     pop_dir_stack();
-                else if(oldpwd != pwd)
+                else if (oldpwd != pwd)
                     push_dir_stack(pwd->i_name);
                 olddptr = dptr;
                 oldpwd = pwd;
             }
-
         }
-        else if (buffer[0] == 'c' && buffer[1] == 'a' 
-                && buffer[2] == 't' && buffer[3] == ' '
-                && buffer[4] != '\0') {
-            dptr1 = vfs_read_inode_dir(pwd);
-
-            shell_cat(buffer,dptr1);
-            vfs_free_dnode(dptr1);
-        }
-        else if (buffer[0] == 'k' && buffer[1] == 'i' 
-                && buffer[2] == 'l' && buffer[3] == 'l'
-                && buffer[4] == ' ' && buffer[5] != '\n') {
-                cptr = buffer+5;
-                while(*cptr != '\n' && *cptr != '\0') {           
-                    cptr++;
-                }
-                *cptr = '\0';
-                pid = atoi(buffer+5);
-                asm("cli");
-                if (sched_process_kill(pid) == false)
-                    kprintf("Kill failed\n");
-                asm("sti");
+        else if (buffer[0] == 'k' && buffer[1] == 'i' && buffer[2] == 'l' && buffer[3] == 'l' && buffer[4] == ' ' && buffer[5] != '\n')
+        {
+            cptr = buffer + 5;
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+            }
+            *cptr = '\0';
+            pid = atoi(buffer + 5);
+            asm("cli");
+            if (sched_process_kill(pid) == false)
+                kprintf("Kill failed\n");
+            asm("sti");
         }
 
+        else if (buffer[0] == 'c' && buffer[1] == 'a' && buffer[2] == 't' && buffer[3] == ' ' && buffer[4] != '\n')
+        {
+            cptr = buffer + 4;
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+            }
+            *cptr = '\0';
+            dptr = vfs_read_inode_dir(pwd);
+            itmp = read_path(buffer + 4, dptr,I_FILE);
+            if(itmp != NULL) {
+                vfs_read_inode_file(itmp);
+            }else
+            {
+                kprintf("cat failed\n");
+            }
+        }
 
-        else if (kstrcmp(buffer,"mem\n") == 0) {
+        else if (kstrcmp(buffer, "mem\n") == 0)
+        {
             mm_print_stats();
             phys_mem_print_usage();
-        }else if (kstrcmp(buffer,"panic\n") == 0) {
-            print_regs(0xdeadbeef,0xdeadbeef);
-        }else if (kstrcmp(buffer,"fatalpanic\n") == 0) {
+        }
+        else if (kstrcmp(buffer, "panic\n") == 0)
+        {
+            print_regs(0xdeadbeef, 0xdeadbeef);
+        }
+        else if (kstrcmp(buffer, "fatalpanic\n") == 0)
+        {
             panic("Kernel Halted");
-        }else if (kstrcmp(buffer,"jiffies\n") == 0) {
-            kprintf("Jiffies: %d\n",read_jiffies());
-        }else if (kstrcmp(buffer,"sched\n") == 0) {
+        }
+        else if (kstrcmp(buffer, "jiffies\n") == 0)
+        {
+            kprintf("Jiffies: %d\n", read_jiffies());
+        }
+        else if (kstrcmp(buffer, "sched\n") == 0)
+        {
             sched_stats();
-        }else if (kstrcmp(buffer,"time\n") == 0) {
+        }
+        else if (kstrcmp(buffer, "time\n") == 0)
+        {
             print_time();
-        }else if (kstrcmp(buffer,"sleep 10\n") == 0) {
+        }
+        else if (kstrcmp(buffer, "sleep 10\n") == 0)
+        {
             ksleepm(10000);
-        }else if (kstrcmp(buffer,"sleep 5\n") == 0) {
+        }
+        else if (kstrcmp(buffer, "sleep 5\n") == 0)
+        {
             ksleepm(5000);
-        }else if (kstrcmp(buffer,"sleep 1\n") == 0) {
+        }
+        else if (kstrcmp(buffer, "sleep 1\n") == 0)
+        {
             ksleepm(1000);
-        }else if (kstrcmp(buffer,"addproc\n") == 0) {
-            user_process_add(&test_user_function5,"Test userspace3");
+        }
+        else if (kstrcmp(buffer, "addproc\n") == 0)
+        {
+            user_process_add(&test_user_function5, "Test userspace3");
             //asm("cli;hlt");
-        }else if (kstrcmp(buffer,"addkproc\n") == 0) {
+        }
+        else if (kstrcmp(buffer, "addkproc\n") == 0)
+        {
             kthread_add(kthread_test, "kthread");
-        } else {
+        }
+        else
+        {
             kprintf("Unknown command:");
             kprintf(buffer);
         }
