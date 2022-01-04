@@ -130,10 +130,10 @@ bool sched_process_kill(int pid)
 				paging_free_pg_tbl(t->mm);
 				kfree(t->mm);
 				t->mm = NULL;
+				for(int j = 0; j<USER_STACK_SIZE; j++)
+					pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc+(4096*j)));
 			}
 			kfree(t->stack_alloc);
-			for(int j = 0; j<USER_STACK_SIZE; j++)
-				pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc+(4096*j)));
 			kprintf("Killed %d\n", t->pid);
 
 			t->state = TASK_DONE;
