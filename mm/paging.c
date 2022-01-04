@@ -12,13 +12,7 @@
 #define VIRT_TO_PTE(x) ((0xfff & x) & 0xfff)
 #define PHYS_ADDR_MASK 0xffffffffff000
 
-#define PAGE_PRESENT 1
-#define READ_WRITE 1<<1
-#define SUPERVISOR 1<<2
-#define KERNEL_PAGE PAGE_PRESENT | READ_WRITE
-#define KERNEL_PAGE_RO PAGE_PRESENT
-#define USER_PAGE PAGE_PRESENT | READ_WRITE | SUPERVISOR
-#define USER_PAGE_RO PAGE_PRESENT  | SUPERVISOR
+
 #define PHYS_MEM_MAP_START 273
 extern uint64_t _kernel_text_end;
 extern uint64_t _kernel_text_start;
@@ -109,7 +103,7 @@ bool paging_map_kernel_range(uint64_t start, uint64_t len)
         //kprintf("2 curr:%x %d\n",curr,offset);
         //kprintf("0x%x\n",curr);
         if ((curr[offset] & PAGE_PRESENT) == 0) {
-            curr[offset] = (uint64_t)pmem_alloc_zero_page() | KERNEL_PAGE_RO ;
+            curr[offset] = (uint64_t)pmem_alloc_zero_page() | KERNEL_PAGE ;
         }
         curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & PHYS_ADDR_MASK));
 
@@ -131,7 +125,8 @@ bool paging_map_kernel_range(uint64_t start, uint64_t len)
     return true;
 }
 
-bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_start, uint64_t len)
+bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_start,
+                           uint64_t len, uint64_t page_ops)
 {
 
     uint64_t virt_curr_addr = virt_start;
@@ -149,7 +144,7 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
         if ((curr[offset] & PAGE_PRESENT) == 0) {
                //     kprintf("Writing to %x\n",curr+offset);
 
-            curr[offset] = (uint64_t)pmem_alloc_zero_page()| USER_PAGE;
+            curr[offset] = (uint64_t)pmem_alloc_zero_page()| page_ops;
             //kprintf("new pagedirtab %x %x\n",curr[offset],offset);
         }
         curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & PHYS_ADDR_MASK));
@@ -160,7 +155,7 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
         if ((curr[offset] & PAGE_PRESENT) == 0) {
                     //kprintf("Writing to %x\n",curr+offset);
 
-            curr[offset] = (uint64_t)pmem_alloc_zero_page() | USER_PAGE ;
+            curr[offset] = (uint64_t)pmem_alloc_zero_page() | page_ops ;
         }
         curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & PHYS_ADDR_MASK));
         offset = VIRT_TO_PAGE_DIR(virt_curr_addr);
@@ -169,7 +164,7 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
         if ((curr[offset] & PAGE_PRESENT) == 0) {
        //                     kprintf("done2\n");
       //  kprintf("Writing to %x\n",curr+offset);
-            curr[offset] = (uint64_t)pmem_alloc_zero_page() | USER_PAGE ;
+            curr[offset] = (uint64_t)pmem_alloc_zero_page() | page_ops ;
         }
            //     kprintf("done\n");
 
@@ -177,7 +172,7 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
         offset = VIRT_TO_PAGE_TAB(virt_curr_addr);
       //  kprintf("page\n");
       //  kprintf("Writing to %x\n",curr+offset);
-        curr[offset] = phys_curr_addr | USER_PAGE;
+        curr[offset] = phys_curr_addr | page_ops;
 
         phys_curr_addr += 0x1000;
         virt_curr_addr += 0x1000;
@@ -308,8 +303,8 @@ bool setup_paging()
         kernel_page_dir[i] = KERN_VIRT_TO_PHYS(page_tbl[i]) | KERNEL_PAGE;
         //kprintf("text %x\n",&_kernel_text_start);
         //        kprintf("text %x\n",&_kernel_text_end);
-        if ((KERN_PHYS_TO_VIRT(curr_addr) >= &_kernel_text_start &&
-             KERN_PHYS_TO_VIRT(curr_addr)  <= &_kernel_rodata_end))
+        if ((KERN_PHYS_TO_VIRT(curr_addr) >= (uint64_t) &_kernel_text_start &&
+             KERN_PHYS_TO_VIRT(curr_addr)  <= (uint64_t) &_kernel_rodata_end))
             page_tbl[i][j] = curr_addr | KERNEL_PAGE_RO;
         else
             page_tbl[i][j] = curr_addr | KERNEL_PAGE;
@@ -335,4 +330,14 @@ bool setup_paging()
     pkernel_pml4 = (uint64_t *) KERN_PHYS_TO_PVIRT(KERN_VIRT_TO_PHYS(kernel_pml4));
 
     return true;
+}
+
+void paging_enable_protected()
+{
+
+    uint64_t cr0;
+    asm volatile("movq %%cr0 ,%0" : "=g"(cr0));
+    cr0 |= 1<<16;
+    kprintf("cr0 %x\n",cr0);
+    asm volatile("movq %0 ,%%cr0" :: "r"(cr0));
 }

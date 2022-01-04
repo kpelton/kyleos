@@ -6,8 +6,8 @@
 #include <mm/mm.h>
 #include <mm/pmem.h>
 
-#define USER_STACK_VADDR 0x6400000000
-#define USER_STACK_SIZE 4096
+#define USER_STACK_VADDR 0x60000000
+#define USER_STACK_SIZE 32
 
 static struct ktask ktasks[SCHED_MAX_TASKS];
 static uint32_t next_task = 0;
@@ -89,18 +89,18 @@ int user_process_add(void (*fptr)(), char *name)
 
 	//kprintf("Allocating Stack\n");
 	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
-	t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_zero_page());
+	t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(32));
 	t->mm = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
 	t->mm->pml4 = (uint64_t *)KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
 	kprintf("sched pml4 %x\n",t->mm->pml4);
-	paging_map_user_range(t->mm,(uint64_t) (uint64_t)fptr, 0, 1);
-	paging_map_user_range(t->mm,(uint64_t) t->user_stack_alloc, USER_STACK_VADDR,(USER_STACK_SIZE/4096));
+	paging_map_user_range(t->mm,(uint64_t) (uint64_t)fptr, 0, 1,USER_PAGE_RO);
+	paging_map_user_range(t->mm,(uint64_t) t->user_stack_alloc, USER_STACK_VADDR,USER_STACK_SIZE,USER_PAGE);
 
 
 	t->state = TASK_NEW;
 	t->start_addr = (uint64_t *)fptr - addr_start;
 	t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE);
-	t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + 2048 );
+	t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (4096*USER_STACK_SIZE) );
 	t->pid = pid;
 	t->type = USER_PROCESS;
 	t->timer.state = TIMER_UNUSED;
@@ -132,7 +132,8 @@ bool sched_process_kill(int pid)
 				t->mm = NULL;
 			}
 			kfree(t->stack_alloc);
-			pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc));
+			for(int j = 0; j<USER_STACK_SIZE; j++)
+				pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc+(4096*j)));
 			kprintf("Killed %d\n", t->pid);
 
 			t->state = TASK_DONE;

@@ -53,10 +53,8 @@ void rtc_irq() {
     uint8_t min;
     uint8_t month;
     uint8_t day;
-    uint8_t century;
     uint16_t year;
   //  uint8_t registerB;
-    int i;
     PIC_sendEOI(8);
 
     //Clear interrupt RTC register
@@ -78,9 +76,6 @@ void rtc_irq() {
     day = inb(CMOS_DATA);
     outb(CMOS_ADDR, REG_YEAR);
     year = inb(CMOS_DATA);
-    outb(CMOS_ADDR, REG_CENTURY);
-    century = inb(CMOS_DATA);
-
    //century hack
    if (year <85) {
        year = 2000 +year;

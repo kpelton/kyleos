@@ -40,17 +40,19 @@ test_user_function2:
     ret
 [global test_user_function]
 test_user_function:
-    mov rax,123
-    ;;int 0x80
-    ;sti
+    mov rax,10000
+    int 0x80
     call test_user_function2
     jmp test_user_function
     ret
 
 [global test_user_function5]
 test_user_function5:
-    mov rax,1
+    mov rax,1000
     int 0x80
+    mov rax,16
+    mov rcx,1
+    ;mov  [rax],rcx
     ;sti
     ;;call test_user_function2
     jmp test_user_function5

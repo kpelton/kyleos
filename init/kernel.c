@@ -118,15 +118,8 @@ void kinit(void)
     paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_stack),STACK_PAGES);
     kprintf("Stack start %x Stack %x\n",kernel_stack,kernel_stack+4096*STACK_PAGES);
     asm volatile("movq %0,%%rsp " : : "r"(kernel_stack+4096*STACK_PAGES));
-
-    uint64_t cr0;
-    asm volatile("movq %%cr0 ,%0" : "=g"(cr0));
-    cr0 |= 1<<16;
-    kprintf("cr0 %x\n",cr0);
-    asm volatile("movq %0 ,%%cr0" :: "r"(cr0));
-
-
     kprintf("MM init done\n");
+    paging_enable_protected();
 
     PIC_init();
 
@@ -136,7 +129,8 @@ void kinit(void)
     sched_init();
 
     kernel();
-    
+        asm("cli; hlt");
+
 }
 
 void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
