@@ -15,16 +15,21 @@ SECTIONS
        }
  
      . += 0xffffffff80000000;
+
     .text ALIGN (0x1000) : AT (ADDR (.text) - 0xffffffff80000000)
     {
+
+	    _kernel_text_start = .;
         *(.text)
     }
 
+	_kernel_text_end = .;
     .rodata ALIGN (0x1000): AT (ADDR (.rodata) - 0xffffffff80000000)
     {
+	    _kernel_rodata_start = .;
         *(.rodata*)
     }
-
+	_kernel_rodata_end = .;
     .data ALIGN (0x1000) :  AT (ADDR (.data) - 0xffffffff80000000)
     {
         *(.data)

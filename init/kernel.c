@@ -119,8 +119,17 @@ void kinit(void)
     kprintf("Stack start %x Stack %x\n",kernel_stack,kernel_stack+4096*STACK_PAGES);
     asm volatile("movq %0,%%rsp " : : "r"(kernel_stack+4096*STACK_PAGES));
 
+    uint64_t cr0;
+    asm volatile("movq %%cr0 ,%0" : "=g"(cr0));
+    cr0 |= 1<<16;
+    kprintf("cr0 %x\n",cr0);
+    asm volatile("movq %0 ,%%cr0" :: "r"(cr0));
+
+
     kprintf("MM init done\n");
+
     PIC_init();
+
     kprintf("PIC init done\n");
     ata_init();
     timer_system_init();

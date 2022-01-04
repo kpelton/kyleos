@@ -16,9 +16,14 @@
 #define READ_WRITE 1<<1
 #define SUPERVISOR 1<<2
 #define KERNEL_PAGE PAGE_PRESENT | READ_WRITE
+#define KERNEL_PAGE_RO PAGE_PRESENT
 #define USER_PAGE PAGE_PRESENT | READ_WRITE | SUPERVISOR
-
+#define USER_PAGE_RO PAGE_PRESENT  | SUPERVISOR
 #define PHYS_MEM_MAP_START 273
+extern uint64_t _kernel_text_end;
+extern uint64_t _kernel_text_start;
+extern uint64_t _kernel_rodata_end;
+extern uint64_t _kernel_rodata_start;
 
 uint64_t initial_pml4[512] __attribute__((aligned(0x20)));         // must be aligned to (at least)0x20, ...
 uint64_t initial_page_dir_tab[512] __attribute__((aligned(0x20))); // must be aligned to (at least)0x20, ...
@@ -104,7 +109,7 @@ bool paging_map_kernel_range(uint64_t start, uint64_t len)
         //kprintf("2 curr:%x %d\n",curr,offset);
         //kprintf("0x%x\n",curr);
         if ((curr[offset] & PAGE_PRESENT) == 0) {
-            curr[offset] = (uint64_t)pmem_alloc_zero_page() | KERNEL_PAGE ;
+            curr[offset] = (uint64_t)pmem_alloc_zero_page() | KERNEL_PAGE_RO ;
         }
         curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & PHYS_ADDR_MASK));
 
@@ -301,7 +306,16 @@ bool setup_paging()
     {
         // kprintf("%x\n",curr_addr);
         kernel_page_dir[i] = KERN_VIRT_TO_PHYS(page_tbl[i]) | KERNEL_PAGE;
-        page_tbl[i][j] = curr_addr | KERNEL_PAGE;
+        //kprintf("text %x\n",&_kernel_text_start);
+        //        kprintf("text %x\n",&_kernel_text_end);
+        if ((KERN_PHYS_TO_VIRT(curr_addr) >= &_kernel_text_start &&
+             KERN_PHYS_TO_VIRT(curr_addr)  <= &_kernel_rodata_end))
+            page_tbl[i][j] = curr_addr | KERNEL_PAGE_RO;
+        else
+            page_tbl[i][j] = curr_addr | KERNEL_PAGE;
+
+
+
         curr_addr += 0x1000;
         if (curr_addr % 0x200000 == 0)
         {
@@ -319,7 +333,6 @@ bool setup_paging()
                  :
                  : "r"(address));
     pkernel_pml4 = (uint64_t *) KERN_PHYS_TO_PVIRT(KERN_VIRT_TO_PHYS(kernel_pml4));
-    kprintf("Switch to late kernel pages done\n");
 
     return true;
 }
