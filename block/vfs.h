@@ -41,12 +41,18 @@ struct dnode {
     struct inode_list* head;
 };
 
+struct file {
+    struct inode* i_node;
+    struct vfs_device* dev;
+    uint64_t pos;
+};
+
 struct vfs_ops {
     int (*read)(char* path,union fsinfo);
     struct dnode* (*read_root_dir)(struct vfs_device * dev);
     struct dnode* (*read_inode_dir)(struct inode* i_node);
-    void (*read_inode_file)(struct inode* i_node);
-
+    void (*cat_inode_file)(struct inode* i_node);
+    int (*read_file)(struct file * rfile,void *buf,int count);
 };
 
 void vfs_init();
@@ -57,4 +63,6 @@ int vfs_register_device(struct vfs_device newdev);
 void vfs_free_inode(struct inode * i_node); 
 void vfs_free_inode_list(struct inode_list * list); 
 void vfs_free_dnode(struct dnode * dn);
+int *vfs_read_file(struct file * rfile,void *buf,int count);
+struct file* vfs_open_file(struct inode * i_node);
 #endif

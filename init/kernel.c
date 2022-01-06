@@ -120,6 +120,7 @@ void kinit(void)
     PIC_init();
 
     kprintf("PIC init done\n");
+    vfs_init();
     ata_init();
     timer_system_init();
     sched_init();

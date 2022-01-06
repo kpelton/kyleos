@@ -109,6 +109,9 @@ static void shell_cat(char cmd[], struct dnode *dptr)
     struct inode_list *ptr;
     char *cmdptr = cmd;
     char *nptr = cmd;
+    uint8_t buffer = NULL;
+    uint32_t bytes_read;
+    struct file *cfile;
     //Find directory
     while (*cmdptr != ' ')
         cmdptr++;
@@ -133,7 +136,8 @@ static void shell_cat(char cmd[], struct dnode *dptr)
             */
             if (kstrcmp(cmdptr, ptr->current->i_name) == 0)
             {
-                vfs_read_inode_file(ptr->current);
+                //vfs_cat_inode_file(ptr->current);
+                cfile = vfs_open_file(ptr->current);
                 return;
             }
         }
@@ -392,7 +396,11 @@ for(;;) {
 
         else if (buffer[0] == 'c' && buffer[1] == 'a' && buffer[2] == 't' && buffer[3] == ' ' && buffer[4] != '\n')
         {
+            struct file *rfile;
+            uint8_t *rbuffer;
+            uint32_t bytes;
             cptr = buffer + 4;
+            kprintf("test\n");
             while (*cptr != '\n' && *cptr != '\0')
             {
                 cptr++;
@@ -401,7 +409,16 @@ for(;;) {
             dptr = vfs_read_inode_dir(pwd);
             itmp = read_path(buffer + 4, dptr,I_FILE);
             if(itmp != NULL) {
-                vfs_read_inode_file(itmp);
+
+                //vfs_cat_inode_file(itmp);
+                rfile = vfs_open_file(itmp);
+                rbuffer = kmalloc(itmp->file_size+1);
+                bytes = vfs_read_file(rfile,rbuffer,itmp->file_size);
+                rbuffer[itmp->file_size] = '\0';
+                kprintf("Read %d\n",bytes);
+                kprintf("%s",rbuffer);
+                kfree(rbuffer);
+                kfree(rfile);
             }else
             {
                 kprintf("cat failed\n");

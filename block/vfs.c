@@ -1,9 +1,21 @@
 #include <block/vfs.h>
 #include <output/output.h>
 #include <mm/mm.h>
-
+#define VFS_MAX_OPEN 1024
 struct vfs_device vfs_devices[VFS_MAX_DEVICES];
 static int current_device = 0;
+
+static struct file open_files[VFS_MAX_OPEN];
+
+void vfs_init()
+{
+    int i;
+    for (i = 0; i < VFS_MAX_OPEN; i++)
+    {
+        open_files[i].i_node = NULL;
+        open_files[i].dev = NULL;
+    }
+}
 
 int vfs_register_device(struct vfs_device newdev)
 {
@@ -30,12 +42,12 @@ struct dnode *vfs_read_inode_dir(struct inode *i_node)
     return vfs_devices[idev].ops->read_inode_dir(i_node);
 }
 
-void vfs_read_inode_file(struct inode *i_node)
+void vfs_cat_inode_file(struct inode *i_node)
 {
 
     int idev;
     idev = i_node->dev->devicenum;
-    vfs_devices[idev].ops->read_inode_file(i_node);
+    vfs_devices[idev].ops->cat_inode_file(i_node);
 }
 
 void vfs_free_inode(struct inode *i_node)
@@ -64,35 +76,58 @@ void vfs_free_dnode(struct dnode *dn)
     kfree(dn);
 }
 
-    struct dnode *vfs_read_root_dir(char *path)
+struct dnode *vfs_read_root_dir(char *path)
+{
+    char *ptr = path;
+    char dev[4];
+    int i = 0;
+    int idev;
+    struct vfs_device *vdevice;
+    while (*ptr != ':')
     {
-        char *ptr = path;
-        char dev[4];
-        int i = 0;
-        int idev;
-        struct vfs_device *vdevice;
-        while (*ptr != ':')
-        {
-            dev[i] = *ptr;
-            i += 1;
-            ptr += 1;
-        }
-        dev[i] = '\0';
+        dev[i] = *ptr;
+        i += 1;
         ptr += 1;
-        if (*ptr != '/')
-        {
-            kprintf("Incorrect path name");
-            goto error;
-        }
-        idev = atoi(dev);
-        if (idev > VFS_MAX_DEVICES || idev > current_device - 1)
-        {
-            kprintf("Invalid device %d\n", idev);
-            goto error;
-        }
-        vdevice = &vfs_devices[idev];
-        return vdevice->ops->read_root_dir(vdevice);
-    error:
-
-        return 0;
     }
+    dev[i] = '\0';
+    ptr += 1;
+    if (*ptr != '/')
+    {
+        kprintf("Incorrect path name");
+        goto error;
+    }
+    idev = atoi(dev);
+    if (idev > VFS_MAX_DEVICES || idev > current_device - 1)
+    {
+        kprintf("Invalid device %d\n", idev);
+        goto error;
+    }
+    vdevice = &vfs_devices[idev];
+    return vdevice->ops->read_root_dir(vdevice);
+error:
+
+    return 0;
+}
+
+struct file *vfs_open_file(struct inode *i_node)
+{
+    struct file *retfile = NULL;
+
+    if (i_node)
+    {
+        retfile = kmalloc(sizeof(struct file));
+        retfile->dev = i_node->dev;
+        retfile->i_node = i_node;
+        retfile->pos = 0;
+    }
+    return retfile;
+}
+
+
+int *vfs_read_file(struct file * rfile,void *buf,int count)
+{
+    int idev;
+    idev = rfile->dev->devicenum;
+    return vfs_devices[idev].ops->read_file(rfile,buf,count);
+   
+}
