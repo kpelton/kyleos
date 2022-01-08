@@ -13,7 +13,6 @@ void vfs_init()
     for (i = 0; i < VFS_MAX_OPEN; i++)
     {
         open_files[i].refcount = 0;
-        open_files[i].i_node = NULL;
         open_files[i].dev = NULL;
     }
 }
@@ -115,7 +114,7 @@ static struct file *vfs_get_open_file(struct inode *i_node)
     //Look for file if it is already opened
     for(i=0; i<VFS_MAX_OPEN; i++) {
         if (open_files[i].refcount > 0 \
-            && open_files[i].i_node->i_ino == i_node->i_ino \
+            && open_files[i].i_node.i_ino == i_node->i_ino \
             && open_files[i].dev == i_node->dev) {
             open_files[i].refcount++;
             return &open_files[i];
@@ -125,7 +124,7 @@ static struct file *vfs_get_open_file(struct inode *i_node)
     for(i=0; i<VFS_MAX_OPEN; i++) {
         if (open_files[i].refcount == 0) {
             open_files[i].dev = i_node->dev;
-            open_files[i].i_node = i_node;
+            vfs_copy_inode(i_node,&open_files[i].i_node);
             open_files[i].refcount++;
             return &open_files[i];
         }
@@ -151,6 +150,15 @@ void vfs_close_file(struct file *ofile)
     struct file *retfile = NULL;
     if (ofile && ofile->refcount)
         ofile->refcount--;
+}
+
+void vfs_copy_inode(struct inode *src,struct inode *dst)
+{
+    kstrncpy(dst->i_name,src->i_name,VFS_MAX_FNAME);
+    dst->file_size = src->file_size;
+    dst->i_ino = src->i_ino;
+    dst->dev = src->dev;
+    dst->i_type = src->i_type;
 }
 
 int *vfs_read_file(struct file * rfile,void *buf,int count)

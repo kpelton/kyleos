@@ -143,7 +143,7 @@ static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector)
 
 int read_inode_file(struct file * rfile,void *buf,int count)
 {
-    uint32_t cluster = rfile->i_node->i_ino;
+    uint32_t cluster = rfile->i_node.i_ino;
     uint32_t first_fat_sector = rfile->dev->finfo.fat->first_fat_sector;
     uint32_t first_data_sector = rfile->dev->finfo.fat->first_data_sector;
     uint8_t cluster_dest[FAT_CLUSTER_SIZE];
@@ -157,7 +157,7 @@ int read_inode_file(struct file * rfile,void *buf,int count)
         read_cluster((cluster - 2) * 8 + first_data_sector, cluster_dest);
         cluster = read_fat_ptr(cluster, first_fat_sector);
         j = 0;
-        while (j < FAT_CLUSTER_SIZE && bytes_read < rfile->i_node->file_size){
+        while (j < FAT_CLUSTER_SIZE && bytes_read < rfile->i_node.file_size){
             if (total_read >= rfile->pos) {
                 bytes_read++;
                 buffer[i] = cluster_dest[j];

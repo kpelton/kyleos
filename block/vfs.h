@@ -43,7 +43,7 @@ struct dnode {
 
 struct file {
     uint32_t refcount;
-    struct inode* i_node;
+    struct inode i_node;
     struct vfs_device* dev;
     uint64_t pos;
 };
@@ -64,6 +64,7 @@ int vfs_register_device(struct vfs_device newdev);
 void vfs_free_inode(struct inode * i_node); 
 void vfs_free_inode_list(struct inode_list * list); 
 void vfs_free_dnode(struct dnode * dn);
+void vfs_copy_inode(struct inode *src,struct inode *dst);
 
 int *vfs_read_file(struct file * rfile,void *buf,int count);
 struct file* vfs_open_file(struct inode * i_node);
