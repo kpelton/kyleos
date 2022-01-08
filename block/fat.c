@@ -165,14 +165,11 @@ int read_inode_file(struct file * rfile,void *buf,int count)
                 j++;
             }
             total_read++;
-
         }
     }
     rfile->pos +=bytes_read;
     return bytes_read;
 }
-
-
 
 static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t first_data_sector)
 {

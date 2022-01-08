@@ -418,7 +418,7 @@ for(;;) {
                 kprintf("Read %d\n",bytes);
                 kprintf("%s",rbuffer);
                 kfree(rbuffer);
-                kfree(rfile);
+                vfs_close_file(rfile);
             }else
             {
                 kprintf("cat failed\n");

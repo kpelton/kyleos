@@ -3,8 +3,8 @@
 #include <mm/mm.h>
 #define VFS_MAX_OPEN 1024
 struct vfs_device vfs_devices[VFS_MAX_DEVICES];
-static int current_device = 0;
 
+static int current_device = 0;
 static struct file open_files[VFS_MAX_OPEN];
 
 void vfs_init()
@@ -12,6 +12,7 @@ void vfs_init()
     int i;
     for (i = 0; i < VFS_MAX_OPEN; i++)
     {
+        open_files[i].refcount = 0;
         open_files[i].i_node = NULL;
         open_files[i].dev = NULL;
     }
@@ -108,6 +109,29 @@ error:
 
     return 0;
 }
+static struct file *vfs_get_open_file(struct inode *i_node)
+{
+    int i = 0;
+    //Look for file if it is already opened
+    for(i=0; i<VFS_MAX_OPEN; i++) {
+        if (open_files[i].refcount > 0 \
+            && open_files[i].i_node->i_ino == i_node->i_ino \
+            && open_files[i].dev == i_node->dev) {
+            open_files[i].refcount++;
+            return &open_files[i];
+        }
+    }
+    //open it back up;
+    for(i=0; i<VFS_MAX_OPEN; i++) {
+        if (open_files[i].refcount == 0) {
+            open_files[i].dev = i_node->dev;
+            open_files[i].i_node = i_node;
+            open_files[i].refcount++;
+            return &open_files[i];
+        }
+    }
+    panic("File table full");
+}
 
 struct file *vfs_open_file(struct inode *i_node)
 {
@@ -115,14 +139,19 @@ struct file *vfs_open_file(struct inode *i_node)
 
     if (i_node)
     {
-        retfile = kmalloc(sizeof(struct file));
-        retfile->dev = i_node->dev;
-        retfile->i_node = i_node;
+        retfile = vfs_get_open_file(i_node);
+        //TODO pos should be per process file descriptor
         retfile->pos = 0;
     }
     return retfile;
 }
 
+void vfs_close_file(struct file *ofile)
+{
+    struct file *retfile = NULL;
+    if (ofile && ofile->refcount)
+        ofile->refcount--;
+}
 
 int *vfs_read_file(struct file * rfile,void *buf,int count)
 {
