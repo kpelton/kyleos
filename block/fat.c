@@ -82,7 +82,7 @@ static uint32_t find_free_cluster(uint32_t first_fat_sector, uint32_t first_data
     // will only read first 64 entries of FAT table
     read_sec(fat_sector, FAT_table);
     kprintf("Read sector %x\n", fat_sector);
-    for (i = 0; i < 512; i+=4)
+    for (i = 0; i < 512; i += 4)
     {
 
         table_value = ((uint32_t)FAT_table[i + 3] << 24 |
@@ -350,7 +350,10 @@ static struct inode_list *fat_read_std_fmt(struct inode_list *tail, struct dnode
     cur_inode->i_ino = file->high_cluster << 16 | file->low_cluster;
 
     if ((file->attribute & FAT_DIR) == FAT_DIR)
+    {
         cur_inode->i_type = I_DIR;
+        cur_inode->file_size = file->file_size;
+    }
     else if ((file->attribute & FAT_FILE) == FAT_FILE)
     {
         cur_inode->i_type = I_FILE;
@@ -387,7 +390,7 @@ static void prepare_new_dir(struct inode *parent, uint32_t new_cluster)
     fmt = (struct std_fat_8_3_fmt *)dir_ptr;
     fmt->attribute = 0;
     fmt->fname[0] = 0;
-    
+
     write_cluster(sector, cluster);
 }
 static void write_directory(struct inode *parent, char *name)
@@ -449,7 +452,7 @@ static void read_directory(uint32_t sec, struct dnode *dir, struct vfs_device *d
     read_cluster(sec, cluster);
     do
     {
-        while (dir_ptr[FAT_ATTRIBUTE]  != 0 && dir_ptr != 0 && k < 0x80)
+        while (dir_ptr[FAT_ATTRIBUTE] != 0 && dir_ptr != 0 && k < 0x80)
         {
             // IF this is a long file name entry handle it
             if (dir_ptr[FAT_ATTRIBUTE] == FAT_LONG_FILENAME)
