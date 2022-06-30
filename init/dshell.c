@@ -75,6 +75,11 @@ static void print_dir(struct inode *pwd)
 error:
     return;
 }
+
+static void mkdir(struct inode *pwd)
+{
+    vfs_create_dir(pwd,"test_dir");
+}
 struct inode *shell_cd(char cmd[], struct dnode *dptr)
 {
     struct inode_list *ptr;
@@ -339,6 +344,11 @@ for(;;) {
         {
 
             print_dir(pwd);
+        }
+        else if (kstrcmp(buffer, "mkdir\n") == 0)
+        {
+
+            mkdir(pwd);
         }
         else if (buffer[0] == 'l'  && buffer[1] == 's'  && buffer[2] == ' ' && buffer[3] != '\n')
         {

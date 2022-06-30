@@ -54,6 +54,7 @@ struct vfs_ops {
     struct dnode* (*read_inode_dir)(struct inode* i_node);
     void (*cat_inode_file)(struct inode* i_node);
     int (*read_file)(struct file * rfile,void *buf,int count);
+    int (*create_dir)(struct inode* parent, char *name);
 };
 
 void vfs_init();
@@ -65,8 +66,8 @@ void vfs_free_inode(struct inode * i_node);
 void vfs_free_inode_list(struct inode_list * list); 
 void vfs_free_dnode(struct dnode * dn);
 void vfs_copy_inode(struct inode *src,struct inode *dst);
-
 int *vfs_read_file(struct file * rfile,void *buf,int count);
+int vfs_create_dir(struct inode* parent, char *name);
 struct file* vfs_open_file(struct inode * i_node);
 void vfs_close_file(struct file *ofile);
 #endif

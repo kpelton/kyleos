@@ -43,6 +43,7 @@ int write_sec(uint32_t sec,void *buffer  )
     short *data =0;
     uint8_t status;
     int i;
+    int j;
     data = buffer;
 
 #ifdef ATA_DEBUG
@@ -72,11 +73,16 @@ int write_sec(uint32_t sec,void *buffer  )
 
     //data is ready
     for (i=0; i<256; i++) {
-        kprintf("writing\n");
+        ///kprintf("writing\n");
         outw(PRIMARY,data[i]);
-        outb(PRIMARY + COMMAND_REG,CMD_CACHE_FLUSH);
-    }
+        status = read_status();
+        status = read_status();
+        status = read_status();
+        while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY  ) != 0) 
+         status = read_status();
+        //print_drive_status();
 
+    }
     return 0;
 }
 int read_sec(uint32_t sec,void *buffer  ) {
@@ -96,6 +102,8 @@ int read_sec(uint32_t sec,void *buffer  ) {
     //outb(PRIMARY + CYL_LOW_REG,10);
     outb(PRIMARY + CYL_HI_REG,(sec &0xff0000) >>16);
     outb(PRIMARY + COMMAND_REG,CMD_READ_SECTORS);
+            outb(PRIMARY + COMMAND_REG,CMD_CACHE_FLUSH);
+
     status = read_status();
 
     while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY  ) != 0) {
@@ -112,7 +120,9 @@ int read_sec(uint32_t sec,void *buffer  ) {
     //data is ready
     for (i=0; i<256; i++) 
         data[i] = inw(PRIMARY);
-    
+        status = read_status();
+        while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY  ) != 0) 
+            status = read_status();
     return 0;
 }
 

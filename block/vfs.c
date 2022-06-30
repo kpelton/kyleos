@@ -168,3 +168,8 @@ int *vfs_read_file(struct file * rfile,void *buf,int count)
     return vfs_devices[idev].ops->read_file(rfile,buf,count);
    
 }
+
+int vfs_create_dir(struct inode *parent, char * name)
+{
+    return vfs_devices[parent->dev->devicenum].ops->create_dir(parent,name);  
+}
