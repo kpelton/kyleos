@@ -43,7 +43,6 @@ int write_sec(uint32_t sec,void *buffer  )
     short *data =0;
     uint8_t status;
     int i;
-    int j;
     data = buffer;
 
 #ifdef ATA_DEBUG
@@ -118,11 +117,10 @@ int read_sec(uint32_t sec,void *buffer  ) {
         status = read_status();
 
     //data is ready
-    for (i=0; i<256; i++) 
+    for (i=0; i<256; i++) {
         data[i] = inw(PRIMARY);
+    }
         status = read_status();
-        while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY  ) != 0) 
-            status = read_status();
     return 0;
 }
 

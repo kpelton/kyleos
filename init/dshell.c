@@ -76,9 +76,16 @@ error:
     return;
 }
 
-static void mkdir(struct inode *pwd)
+static void mkdir(struct inode *pwd,char *dir_name)
 {
-    vfs_create_dir(pwd,"test_dir");
+    char dir[8] = {0};
+
+    for(int i=0; i<8; i++) {
+        if(dir_name[i] == '\n')
+            break;
+        dir[i] = dir_name[i];
+    }
+    vfs_create_dir(pwd,dir);
 }
 struct inode *shell_cd(char cmd[], struct dnode *dptr)
 {
@@ -345,10 +352,9 @@ for(;;) {
 
             print_dir(pwd);
         }
-        else if (kstrcmp(buffer, "mkdir\n") == 0)
+        else if (buffer[0] == 'm' && buffer[1] == 'k' && buffer[2] == 'd' && buffer[3] == 'i'&& buffer[4] == 'r'  && buffer[5] == ' ' && buffer[6] != '\n')
         {
-
-            mkdir(pwd);
+            mkdir(pwd,buffer+6);
         }
         else if (buffer[0] == 'l'  && buffer[1] == 's'  && buffer[2] == ' ' && buffer[3] != '\n')
         {

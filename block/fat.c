@@ -3,17 +3,20 @@
 #include <block/vfs.h>
 #include <output/output.h>
 #include <mm/mm.h>
+
 #define NULL 0
 static void read_directory(uint32_t sec, struct dnode *dir, struct vfs_device *dev);
 static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t first_data_sector);
-int read_inode_file(struct file *rfile, void *buf, int count);
 static inline uint32_t clust2sec(uint32_t cluster, struct fatFS *fs);
-int fat_create_dir(struct inode *parent, char *name);
 static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector);
 struct dnode *fat_read_root_dir(struct vfs_device *dev);
 struct dnode *read_inode_dir(struct inode *i_node);
-void cat_inode_file(struct inode *i_node);
 static void write_directory(struct inode *parent, char *name);
+
+void cat_inode_file(struct inode *i_node);
+int fat_create_dir(struct inode *parent, char *name);
+int read_inode_file(struct file *rfile, void *buf, uint32_t count);
+
 
 #define FAT_UNUSED_DIR 0xe5
 #define FAT_END_OF_CHAIN 0x0FFFFFF8
@@ -71,7 +74,7 @@ int fat_init(struct mbr_info mbr_entry)
     return 0;
 }
 
-static uint32_t find_free_cluster(uint32_t first_fat_sector, uint32_t first_data_sector)
+static uint32_t find_free_cluster(uint32_t first_fat_sector)
 {
     uint8_t FAT_table[512];
     uint32_t fat_sector = first_fat_sector;
@@ -109,27 +112,20 @@ static uint32_t find_free_cluster(uint32_t first_fat_sector, uint32_t first_data
 
     kprintf("\n");
     panic("unable to find cluster");
+    return 0;
 }
 
-int fat_create_dir(struct inode *parent, char *name)
-{
-    uint32_t cluster = 0;
-    uint32_t sector = 0;
-    uint32_t clust = 0;
+int fat_create_dir(struct inode *parent, char *name) {
 
-    // sector = clust2sec(cluster,parent->dev->finfo.fat);
-    // kprintf("Sector: %x cluster:%x\n",sector,cluster);
-    // clust = read_fat_ptr(parent->i_ino, parent->dev->finfo.fat->first_fat_sector);
-    // kprintf("Cluster:%x\n",clust);
     write_directory(parent, name);
+    return 1;
 }
 
 static inline uint32_t clust2sec(uint32_t cluster, struct fatFS *fs)
 {
     if (cluster == 0)
-    {
         return fs->first_data_sector;
-    }
+
     return (cluster - 2) * fs->fat_boot.sectors_per_cluster + fs->first_data_sector;
 }
 
@@ -176,43 +172,14 @@ static void read_cluster(uint32_t sector_start, uint8_t *dest)
 {
     int i;
     for (i = 0; i < 8; i++)
-    {
         read_sec(sector_start + i, dest + (512 * i));
-    }
 }
 
 static void write_cluster(uint32_t sector_start, uint8_t *data)
 {
     int i;
     for (i = 0; i < 8; i++)
-    {
         write_sec(sector_start + i, data + (512 * i));
-    }
-}
-
-static int write_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector, uint32_t val)
-{
-    // from osdev
-    uint8_t FAT_table[512];
-
-    uint32_t fat_offset = cluster_num * 4;
-    uint32_t fat_sector = first_fat_sector + (fat_offset / 512);
-    uint32_t ent_offset = fat_offset % 512;
-
-    read_sec(fat_sector, FAT_table);
-
-    FAT_table[ent_offset] = val & 0xff;
-    FAT_table[ent_offset + 1] = (val & 0xff00) >> 8;
-    FAT_table[ent_offset + 2] = (val & 0xff0000) >> 16;
-    FAT_table[ent_offset + 3] = (val & 0xff000000) >> 24;
-    kprintf("Reading fat pre:%d %x\n", fat_sector, FAT_table[ent_offset]);
-
-    kprintf("Writing fat:%d %x\n", fat_sector, FAT_table[ent_offset]);
-    kprintf("Read sector %x\n", fat_sector);
-
-    write_sec(fat_sector, FAT_table);
-
-    return 0;
 }
 
 static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector)
@@ -235,7 +202,7 @@ static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector)
     return table_value;
 }
 
-int read_inode_file(struct file *rfile, void *buf, int count)
+int read_inode_file(struct file *rfile, void *buf, uint32_t count)
 {
     uint32_t cluster = rfile->i_node.i_ino;
     uint32_t first_fat_sector = rfile->dev->finfo.fat->first_fat_sector;
@@ -245,7 +212,7 @@ int read_inode_file(struct file *rfile, void *buf, int count)
     uint32_t bytes_read = 0;
     int j = 0;
     int i = 0;
-    int total_read = 0;
+    uint64_t total_read = 0;
     while (cluster < FAT_END_OF_CHAIN && bytes_read < count)
     {
         read_cluster((cluster - 2) * 8 + first_data_sector, cluster_dest);
@@ -269,7 +236,7 @@ int read_inode_file(struct file *rfile, void *buf, int count)
 
 static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t first_data_sector)
 {
-    uint8_t cluster_dest[4097];
+    uint8_t *cluster_dest = kmalloc(FAT_CLUSTER_SIZE+1);
     uint32_t clust = cluster;
     cluster_dest[FAT_CLUSTER_SIZE] = '\0';
     while (clust < FAT_END_OF_CHAIN)
@@ -278,6 +245,7 @@ static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t firs
         clust = read_fat_ptr(clust, first_fat_sector);
         kprintf((char *)cluster_dest);
     }
+    kfree(cluster_dest);
 }
 
 static void fat_read_lfilename(char longfname[], uint8_t *dir_ptr)
@@ -363,19 +331,20 @@ static struct inode_list *fat_read_std_fmt(struct inode_list *tail, struct dnode
 }
 static void prepare_new_dir(struct inode *parent, uint32_t new_cluster)
 {
-    uint8_t cluster[FAT_CLUSTER_SIZE];
+    uint8_t *cluster = kmalloc(FAT_CLUSTER_SIZE);
     uint8_t *dir_ptr = cluster;
     struct std_fat_8_3_fmt *fmt;
     uint32_t sector = 0;
     sector = clust2sec(new_cluster, parent->dev->finfo.fat);
 
     read_cluster(sector, cluster);
+    memzero8(cluster,FAT_CLUSTER_SIZE);
     fmt = (struct std_fat_8_3_fmt *)dir_ptr;
     fmt->attribute = FAT_DIR;
     fmt->file_size = 0;
     fmt->low_cluster = 0xffff & new_cluster;
     fmt->high_cluster = (0x0fff0000 & new_cluster) >> 16;
-    kstrcpy(fmt->fname, ".");
+    kstrcpy((char *) fmt->fname, ".");
 
     dir_ptr += FAT_DIR_RECORD_SIZE;
     fmt = (struct std_fat_8_3_fmt *)dir_ptr;
@@ -383,22 +352,16 @@ static void prepare_new_dir(struct inode *parent, uint32_t new_cluster)
     fmt->file_size = 0;
     fmt->low_cluster = 0xffff & parent->i_ino;
     fmt->high_cluster = (0x0fff0000 & parent->i_ino) >> 16;
-    kstrcpy(fmt->fname, "..");
-
-    // End of directory list
-    dir_ptr += FAT_DIR_RECORD_SIZE;
-    fmt = (struct std_fat_8_3_fmt *)dir_ptr;
-    fmt->attribute = 0;
-    fmt->fname[0] = 0;
+    kstrcpy((char *) fmt->fname, "..");
 
     write_cluster(sector, cluster);
+    kfree(cluster);
 }
 static void write_directory(struct inode *parent, char *name)
 {
-    uint8_t cluster[FAT_CLUSTER_SIZE];
+    uint8_t *cluster = kmalloc(FAT_CLUSTER_SIZE);    
     uint8_t *dir_ptr = cluster;
     int k = 0;
-    int using_lfname = 0;
     uint32_t clust = parent->i_ino;
     uint32_t sector = 0;
     uint32_t new_cluster = 0;
@@ -410,20 +373,20 @@ static void write_directory(struct inode *parent, char *name)
         {
             if (dir_ptr[FAT_ATTRIBUTE] == 0)
             {
-                new_cluster = find_free_cluster(parent->dev->finfo.fat->first_fat_sector,
-                                                parent->dev->finfo.fat->first_data_sector);
+                new_cluster = find_free_cluster(parent->dev->finfo.fat->first_fat_sector);
                 fmt = (struct std_fat_8_3_fmt *)dir_ptr;
 
                 fmt->attribute = FAT_DIR;
                 fmt->file_size = 0;
                 fmt->low_cluster = 0xffff & new_cluster;
                 fmt->high_cluster = (0x0fff0000 & new_cluster) >> 16;
-                kstrcpy(fmt->fname, "DEADBEEF");
+                kstrcpy((char *) fmt->fname, name);
 
                 sector = clust2sec(clust, parent->dev->finfo.fat);
                 write_cluster(sector, cluster);
                 prepare_new_dir(parent, new_cluster);
                 kprintf("cluster:%x new_cluster:%x \n", clust, new_cluster);
+                kfree(cluster);
                 return;
             }
             dir_ptr += FAT_DIR_RECORD_SIZE;
@@ -436,6 +399,7 @@ static void write_directory(struct inode *parent, char *name)
         dir_ptr = cluster;
     } while (clust < FAT_END_OF_CHAIN);
     panic("need to implement adding new cluster for more directories");
+    kfree(cluster);
 }
 
 static void read_directory(uint32_t sec, struct dnode *dir, struct vfs_device *dev)

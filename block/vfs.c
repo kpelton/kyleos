@@ -130,6 +130,7 @@ static struct file *vfs_get_open_file(struct inode *i_node)
         }
     }
     panic("File table full");
+    return NULL;
 }
 
 struct file *vfs_open_file(struct inode *i_node)
@@ -147,7 +148,6 @@ struct file *vfs_open_file(struct inode *i_node)
 
 void vfs_close_file(struct file *ofile)
 {
-    struct file *retfile = NULL;
     if (ofile && ofile->refcount)
         ofile->refcount--;
 }
@@ -161,7 +161,7 @@ void vfs_copy_inode(struct inode *src,struct inode *dst)
     dst->i_type = src->i_type;
 }
 
-int *vfs_read_file(struct file * rfile,void *buf,int count)
+int vfs_read_file(struct file * rfile,void *buf,int count)
 {
     int idev;
     idev = rfile->dev->devicenum;

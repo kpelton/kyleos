@@ -4,6 +4,7 @@
 #include <output/input.h>
 #include <asm/asm.h>
 #include <include/stdarg.h>
+#include <include/types.h>
 void output_init() {
     vga_clear();
     serial_init();
@@ -57,6 +58,22 @@ char * kstrncpy(char *dest, const char *src,int bytes) {
         if (src[i] == '\0') {
             break;
         }
+    }
+    return dest;
+}
+
+uint8_t * memcpy8(uint8_t *dest, const uint8_t *src,uint64_t bytes) {
+    uint64_t i;
+    for (i=0; i <bytes; i++) {
+        dest[i] = src[i];
+    }
+    return dest;
+}
+
+uint8_t * memzero8(uint8_t *dest,uint64_t bytes) {
+    uint64_t i;
+    for (i=0; i <=bytes; i++) {
+        dest[i] = 0;
     }
     return dest;
 }
