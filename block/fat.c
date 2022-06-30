@@ -435,6 +435,7 @@ static void write_directory(struct inode *parent, char *name)
         read_cluster(clust2sec(clust, parent->dev->finfo.fat), cluster);
         dir_ptr = cluster;
     } while (clust < FAT_END_OF_CHAIN);
+    panic("need to implement adding new cluster for more directories");
 }
 
 static void read_directory(uint32_t sec, struct dnode *dir, struct vfs_device *dev)
