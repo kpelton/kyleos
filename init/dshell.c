@@ -116,47 +116,6 @@ struct inode *shell_cd(char cmd[], struct dnode *dptr)
     return 0;
 }
 
-static void shell_cat(char cmd[], struct dnode *dptr)
-{
-    struct inode_list *ptr;
-    char *cmdptr = cmd;
-    char *nptr = cmd;
-    uint8_t buffer = NULL;
-    uint32_t bytes_read;
-    struct file *cfile;
-    //Find directory
-    while (*cmdptr != ' ')
-        cmdptr++;
-    cmdptr++;
-    nptr = cmdptr;
-    //Take out newline
-    while (*nptr != '\n')
-        nptr++;
-    *nptr = '\0';
-
-    ptr = dptr->head;
-    while (ptr != 0)
-    {
-        if (ptr->current->i_type == I_FILE)
-        {
-            /*
-            kprintf("Comparing ");
-            kprintf(ptr->current->i_name);
-            kprintf(" ");
-            kprintf(cmdptr);
-            kprintf("\n");
-            */
-            if (kstrcmp(cmdptr, ptr->current->i_name) == 0)
-            {
-                //vfs_cat_inode_file(ptr->current);
-                cfile = vfs_open_file(ptr->current);
-                return;
-            }
-        }
-        ptr = ptr->next;
-    }
-    kprintf("bad file\n");
-}
 
 void print_prompt()
 {
@@ -275,7 +234,7 @@ struct inode * read_path(char *path, struct dnode *pwd,enum inode_type type)
     while (ptr)
     {
         //kprintf("%s\n",ptr->current->i_name);
-        if (kstrcmp(ptr->current->i_name, blah) == 0 && ptr->current->i_type == type) {
+        if (kstrcmp(ptr->current->i_name, blah) == 0 && ptr->current->i_type == (int)type) {
 
             vfs_free_dnode(dptr);
             return ptr->current;
@@ -293,7 +252,6 @@ void start_dshell()
     char *cptr = NULL;
     int pid;
     struct dnode *dptr;
-    struct dnode *dptr1;
     dptr = vfs_read_root_dir("0:/");
     struct dnode *olddptr = dptr;
     struct inode *pwd = dptr->root_inode;
