@@ -85,6 +85,7 @@ static void mkdir(struct inode *pwd,char *dir_name)
             break;
         dir[i] = dir_name[i];
     }
+    kprintf("vfs-create-dir %x\n",pwd->i_ino);
     vfs_create_dir(pwd,dir);
 }
 struct inode *shell_cd(char cmd[], struct dnode *dptr)
@@ -259,7 +260,7 @@ void start_dshell()
     struct inode *itmp;
     push_dir_stack("/");
     print_prompt();
-
+    kprintf("root %x\n",pwd->i_ino);
     //write_sec(0,buffer2);
     // asm("test: jmp test");
     //debug
@@ -309,6 +310,8 @@ for(;;) {
         {
 
             print_dir(pwd);
+                kprintf("root %x\n",pwd->i_ino);
+
         }
         else if (buffer[0] == 'm' && buffer[1] == 'k' && buffer[2] == 'd' && buffer[3] == 'i'&& buffer[4] == 'r'  && buffer[5] == ' ' && buffer[6] != '\n')
         {

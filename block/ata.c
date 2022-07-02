@@ -119,6 +119,8 @@ int read_sec(uint32_t sec,void *buffer  ) {
     //data is ready
     for (i=0; i<256; i++) {
         data[i] = inw(PRIMARY);
+                while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY  ) != 0) 
+         status = read_status();
     }
         status = read_status();
     return 0;
