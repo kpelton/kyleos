@@ -210,6 +210,8 @@ void kprintf(char *format, ...)
                     str_ptr = va_arg(arguments,char *);
                     puts(str_ptr);
                 break;
+                default:
+                panic("unable to handle kprintf type");
             }
         } else {
             putc(*ptr);
