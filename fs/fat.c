@@ -1,6 +1,6 @@
-#include <block/fat.h>
+#include <fs/fat.h>
 #include <block/ata.h>
-#include <block/vfs.h>
+#include <fs/vfs.h>
 #include <output/output.h>
 #include <mm/mm.h>
 
@@ -118,13 +118,13 @@ static uint32_t add_new_link_to_chain(uint32_t cluster_num, struct fatFS *fs)
     new_cluster = find_free_cluster(fs);
 
     read_sec(fat_sector, FAT_table);
-/*
-    uint32_t table_value = (FAT_table[ent_offset + 3] << 24 |
-                            FAT_table[ent_offset + 2] << 16 |
-                            FAT_table[ent_offset + 1] << 8 |
-                            FAT_table[ent_offset]) &
-                           0x0FFFFFFF;
-  */
+    /*
+        uint32_t table_value = (FAT_table[ent_offset + 3] << 24 |
+                                FAT_table[ent_offset + 2] << 16 |
+                                FAT_table[ent_offset + 1] << 8 |
+                                FAT_table[ent_offset]) &
+                               0x0FFFFFFF;
+      */
     // kprintf("Reading fat:%d %x\n", fat_sector, table_value);
 
     FAT_table[ent_offset + 3] = (new_cluster >> 24) & 0xff;
@@ -416,11 +416,11 @@ static void write_directory(struct inode *parent, char *name)
         {
             kprintf("wattr %x %x cluster %x\n", *dir_ptr, dir_ptr[FAT_ATTRIBUTE], clust);
 
-            if (*dir_ptr == FAT_UNUSED_DIR|| *dir_ptr == 0)
+            if (*dir_ptr == FAT_UNUSED_DIR || *dir_ptr == 0)
             {
                 new_cluster = find_free_cluster(parent->dev->finfo.fat);
                 fmt = (struct std_fat_8_3_fmt *)dir_ptr;
-
+                // rework how name is copied over and use long filename if longer than 8 chars
                 fmt->attribute = FAT_DIR;
                 fmt->file_size = 0;
                 fmt->low_cluster = 0xffff & new_cluster;
@@ -451,7 +451,9 @@ static void write_directory(struct inode *parent, char *name)
 
             // kprintf("NEw cluster chanin %d \n",prev_clust);
             clust = add_new_link_to_chain(prev_clust, parent->dev->finfo.fat);
-            read_cluster(clust2sec(clust, parent->dev->finfo.fat), parent->dev->finfo.fat->fat_boot.sectors_per_cluster, cluster);
+            read_cluster(clust2sec(clust, parent->dev->finfo.fat),
+                         parent->dev->finfo.fat->fat_boot.sectors_per_cluster,
+                         cluster);
             memzero8(cluster, sectors_per_cluster * 512);
             // kprintf("DONE\n");
         }

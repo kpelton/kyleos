@@ -1,4 +1,4 @@
-#include <block/vfs.h>
+#include <fs/vfs.h>
 #include <output/output.h>
 #include <mm/mm.h>
 #define VFS_MAX_OPEN 1024

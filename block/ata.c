@@ -3,7 +3,7 @@
 #include <output/output.h>
 #include <mm/mm.h>
 #include <block/ata.h>
-#include <block/fat.h>
+#include <fs/fat.h>
 
 #define DATA_REG 0
 #define ERROR_REG 1

@@ -16,7 +16,10 @@ all: kernel.img
 asm: asm/asm.o asm/asm_calls.o
 	$(MAKE) -C asm
 
-block: block/ata.o block/fat.o block/vfs.o
+block: block/ata.o 
+	$(MAKE) -C block
+
+fs: fs/fat.o fs/vfs.o
 	$(MAKE) -C block
 
 init: init/kernel.o init/loader.o init/tables.o init/dshell.o
@@ -45,7 +48,7 @@ clean:
 	rm -rfv kernel.bin
 	rm -rfv kernel32.bin
 
-kernel.bin: asm block init irq mm output timer sched
+kernel.bin: asm block init irq mm output timer sched fs
 	$(LD) -T linker.ld -o kernel.bin $(OBJ_FILES) 
 
 kernel.img: kernel.bin

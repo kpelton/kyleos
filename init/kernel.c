@@ -7,7 +7,7 @@
 #include <mm/mm.h>
 #include <mm/pmem.h>
 #include <timer/pit.h>
-#include <block/vfs.h>
+#include <fs/vfs.h>
 #include <sched/sched.h>
 #include <timer/timer.h>
 #include <init/dshell.h>

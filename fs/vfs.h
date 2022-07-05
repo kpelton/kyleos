@@ -1,6 +1,6 @@
 #ifndef VFS_H
 #define VFS_H
-#include <block/fat.h>
+#include <fs/fat.h>
 #include <include/types.h>
 #define VFS_MAX_DEVICES 10
 #define FAT_FS 0
