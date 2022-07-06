@@ -2,13 +2,14 @@ CC	= gcc
 AS = nasm
 ASFLAGS = -f elf64
 KERNEL_ROOT=$(shell pwd)
-OBJ_FILES = $(shell find . -type f -name '*.o')
 CFLAGS	= -m64 -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2  -I $(KERNEL_ROOT) -g 
 LD	= ld  -m elf_x86_64 
 export CFLAGS 
 export CC
 export AS
 export ASFLAGS
+SUBDIRS = $(shell ls -d */)
+OBJ_FILES = $(shell find . -type f -name '*.o')
 
 all: kernel.img
 
