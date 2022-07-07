@@ -33,8 +33,8 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count);
 #define FAT_MAX_LFNAME_RECORDS 0x3f
 #define FAT_CLUSTER_SIZE 4096
 #define FAT_LFNAME_LAST_ENTRY 0x40
-
 #define FAT_MAX_STD_NAME 8
+
 
 //#define DEBUG
 
@@ -42,13 +42,13 @@ static void read_fat_to_mem(struct fatFS *fs)
 {
     kprintf("reading in 0x%x sectors\n", fs->fat_size);
     fs->fat_ptr = kmalloc(ATA_SECTOR_SIZE * fs->fat_size);
-
-    uint32_t *FAT_table = kmalloc(128);
+    uint32_t *FAT_table = kmalloc(ATA_SECTOR_SIZE/sizeof(uint32_t));
     int k = 0;
+
     for (uint32_t i = 0; i < fs->fat_size; i++)
     {
         read_sec(fs->first_fat_sector + i, FAT_table);
-        for (int j = 0; j < 128; j++)
+        for (uint32_t j = 0; j < ATA_SECTOR_SIZE/sizeof(uint32_t); j++)
         {
             fs->fat_ptr[k] = FAT_table[j] & 0x0fffffff;
             k++;
@@ -192,8 +192,8 @@ struct dnode *read_inode_dir(struct inode *i_node)
     dir->root_inode->i_ino = i_node->i_ino;
     dir->root_inode->dev = i_node->dev;
     dir->root_inode->i_type = I_DIR;
-    kstrncpy(dir->root_inode->i_name, i_node->i_name, 256);
-    kstrncpy(dir->i_name, i_node->i_name, 256);
+    kstrncpy(dir->root_inode->i_name, i_node->i_name, FAT_MAX_FNAME);
+    kstrncpy(dir->i_name, i_node->i_name, FAT_MAX_FNAME);
     read_directory(dir, i_node->dev);
     return dir;
 }
@@ -447,7 +447,6 @@ static void write_longfname(struct inode *parent, char *name)
 
     do
     {
-
         if (prev_clust == 0)
             panic("test");
 

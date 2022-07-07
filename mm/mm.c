@@ -65,7 +65,7 @@ void kfree(void *ptr)
 {
     struct  mm_block *lptr = ptr - (sizeof(struct mm_block));
     if (lptr->addr == ptr) {
-            lptr->free = 1;
+            lptr->free = FREE;
     } else {
         panic("Memory courrption detected on free\n");
     }
