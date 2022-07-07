@@ -152,8 +152,9 @@ static uint32_t add_new_link_to_chain(uint32_t cluster_num, struct fatFS *fs)
 
 int fat_create_dir(struct inode *parent, char *name)
 {
-
-    write_directory(parent, name);
+    char truncated_name[FAT_MAX_FNAME+1];
+    kstrncpy(truncated_name,name,FAT_MAX_FNAME+1);
+    write_directory(parent, truncated_name);
     return 1;
 }
 
@@ -185,7 +186,7 @@ struct dnode *fat_read_root_dir(struct vfs_device *dev)
 struct dnode *read_inode_dir(struct inode *i_node)
 {
     struct dnode *dir;
-    kprintf("inode_dir_alloc\n");
+    //printf("inode_dir_alloc\n");
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     dir->root_inode->i_ino = i_node->i_ino;
@@ -441,7 +442,7 @@ static void write_longfname(struct inode *parent, char *name)
     uint32_t done_bytes = 0;
     uint32_t lfnamesec = 1;
     uint32_t max_dir_records = (ATA_SECTOR_SIZE * sectors_per_cluster) / FAT_DIR_RECORD_SIZE;
-    // kprintf("REading sector %x\n", clust2sec(clust, parent->dev->finfo.fat));
+
     read_cluster(clust2sec(clust, parent->dev->finfo.fat), sectors_per_cluster, cluster);
 
     do
