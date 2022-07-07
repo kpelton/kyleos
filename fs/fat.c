@@ -3,8 +3,8 @@
 #include <fs/vfs.h>
 #include <output/output.h>
 #include <mm/mm.h>
+#include <include/types.h>
 
-#define NULL 0
 static void read_directory(struct dnode *dir, struct vfs_device *dev);
 static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t first_data_sector, uint32_t sectors_per_cluster);
 static inline uint32_t clust2sec(uint32_t cluster, struct fatFS *fs);
@@ -131,10 +131,9 @@ static uint32_t find_free_cluster(struct fatFS *fs)
 {
     uint32_t i = 0;
     for (i = 0; i < fs->cluster_count; i++)
-    {
         if (fs->fat_ptr[i] == 0)
             return i;
-    }
+
     kprintf("%i \n", i);
     panic("Out of space");
     return 0;
