@@ -78,14 +78,14 @@ error:
 
 static void mkdir(struct inode *pwd,char *dir_name)
 {
-    char dir[8] = {0};
+    char dir[256] = {0};
 
-    for(int i=0; i<8; i++) {
+    for(int i=0; i<256; i++) {
         if(dir_name[i] == '\n')
             break;
         dir[i] = dir_name[i];
     }
-    kprintf("vfs-create-dir %x\n",pwd->i_ino);
+    //kprintf("vfs-create-dir %x\n",pwd->i_ino);
     vfs_create_dir(pwd,dir);
 }
 struct inode *shell_cd(char cmd[], struct dnode *dptr)
@@ -315,8 +315,21 @@ for(;;) {
         }
         else if (buffer[0] == 'm' && buffer[1] == 'k' && buffer[2] == 'd' && buffer[3] == 'i'&& buffer[4] == 'r'  && buffer[5] == ' ' && buffer[6] != '\n')
         {
-            mkdir(pwd,buffer+6);
+            //for(int j =0; j<500; j++){
+             mkdir(pwd,buffer+6);
+             //  mkdir(pwd,"a");
+
+           // }
         }
+        else if (buffer[0] == 's' && buffer[1] == 'k' && buffer[2] == 'd' && buffer[3] == 'i'&& buffer[4] == 'r'  && buffer[5] == ' ' && buffer[6] != '\n')
+        {
+            for(int j =0; j<500; j++){
+             //mkdir(pwd,buffer+6);
+               mkdir(pwd,"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+            }
+        }
+
         else if (buffer[0] == 'l'  && buffer[1] == 's'  && buffer[2] == ' ' && buffer[3] != '\n')
         {
             cptr = buffer + 3;

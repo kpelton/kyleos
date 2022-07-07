@@ -83,7 +83,25 @@ struct fatFS
     uint32_t first_fat_sector;
     uint32_t sectors_per_cluster;
     uint32_t root_cluster;
+    uint32_t *fat_ptr;
+    uint32_t cluster_count;
+    uint32_t free_cluster;
+
 };
+
+struct fat_long_fmt
+{
+    uint8_t order;
+    char first_entry[10];
+    uint8_t attribute;
+    uint8_t long_entry_type;
+    uint8_t checksum;
+    char second_entry[12];
+    uint16_t zerospace;
+    char third_entry[4];
+
+}__attribute__((packed));
+
 
 int fat_init(struct mbr_info mbr_entry);
 #endif
