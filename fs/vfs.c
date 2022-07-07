@@ -79,18 +79,13 @@ void vfs_free_dnode(struct dnode *dn)
 struct dnode *vfs_read_root_dir(char *path)
 {
     char *ptr = path;
-    char dev[4];
+    char dev[4] = {0};
     int i = 0;
     int idev;
     struct vfs_device *vdevice;
-    while (*ptr != ':')
-    {
-        dev[i] = *ptr;
-        i += 1;
-        ptr += 1;
-    }
-    dev[i] = '\0';
-    ptr += 1;
+
+
+    dev[i] = '0';
     if (*ptr != '/')
     {
         kprintf("Incorrect path name");

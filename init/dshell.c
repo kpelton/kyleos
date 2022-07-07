@@ -12,7 +12,7 @@
 #include <mm/pmem.h>
 
 void test_user_function5();
-static const char OS_PROMPT[] = "Kyle OS |0:";
+static const char OS_PROMPT[] = "Kyle OS |";
 
 static char *dir_stack[100][256];
 static int top_dir_stack = -1;
@@ -135,7 +135,7 @@ void fs_test()
 {
     struct dnode *dptr;
     struct dnode *dptr1;
-    dptr = vfs_read_root_dir("0:/");
+    dptr = vfs_read_root_dir("/");
     for (;;)
     {
         asm("sti");
@@ -253,7 +253,7 @@ void start_dshell()
     char *cptr = NULL;
     int pid;
     struct dnode *dptr;
-    dptr = vfs_read_root_dir("0:/");
+    dptr = vfs_read_root_dir("/");
     struct dnode *olddptr = dptr;
     struct inode *pwd = dptr->root_inode;
     struct inode *oldpwd = pwd;
