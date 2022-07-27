@@ -22,6 +22,7 @@ bool exec_from_inode(struct inode *ifile)
     uint32_t size;
     void *block;
     struct pg_tbl *new_pg_tbl = NULL;
+    uint64_t page_ops;
 
 
     if (hdr.magic == ELF_MAGIC)
@@ -67,13 +68,19 @@ bool exec_from_inode(struct inode *ifile)
                 track->next = head;
                 head = track;
             }
-
+            page_ops = USER_PAGE;
             kprintf("block: %x\n",block);
             bytes = vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT(block),phdr.memsz,phdr.off);
             kprintf("%x\n", KERN_PHYS_TO_PVIRT(block));
             kprintf("%x\n", *(uint64_t *)KERN_PHYS_TO_PVIRT(block));
             kprintf("mapping %x\n",size);
-            paging_map_user_range(new_pg_tbl,(uint64_t) block,phdr.vaddr,size,USER_PAGE);
+
+            //if write is not set for this program section map section as RO
+            if ((phdr.flags  & ELF_PROG_FLAG_WRITE) == 0) {
+                kprintf("Setting phdr.vaddr:%x %d  RO\n",phdr.vaddr,i);
+                page_ops = USER_PAGE_RO;
+            }
+            paging_map_user_range(new_pg_tbl,(uint64_t) block,phdr.vaddr,size,page_ops);
             kprintf("  Read in %d\n", bytes);
 
         }

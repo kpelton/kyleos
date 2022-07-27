@@ -418,12 +418,7 @@ for(;;) {
         }
         else if (buffer[0] == 'e' && buffer[1] == 'x' && buffer[2] == 'e' && buffer[3] == 'c' && buffer[4] ==  ' ' && buffer[5] != '\n')
         {
-            struct file *rfile;
             cptr = buffer + 5;
-            struct elfhdr hdr;
-            struct proghdr phdr;
-            uint32_t bytes;
-            int k;
             while (*cptr != '\n' && *cptr != '\0')
             {
                 cptr++;
