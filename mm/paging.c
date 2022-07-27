@@ -88,7 +88,7 @@ bool paging_map_kernel_range(uint64_t start, uint64_t len)
     uint16_t offset;
     uint64_t *curr;
 
-    while (phys_curr_addr < start + (len * 4096))
+    while (phys_curr_addr < start + (len * PAGE_SIZE))
     {
 
         offset = VIRT_TO_PML4_ADDR(virt_curr_addr);
@@ -130,11 +130,11 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
 {
 
     uint64_t virt_curr_addr = virt_start;
-    uint64_t phys_curr_addr = KERN_VIRT_TO_PHYS(start);
+    uint64_t phys_curr_addr = start;
     uint16_t offset;
     uint64_t *curr = pg->pml4;
    // kprintf("call base pml4 %x\n",pg->pml4);
-    while (phys_curr_addr < KERN_VIRT_TO_PHYS(start) + (len * 4096))
+    while (phys_curr_addr < start + (len * PAGE_SIZE))
     {
         curr = pg->pml4;
         offset = VIRT_TO_PML4_ADDR(virt_curr_addr);
@@ -176,6 +176,7 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
 
         phys_curr_addr += 0x1000;
         virt_curr_addr += 0x1000;
+        kprintf("loop\n");
     }
     return true;
 

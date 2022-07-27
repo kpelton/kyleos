@@ -164,6 +164,17 @@ int vfs_read_file(struct file * rfile,void *buf,int count)
    
 }
 
+int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset    )
+{
+    int idev;
+    idev = rfile->dev->devicenum;
+
+    //set offset of file -- No check if we are going over file
+    rfile->pos=offset;
+    return vfs_devices[idev].ops->read_file(rfile,buf,count);
+}
+
+
 int vfs_create_dir(struct inode *parent, char * name)
 {
     return vfs_devices[parent->dev->devicenum].ops->create_dir(parent,name);  

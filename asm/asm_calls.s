@@ -48,7 +48,7 @@ test_user_function:
 
 [global test_user_function5]
 test_user_function5:
-    mov rax,1000
+    mov rax,10
     int 0x80
     mov rax,16
     mov rcx,1
@@ -62,10 +62,10 @@ test_user_function5:
 
 [global usermode_int] ;
 usermode_int:
-    mov rdi,rax
+    mov rdi,100
     call ksleepm
     mov rdi,HelloString
-    ;call kprintf
+    call kprintf
     ;jmp panic_handler
     mov ax, (4 * 8)
 	mov ds, ax
@@ -84,13 +84,13 @@ jump_usermode:
 	mov es, ax 
 	mov fs, ax 
 	mov gs, ax ; SS is handled by iret
+    sti
 	; set up the stack frame iret expects
 	push (4 * 8) | 3 ; data selector
 	push rsi ; current esp
     pushf
 	push (3 * 8) | 3 ; code selector (ring 3 code with bottom 2 bits set for ring 3)
 	push rdi ; instruction address to return to
-    sti
 	iretq
 
 setup_long_mode:

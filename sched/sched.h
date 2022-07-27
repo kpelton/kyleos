@@ -14,6 +14,7 @@ void sched_stats();
 void ksleepm(uint32_t ms);
 struct ktask* get_current_process();
 bool sched_process_kill(int pid);
+int user_process_add_exec(uint64_t startaddr, char *name,struct pg_tbl *tbl);
 void sched_init();
 enum sched_states {
 	TASK_RUNNING,

@@ -243,26 +243,29 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count)
     uint32_t j = 0;
     uint32_t i = 0;
     uint64_t total_read = 0;
+    
     while (cluster < FAT_END_OF_CHAIN && bytes_read < count)
     {
         read_cluster((cluster - 2) * sectors_per_cluster + first_data_sector, sectors_per_cluster, cluster_dest);
 
         cluster = rfile->dev->finfo.fat->fat_ptr[cluster];
         j = 0;
-        while (j < sectors_per_cluster * ATA_SECTOR_SIZE && bytes_read < rfile->i_node.file_size)
+        while (j < sectors_per_cluster * ATA_SECTOR_SIZE && bytes_read < rfile->i_node.file_size && bytes_read < count)
         {
             if (total_read >= rfile->pos)
             {
                 bytes_read++;
                 buffer[i] = cluster_dest[j];
+                //kprintf("%d, %d %d\n",i,j, rfile->pos);
                 i++;
-                j++;
             }
+            j++;
             total_read++;
         }
     }
     rfile->pos += bytes_read;
     kfree(cluster_dest);
+    //kprintf("read inode total bytes read %d\n",bytes_read);
     return bytes_read;
 }
 

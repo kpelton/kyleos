@@ -10,6 +10,8 @@
 #include <sched/sched.h>
 #include <timer/rtc.h>
 #include <mm/pmem.h>
+#include <fs/elf.h>
+#include <sched/exec.h>
 
 void test_user_function5();
 static const char OS_PROMPT[] = "Kyle OS |";
@@ -260,7 +262,7 @@ void start_dshell()
     struct inode *itmp;
     push_dir_stack("/");
     print_prompt();
-    kprintf("root %x\n",pwd->i_ino);
+    //kprintf("root %x\n",pwd->i_ino);
     //write_sec(0,buffer2);
     // asm("test: jmp test");
     //debug
@@ -310,7 +312,7 @@ for(;;) {
         {
 
             print_dir(pwd);
-                kprintf("root %x\n",pwd->i_ino);
+            //kprintf("root %x\n",pwd->i_ino);
 
         }
         else if (buffer[0] == 'm' && buffer[1] == 'k' && buffer[2] == 'd' && buffer[3] == 'i'&& buffer[4] == 'r'  && buffer[5] == ' ' && buffer[6] != '\n')
@@ -414,7 +416,29 @@ for(;;) {
                 kprintf("cat failed\n");
             }
         }
+        else if (buffer[0] == 'e' && buffer[1] == 'x' && buffer[2] == 'e' && buffer[3] == 'c' && buffer[4] ==  ' ' && buffer[5] != '\n')
+        {
+            struct file *rfile;
+            cptr = buffer + 5;
+            struct elfhdr hdr;
+            struct proghdr phdr;
+            uint32_t bytes;
+            int k;
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+            }
+            *cptr = '\0';
+            dptr = vfs_read_inode_dir(pwd);
+            itmp = read_path(buffer + 5, dptr,I_FILE);
+            if(itmp != NULL) {
+                exec_from_inode(itmp);
 
+            }else
+            {
+                kprintf("cat failed\n");
+            }
+        }
         else if (kstrcmp(buffer, "mem\n") == 0)
         {
             mm_print_stats();

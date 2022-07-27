@@ -67,6 +67,7 @@ void vfs_free_inode_list(struct inode_list * list);
 void vfs_free_dnode(struct dnode * dn);
 void vfs_copy_inode(struct inode *src,struct inode *dst);
 int vfs_read_file(struct file * rfile,void *buf,int count);
+int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset);
 int vfs_create_dir(struct inode* parent, char *name);
 struct file* vfs_open_file(struct inode * i_node);
 void vfs_close_file(struct file *ofile);

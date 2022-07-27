@@ -93,14 +93,40 @@ int user_process_add(void (*fptr)(), char *name)
 	t->mm = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
 	t->mm->pml4 = (uint64_t *)KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
 	kprintf("sched pml4 %x\n",t->mm->pml4);
-	paging_map_user_range(t->mm,(uint64_t) (uint64_t)fptr, 0, 1,USER_PAGE_RO);
-	paging_map_user_range(t->mm,(uint64_t) t->user_stack_alloc, USER_STACK_VADDR,USER_STACK_SIZE,USER_PAGE);
-
+	paging_map_user_range(t->mm,(uint64_t) KERN_VIRT_TO_PHYS((uint64_t)fptr), 0, 1,USER_PAGE_RO);
+	paging_map_user_range(t->mm,(uint64_t) KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR,USER_STACK_SIZE,USER_PAGE);
 
 	t->state = TASK_NEW;
-	t->start_addr = (uint64_t *)fptr - addr_start;
+	t->start_addr = (uint64_t)((uint64_t *)fptr - addr_start) &0xfff;
+	kprintf("start add 0x%x\n",t->start_addr);
+	t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) -16;
+	t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (4096*USER_STACK_SIZE) -16 );
+	t->pid = pid;
+	t->type = USER_PROCESS;
+	t->timer.state = TIMER_UNUSED;
+	kstrcpy(t->name, name);
+	t->context_switches = 0;
+	pid_ret = pid;
+	pid += 1;
+	return pid_ret;
+
+}
+
+int user_process_add_exec(uint64_t startaddr, char *name,struct pg_tbl *tbl)
+{
+	struct ktask *t;
+	t = &ktasks[find_free_task()];
+	int pid_ret;
+
+	//kprintf("Allocating Stack\n");
+	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
+	t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(32));
+	t->mm = tbl;
+	paging_map_user_range(t->mm,(uint64_t) KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR,USER_STACK_SIZE,USER_PAGE);
+	t->state = TASK_NEW;
+	t->start_addr =  startaddr;
 	t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE);
-	t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (4096*USER_STACK_SIZE) );
+	t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (4096*USER_STACK_SIZE) -16);
 	t->pid = pid;
 	t->type = USER_PROCESS;
 	t->timer.state = TIMER_UNUSED;
@@ -240,7 +266,7 @@ void schedule()
 			set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
 			user_switch_paging(ktasks[i].mm);
 
-			jump_usermode((uint64_t)ktasks[i].start_addr & 0xfff, ktasks[i].user_start_stack);
+			jump_usermode((uint64_t)ktasks[i].start_addr, ktasks[i].user_start_stack);
 			success = true;
 		}
 		else if (ktasks[i].state == TASK_READY)

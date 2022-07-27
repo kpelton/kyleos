@@ -13,7 +13,7 @@
 #include <init/dshell.h>
 #include <include/multiboot.h>
 #include <include/types.h>
-#define STACK_PAGES 128
+#define STACK_PAGES 256
 
 void test_user_function ();
 void test_user_function5 ();
@@ -77,7 +77,7 @@ void kernel(void)
 {
     kprintf("Kyle OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
-      	kthread_add(&start_dshell,"D Shell");
+    kthread_add(&start_dshell,"D Shell");
 
 
  
