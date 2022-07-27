@@ -6,6 +6,12 @@
 #define SCHED_MAX_TASKS 1024
 #define SCHED_MAX_NAME 32
 #define KTHREAD_STACK_SIZE 0x8000
+struct p_memblock {
+	void *block;
+	uint32_t count;
+	struct p_memblock *next;
+};
+
 
 void kthread_add(void (*fptr)(),char * name);
 int user_process_add(void (*fptr)(),char * name);
@@ -14,7 +20,7 @@ void sched_stats();
 void ksleepm(uint32_t ms);
 struct ktask* get_current_process();
 bool sched_process_kill(int pid);
-int user_process_add_exec(uint64_t startaddr, char *name,struct pg_tbl *tbl);
+int user_process_add_exec(uint64_t startaddr, char *name,struct pg_tbl *tbl,struct p_memblock *head);
 void sched_init();
 enum sched_states {
 	TASK_RUNNING,
@@ -47,6 +53,7 @@ struct ktask{
 	uint64_t context_switches;
 	struct pg_tbl *mm;
     struct basic_timer timer;
+	struct p_memblock *mem_list;
 };
 
 

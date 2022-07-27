@@ -71,6 +71,7 @@ void kthread_add(void (*fptr)(), char *name)
 	t->pid = pid;
 	t->type = KERNEL_PROCESS;
 	t->timer.state = TIMER_UNUSED;
+	t->mem_list = NULL;
 	kstrcpy(t->name, name);
 	t->context_switches = 0;
 	pid += 1;
@@ -104,6 +105,7 @@ int user_process_add(void (*fptr)(), char *name)
 	t->pid = pid;
 	t->type = USER_PROCESS;
 	t->timer.state = TIMER_UNUSED;
+	t->mem_list = NULL;
 	kstrcpy(t->name, name);
 	t->context_switches = 0;
 	pid_ret = pid;
@@ -112,7 +114,7 @@ int user_process_add(void (*fptr)(), char *name)
 
 }
 
-int user_process_add_exec(uint64_t startaddr, char *name,struct pg_tbl *tbl)
+int user_process_add_exec(uint64_t startaddr, char *name,struct pg_tbl *tbl,struct p_memblock *head)
 {
 	struct ktask *t;
 	t = &ktasks[find_free_task()];
@@ -130,6 +132,7 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct pg_tbl *tbl)
 	t->pid = pid;
 	t->type = USER_PROCESS;
 	t->timer.state = TIMER_UNUSED;
+	t->mem_list = head;
 	kstrcpy(t->name, name);
 	t->context_switches = 0;
 	pid_ret = pid;
@@ -138,9 +141,27 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct pg_tbl *tbl)
 
 }
 
+//Free list of used blocks allocated for program image
+static void free_memblock_list(struct p_memblock *head) {
+	struct p_memblock *p = head;
+	struct p_memblock *curr = NULL;
+	uint32_t j = 0;
+
+	while(p != NULL) {
+		curr = p;
+		p = p->next;
+		for(j =0; j<curr->count; j++) {
+			kprintf("Freeing 0x%x\n",(uint64_t)curr->block+(PAGE_SIZE*j));
+			pmem_free_block((uint64_t)curr->block+(PAGE_SIZE*j));	
+			}
+		kfree(curr);
+	}
+}
+
 bool sched_process_kill(int pid)
 {
 	int i;
+	int j;
 	kprintf("Killing %d\n", pid);
 	for (i = 0; i < SCHED_MAX_TASKS; i++)
 	{
@@ -156,14 +177,18 @@ bool sched_process_kill(int pid)
 				paging_free_pg_tbl(t->mm);
 				kfree(t->mm);
 				t->mm = NULL;
-				for(int j = 0; j<USER_STACK_SIZE; j++)
-					pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc+(4096*j)));
+				for( j = 0; j<USER_STACK_SIZE; j++)
+					pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc+(PAGE_SIZE*j)));
+
+				free_memblock_list(t->mem_list);
+
 			}
 			kfree(t->stack_alloc);
 			kprintf("Killed %d\n", t->pid);
-
 			t->state = TASK_DONE;
 			t->pid = -1;
+			t->mem_list = NULL;
+
 			return true;
 		}
 	}
