@@ -1,0 +1,11 @@
+#ifndef _PS_H
+#define _PS_H
+#include <include/types.h>
+#include <sched/sched.h>
+#include <fs/vfs.h>
+#include <fs/vfs.h>
+int user_process_open_fd(struct ktask *t, struct inode *iptr);
+int user_process_close_fd(struct ktask *t,int fd);
+int user_process_read_fd(struct ktask *t,int fd, void *buf, int count);
+
+#endif
