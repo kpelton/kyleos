@@ -166,35 +166,6 @@ void print_time()
             current_time.sec, current_time.month, current_time.day, current_time.year);
 }
 
-int kstrstr(char *base, char *delim)
-{
-    char *baseptr = base;
-    int kstart = 0;
-    if (!base || !delim || !*base || !*delim)
-        return -1;
-    int val = 0;
-    while (*baseptr)
-    {
-        if (*baseptr && *delim && *baseptr == *delim)
-        {
-            val = kstart;
-        }
-        while (*baseptr && *delim && *baseptr == *delim)
-        {
-
-            baseptr++;
-            delim++;
-            if (!*delim)
-            {
-                return val;
-            }
-            val++;
-        }
-        baseptr++;
-        kstart++;
-    }
-    return -1;
-}
 
 struct inode * read_path(char *path, struct dnode *pwd,enum inode_type type)
 {
@@ -401,11 +372,12 @@ for(;;) {
             dptr = vfs_read_inode_dir(pwd);
             itmp = read_path(buffer + 4, dptr,I_FILE);
             if(itmp != NULL) {
-
+                asm("cli");
                 //vfs_cat_inode_file(itmp);
                 rfile = vfs_open_file(itmp);
                 rbuffer = kmalloc(itmp->file_size+1);
                 bytes = vfs_read_file(rfile,rbuffer,itmp->file_size);
+                asm("sti");
                 rbuffer[itmp->file_size] = '\0';
                 kprintf("Read %d\n",bytes);
                 kprintf("%s",rbuffer);

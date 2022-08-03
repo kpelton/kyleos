@@ -71,4 +71,5 @@ int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset
 int vfs_create_dir(struct inode* parent, char *name);
 struct file* vfs_open_file(struct inode * i_node);
 void vfs_close_file(struct file *ofile);
+struct inode * vfs_walk_path(char *path, struct dnode *pwd,enum inode_type type);
 #endif

@@ -55,12 +55,19 @@ static int find_free_task()
 	//kprintf("f:%d\n",i);
 	return i;
 }
+static void clear_fd_table(struct ktask *t)
+{
+	for (int j; j<MAX_TASK_OPEN_FILES; j++)
+		t->open_fds[j] = NULL;
+}
 
 void kthread_add(void (*fptr)(), char *name)
 {
 	struct ktask *t;
 
 	t = &ktasks[find_free_task()];
+	clear_fd_table(t);
+
 	t->mm = NULL;
 	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
 	t->state = TASK_NEW;
@@ -81,12 +88,124 @@ struct ktask *get_current_process()
 {
 	return &ktasks[prev_task];
 }
+int forkret(){
+	struct ktask *curr = get_current_process();
+	curr->type = USER_PROCESS;
+	user_switch_paging(curr->mm);
+	curr->s_rbp = ktasks[curr->parent].s_rbp;
+	curr->s_rsp = ktasks[curr->parent].s_rsp;
+
+	kprintf("Resuming to 0x%x",curr->s_rsp);
+	switch_to(curr->save_rsp, curr->save_rip);
+	return 0;
+}
+
+void sched_save_context(uint64_t rip, uint64_t rsp) 
+{
+	struct ktask *c = get_current_process();
+	c->save_rip = rip;
+	c->save_rsp = rsp;
+}
+
+int user_process_fork()
+{
+	struct ktask *curr = get_current_process();
+	struct ktask *t;
+	struct p_memblock *c_mem;
+	struct p_memblock *track = NULL;
+	struct p_memblock *head = NULL;
+	t = &ktasks[find_free_task()];
+	int pid_ret;
+	clear_fd_table(t);
+
+	//kprintf("Allocating Stack\n");
+	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
+	t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(32));
+	t->mm = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
+	t->mm->pml4 = (uint64_t *)KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
+	kprintf("sched pml4 %x\n",t->mm->pml4);
+	paging_map_user_range(t->mm,(uint64_t) KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR,USER_STACK_SIZE,USER_PAGE);
+
+	t->state = TASK_READY;
+	t->type = USER_PROCESS;
+	t->timer.state = TIMER_UNUSED;
+
+	kprintf("start add 0x%x\n",t->start_addr);
+	t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) -16;
+	t->user_start_stack = curr->user_start_stack;
+	t->pid = pid;
+
+	t->mem_list = NULL;
+	t->context_switches = 0;
+	t->parent = curr->pid;
+	
+	kstrcpy(t->name, curr->name);
+	//Copy over parent data using brute force;
+	kprintf("start stack copy\n");
+	
+	memcpy8(KERN_PHYS_TO_PVIRT(KERN_VIRT_TO_PHYS(t->user_stack_alloc)),
+												KERN_PHYS_TO_PVIRT(KERN_VIRT_TO_PHYS(curr->user_stack_alloc)),
+												USER_STACK_SIZE*4096);
+
+	kprintf("Done stack copy\n");
+	t->s_rbp  = curr->s_rbp;
+	t->s_rsp  = t->start_stack;
+	for(int i=0; i<=20; i++){
+		kprintf("Writing %x\n",*(curr->save_rsp+21-i));
+		if (i != 5)
+			*(--t->s_rsp) = *(curr->save_rsp+21-i);
+		else {
+			//return value case
+			*(--t->s_rsp) =0;
+			*(curr->save_rsp+21-5)=pid;
+		}
+	}
+	//Rax is 0 for child
+	
+	*(t->s_rsp-1) = curr->save_rip;
+	
+	kprintf("Ret addr %x\n",*(curr->save_rsp+1));
+	for (int j; j<MAX_TASK_OPEN_FILES; j++)
+		t->open_fds[j] = curr->open_fds[j];	
+	
+	//copy over allocated memory pages to process
+	c_mem = curr->mem_list;
+	while(c_mem != NULL)
+	{
+            //track pages allocated for program image in stack linked list
+            track = kmalloc(sizeof(struct p_memblock));
+            track->block = pmem_alloc_block(c_mem->count);
+			track->vaddr = c_mem->vaddr;
+			track->pg_opts = c_mem->pg_opts;
+            track->count = c_mem->count;
+			if(head == NULL) {
+                head = track;
+            } else {
+                track->next = head;
+                head = track;
+            }
+			memcpy8(KERN_PHYS_TO_PVIRT(track->block),KERN_PHYS_TO_PVIRT(c_mem->block),c_mem->count*PAGE_SIZE);
+			paging_map_user_range(t->mm,(uint64_t) track->block,track->vaddr, track->count,track->pg_opts);
+
+			c_mem = c_mem->next;
+	}
+	t->mem_list = head;
+
+
+	pid_ret = pid;
+	pid += 1;
+	kprintf("Returning %d\n",pid_ret);
+	kprintf("%x\n",curr->s_rsp);
+	return pid_ret;
+
+}
 
 int user_process_add(void (*fptr)(), char *name)
 {
 	struct ktask *t;
 	t = &ktasks[find_free_task()];
 	int pid_ret;
+	clear_fd_table(t);
 
 	//kprintf("Allocating Stack\n");
 	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
@@ -120,6 +239,8 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct pg_tbl *tbl,stru
 	t = &ktasks[find_free_task()];
 	int pid_ret;
 
+	clear_fd_table(t);
+
 	//kprintf("Allocating Stack\n");
 	t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
 	t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(32));
@@ -127,7 +248,8 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct pg_tbl *tbl,stru
 	paging_map_user_range(t->mm,(uint64_t) KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR,USER_STACK_SIZE,USER_PAGE);
 	t->state = TASK_NEW;
 	t->start_addr =  (uint64_t *) startaddr;
-	t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE);
+	t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) -16;
+	t->s_rbp = t->user_start_stack;
 	t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (4096*USER_STACK_SIZE) -16);
 	t->pid = pid;
 	t->type = USER_PROCESS;
@@ -162,6 +284,7 @@ bool sched_process_kill(int pid)
 {
 	int i;
 	int j;
+    asm("cli");
 	kprintf("Killing %d\n", pid);
 	for (i = 0; i < SCHED_MAX_TASKS; i++)
 	{
@@ -189,16 +312,18 @@ bool sched_process_kill(int pid)
 			t->pid = -1;
 			t->mem_list = NULL;
 
+            asm("sti");
 			return true;
 		}
 	}
+    asm("sti");
 	return false;
 }
 
 void sched_stats()
 {
 	uint32_t i;
-
+	uint32_t j;
 	for (i = 0; i < SCHED_MAX_TASKS; i++)
 	{
 		if (ktasks[i].pid != -1)
@@ -212,11 +337,13 @@ void sched_stats()
 			kprintf("  context switches:0x%x\n", ktasks[i].context_switches);
 			kprintf("  Process Type:    %s\n", process_types_str[ktasks[i].type]);
 			kprintf("  Sleep state:     %s\n", str_timer_states[ktasks[i].timer.state]);
+			kprintf("  File Table\n");
+			for (j = 0; j < MAX_TASK_OPEN_FILES; j++) {
+				kprintf("    %d -> %x\n",j,ktasks[i].open_fds[j]);
+			}
 		}
 	}
 }
-
-
 
 static int find_next_task(int current_task)
 {
@@ -269,6 +396,7 @@ void schedule()
 					 : "=g"(ktasks[prev_task].s_rsp));
 		asm volatile("movq %%rbp ,%0"
 					 : "=g"(ktasks[prev_task].s_rbp));
+		
 	}
 
 	while (success == false)
@@ -304,6 +432,7 @@ void schedule()
 			{
 				user_switch_paging(ktasks[i].mm);
 			}
+			//kprintf("%d %x\n",i,ktasks[i].s_rsp);
 			resume_p(ktasks[i].s_rsp, ktasks[i].s_rbp);
 			success = true;
 		}

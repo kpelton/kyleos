@@ -238,6 +238,12 @@ void user_switch_paging(struct pg_tbl *pg)
         else
             kernel_pml4[i] = 0;
     }
+    //Flush entire TLB on context switch... Not the best
+        uint64_t address = (uint64_t)kernel_pml4 - addr_start;
+    asm volatile("movq %0 ,%%cr3; \
+            "
+                 :
+                 : "r"(address));
 /*
     //    kprintf("pml4 0x%x %x\n",address,pg->pml4);
     asm volatile("movq %0 ,%%cr3; \

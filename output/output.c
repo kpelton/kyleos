@@ -87,6 +87,37 @@ int kstrcmp(char *dest, const char *src) {
     return 0;
 }
 
+int kstrstr(char *base, char *delim)
+{
+    char *baseptr = base;
+    int kstart = 0;
+    if (!base || !delim || !*base || !*delim)
+        return -1;
+    int val = 0;
+    while (*baseptr)
+    {
+        if (*baseptr && *delim && *baseptr == *delim)
+        {
+            val = kstart;
+        }
+        while (*baseptr && *delim && *baseptr == *delim)
+        {
+
+            baseptr++;
+            delim++;
+            if (!*delim)
+            {
+                return val;
+            }
+            val++;
+        }
+        baseptr++;
+        kstart++;
+    }
+    return -1;
+}
+
+
 char * itoa( unsigned long value, char * str, int base ) {
     char * rc;
     char * ptr;

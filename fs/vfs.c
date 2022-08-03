@@ -84,7 +84,6 @@ struct dnode *vfs_read_root_dir(char *path)
     int idev;
     struct vfs_device *vdevice;
 
-
     dev[i] = '0';
     if (*ptr != '/')
     {
@@ -106,20 +105,22 @@ error:
 static struct file *vfs_get_open_file(struct inode *i_node)
 {
     int i = 0;
-    //Look for file if it is already opened
-    for(i=0; i<VFS_MAX_OPEN; i++) {
-        if (open_files[i].refcount > 0 \
-            && open_files[i].i_node.i_ino == i_node->i_ino \
-            && open_files[i].dev == i_node->dev) {
+    // Look for file if it is already opened
+    for (i = 0; i < VFS_MAX_OPEN; i++)
+    {
+        if (open_files[i].refcount > 0 && open_files[i].i_node.i_ino == i_node->i_ino && open_files[i].dev == i_node->dev)
+        {
             open_files[i].refcount++;
             return &open_files[i];
         }
     }
-    //open it back up;
-    for(i=0; i<VFS_MAX_OPEN; i++) {
-        if (open_files[i].refcount == 0) {
+    // open it back up;
+    for (i = 0; i < VFS_MAX_OPEN; i++)
+    {
+        if (open_files[i].refcount == 0)
+        {
             open_files[i].dev = i_node->dev;
-            vfs_copy_inode(i_node,&open_files[i].i_node);
+            vfs_copy_inode(i_node, &open_files[i].i_node);
             open_files[i].refcount++;
             return &open_files[i];
         }
@@ -135,7 +136,7 @@ struct file *vfs_open_file(struct inode *i_node)
     if (i_node)
     {
         retfile = vfs_get_open_file(i_node);
-        //TODO pos should be per process file descriptor
+        // TODO pos should be per process file descriptor
         retfile->pos = 0;
     }
     return retfile;
@@ -147,35 +148,86 @@ void vfs_close_file(struct file *ofile)
         ofile->refcount--;
 }
 
-void vfs_copy_inode(struct inode *src,struct inode *dst)
+
+struct inode * vfs_walk_path(char *path, struct dnode *pwd,enum inode_type type)
 {
-    kstrncpy(dst->i_name,src->i_name,VFS_MAX_FNAME);
+    int end = 0;
+    char *blah = path;
+    char buffer[1024];
+    struct inode_list *ptr;
+    struct dnode *dptr = pwd;
+    //if (*blah == '/')
+    //    return;
+
+    while (end != -1)
+    {
+        end = kstrstr(blah, "/");
+        kprintf("%d %s\n", end, blah);
+        if (end >= 0)
+        {
+            kstrncpy(buffer, blah, end);
+            buffer[end] = '\0';
+            blah += end + 1;
+        }
+        //printf("%s\n",blah);
+        ptr = dptr->head;
+        while (ptr)
+        {
+            //kprintf("%s %s\n",ptr->current->i_name,buffer);
+
+            if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
+            {
+                if (dptr != pwd)
+                    vfs_free_dnode(dptr);
+                dptr = vfs_read_inode_dir(ptr->current);
+                break;
+            }
+            ptr = ptr->next;
+        }
+    }
+
+    ptr = dptr->head;
+    while (ptr)
+    {
+        //kprintf("%s\n",ptr->current->i_name);
+        if (kstrcmp(ptr->current->i_name, blah) == 0 && ptr->current->i_type == (int)type) {
+
+            vfs_free_dnode(dptr);
+            return ptr->current;
+        }
+        ptr = ptr->next;
+    }
+    vfs_free_dnode(dptr);
+    return NULL;
+}
+
+void vfs_copy_inode(struct inode *src, struct inode *dst)
+{
+    kstrncpy(dst->i_name, src->i_name, VFS_MAX_FNAME);
     dst->file_size = src->file_size;
     dst->i_ino = src->i_ino;
     dst->dev = src->dev;
     dst->i_type = src->i_type;
 }
 
-int vfs_read_file(struct file * rfile,void *buf,int count)
+int vfs_read_file(struct file *rfile, void *buf, int count)
 {
     int idev;
     idev = rfile->dev->devicenum;
-    return vfs_devices[idev].ops->read_file(rfile,buf,count);
-   
+    return vfs_devices[idev].ops->read_file(rfile, buf, count);
 }
 
-int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset    )
+int vfs_read_file_offset(struct file *rfile, void *buf, int count, uint32_t offset)
 {
     int idev;
     idev = rfile->dev->devicenum;
 
-    //set offset of file -- No check if we are going over file
-    rfile->pos=offset;
-    return vfs_devices[idev].ops->read_file(rfile,buf,count);
+    // set offset of file -- No check if we are going over file
+    rfile->pos = offset;
+    return vfs_devices[idev].ops->read_file(rfile, buf, count);
 }
 
-
-int vfs_create_dir(struct inode *parent, char * name)
+int vfs_create_dir(struct inode *parent, char *name)
 {
-    return vfs_devices[parent->dev->devicenum].ops->create_dir(parent,name);  
+    return vfs_devices[parent->dev->devicenum].ops->create_dir(parent, name);
 }

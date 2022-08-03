@@ -30,6 +30,7 @@ int user_process_close_fd(struct ktask *t,int fd)
 
 int user_process_read_fd(struct ktask *t,int fd, void *buf, int count)
 {
+	kprintf("buffer loc = %x\n",buf);
 	if(fd >= 0 && fd < MAX_TASK_OPEN_FILES && t->open_fds[fd] != NULL){
 		return vfs_read_file(t->open_fds[fd],buf,count);
 	}

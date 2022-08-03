@@ -4,6 +4,7 @@ typedef __builtin_va_list va_list;
 #define va_end(v)   __builtin_va_end(v)
 #define va_arg(v, T)    __builtin_va_arg(v, T)
 #define va_copy(d, s)   __builtin_va_copy(d, s)
+static void printf(char *format, ...);
 
 static int sleep(unsigned int msec) {
      long val = 0;
@@ -32,6 +33,14 @@ static int close(int fd) {
 static int read(int fd,void *buf, int count) {
     long val = 0;
     asm volatile("mov $4, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
+    return val;
+}
+
+static int fork() {
+    long val = 0;
+    asm volatile("mov $5, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
+    printf("user fork returned %d\n",val);
+
     return val;
 }
 
@@ -115,6 +124,7 @@ void read_test()
     int fd = 0;
     char buffer[1025];
     fd = open("/bible.txt",123);
+    printf("open returned %d\n",fd);
     if (fd >= 0 ) {
         retval = read(fd,buffer,1024);
         printf("read returned %d\n",retval);
@@ -137,7 +147,7 @@ void read_fullpath_test()
     if (fd >= 0 ) {
         retval = read(fd,buffer,1024);
         printf("read returned %d\n",retval);
-        buffer[1024]= '\0';
+        buffer[retval]= '\0';
         printf(buffer);
         retval = close(fd);
         printf("close returned %d\n",retval);
@@ -151,7 +161,7 @@ void test1() {
     int retval = 0;
 
     for(;;){
-        retval = sleep(100);
+        retval = sleep(2000);
         
         printf("sleep returned %d\n",retval);
         read_test();
@@ -165,13 +175,30 @@ void test1() {
 }
 }
 
+void forktest() {
+    open("/bible.txt",123);
+    printf("starting fork!\n");
+    int pid = fork();
+    printf("Fork returned %d\n",pid);
+    if(pid != 0) 
+        printf("I'm the parent\n");
+    else{
+        sleep(2000);
+        printf("I'm the child\n");
+        test1();
+    }
+    read_fullpath_test();
+   // }
+}
+
 int _start() 
 {
-
-    for(;;){
-    read_fullpath_test();
-    read_test();
-    sleep(500);
-    }
+        sleep(500);
+        //forktest();
+        read_test();
+        read_fullpath_test();
+        forktest();
+        printf("Done\n");
+        for(;;);
     
 }

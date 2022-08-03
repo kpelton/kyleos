@@ -11,7 +11,10 @@ export ASFLAGS
 SUBDIRS = $(shell ls -d */)
 OBJ_FILES = $(shell find . -type f -name '*.o')
 
-all: kernel.img
+all: kernel.img user
+
+install: user
+	$(MAKE) -C user install
 
 asm: asm/asm.o asm/asm_calls.o
 	$(MAKE) -C asm
@@ -22,7 +25,7 @@ block: block/ata.o
 fs: fs/fat.o fs/vfs.o
 	$(MAKE) -C block
 
-init: init/kernel.o init/loader.o init/tables.o init/dshell.o
+init: init/kernel.o init/loader.o init/tables.o init/dshell.o init/syscall.o
 	$(MAKE) -C init
 
 irq: irq/irq.o
@@ -31,7 +34,7 @@ irq: irq/irq.o
 mm: mm/mm.o mm/paging.o mm/pmem.o
 	$(MAKE) -C mm
 
-sched: sched/sched.o sched/exec.o
+sched: sched/sched.o sched/exec.o sched/ps.o
 	$(MAKE) -C sched
 
 output: output/output.o output/vga.o output/uart.o output/keyboard.o output/input.o
@@ -40,6 +43,9 @@ output: output/output.o output/vga.o output/uart.o output/keyboard.o output/inpu
 timer: timer/pit.o timer/timer.o timer/rtc.o
 	$(MAKE) -C timer
 
+user:kernel.img
+	$(MAKE) -C user
+    
 clean: 
 	for dir in $(SUBDIRS) ; do \
 		make -C  $$dir clean ; \

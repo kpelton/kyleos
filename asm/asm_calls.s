@@ -7,6 +7,10 @@
 [extern ksleepm]
 [extern timer_irq]
 [extern rtc_irq]
+[extern NR_syscall]
+[extern syscall_tbl]
+[extern sched_save_context]
+[extern syscall]
 [global gdt_flush]
 [global load_page_directory]
 [global setup_long_mode]
@@ -58,19 +62,139 @@ test_user_function5:
     jmp test_user_function5
     ret
 
-
+save_context_asm:
+    mov rsi,rsp
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    pushfq
+    ;; copy over rsp/rip to argumet list
+    mov rdi, r14,
+    call sched_save_context
+    popfq
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    ret
+fork_int:
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    pushfq
+    ;;load syscall addr and call it
+    mov r8, syscall_tbl
+    lea r8, [r8+rax*8]
+    ;save $rip
+    lea r14, [$+16]
+    call save_context_asm
+    call [r8]
+    mov bx, (4 * 8)
+	mov ds, bx
+	mov es, bx 
+	mov fs, bx 
+    popfq
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    sti
+    iretq
 
 [global usermode_int] ;
 usermode_int:
-    mov rdi,100
-    call ksleepm
-    mov rdi,HelloString
-    call kprintf
-    ;jmp panic_handler
-    mov ax, (4 * 8)
-	mov ds, ax
-	mov es, ax 
-	mov fs, ax 
+    ;;rax is return val from syscall
+    cli
+    cmp rax,5
+    je fork_int
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    pushfq
+    ;;load syscall addr and call it
+    push rsi
+    mov r8, syscall_tbl
+    lea r8, [r8+rax*8]
+    ;save $rip
+    lea r14, [$+16]
+
+    call save_context_asm
+    pop rsi
+    call [r8]
+    mov bx, (4 * 8)
+	mov ds, bx
+	mov es, bx 
+	mov fs, bx 
+    popfq
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
     sti
     iretq
 

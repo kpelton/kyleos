@@ -7,6 +7,7 @@
 #include <mm/mm.h>
 #include <mm/pmem.h>
 #include <sched/sched.h>
+
 //Add elf file to runqueue given an inode. Will return false if something bad happened. 
 bool exec_from_inode(struct inode *ifile)
 {
@@ -80,7 +81,10 @@ bool exec_from_inode(struct inode *ifile)
                 kprintf("Setting phdr.vaddr:%x %d  RO\n",phdr.vaddr,i);
                 page_ops = USER_PAGE_RO;
             }
+            track->pg_opts = page_ops;
+            track->vaddr = phdr.vaddr;
             paging_map_user_range(new_pg_tbl,(uint64_t) block,phdr.vaddr,size,page_ops);
+
             kprintf("  Read in %d\n", bytes);
 
         }
