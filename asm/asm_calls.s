@@ -119,9 +119,10 @@ fork_int:
     mov r8, syscall_tbl
     lea r8, [r8+rax*8]
     ;save $rip
-    lea r14, [$+16]
+    mov r14, .forkret
     call save_context_asm
     call [r8]
+.forkret:
     mov bx, (4 * 8)
 	mov ds, bx
 	mov es, bx 
@@ -171,8 +172,7 @@ usermode_int:
     mov r8, syscall_tbl
     lea r8, [r8+rax*8]
     ;save $rip
-    lea r14, [$+16]
-
+    lea r14, [$+7]
     call save_context_asm
     pop rsi
     call [r8]
