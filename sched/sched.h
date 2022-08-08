@@ -91,31 +91,4 @@ struct reg_state
     uint64_t user_ss;
 } __attribute__((packed));
 
-/*
-struct reg_state
-{
-    uint64_t user_ss;
-    uint64_t user_rsp;
-    uint64_t user_flags;
-    uint64_t user_cs;
-    uint64_t user_ret_addr;
-    uint64_t flags;
-    uint64_t r15;
-    uint64_t r14;
-    uint64_t r13;
-    uint64_t r12;
-    uint64_t r11;
-    uint64_t r10;
-    uint64_t r9;
-    uint64_t r8;
-    uint64_t rbp;
-    uint64_t rsi;
-    uint64_t rdx;
-    uint64_t rcx;
-    uint64_t rbx;
-    uint64_t rax;
-} __atribute__ ((packed));
-*/
-
-
 #endif
