@@ -161,7 +161,7 @@ void test1() {
     int retval = 0;
 
     for(;;){
-//        retval = sleep(2000);
+        retval = sleep(2000);
         
         printf("sleep returned %d\n",retval);
         read_test();
@@ -183,8 +183,8 @@ void forktest() {
     if(pid != 0) 
         printf("I'm the parent\n");
     else{
-//        sleep(2000);
         printf("I'm the child\n");
+        sleep(2000);
         test1();
     }
     read_fullpath_test();
