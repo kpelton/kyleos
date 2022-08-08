@@ -114,7 +114,6 @@ int user_process_fork()
     struct p_memblock *track = NULL;
     struct p_memblock *head = NULL;
     t = &ktasks[find_free_task()];
-    int pid_ret;
     clear_fd_table(t);
 
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
@@ -167,6 +166,7 @@ int user_process_fork()
     *(--t->s_rsp) = rptr->flags;
     //Set return addr
     *(t->s_rsp - 1) = (uint64_t) curr->save_rip;
+    //Set parent return value 
     rptr->rax = pid;
 
     for (int j; j < MAX_TASK_OPEN_FILES; j++)
@@ -199,9 +199,9 @@ int user_process_fork()
     }
     t->mem_list = head;
 
-    pid_ret = pid;
     pid += 1;
-    return pid_ret;
+    //Return will not apply since eax will be popped off stack
+    return -1;
 }
 
 int user_process_add(void (*fptr)(), char *name)

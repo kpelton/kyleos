@@ -7,31 +7,39 @@ typedef __builtin_va_list va_list;
 static void printf(char *format, ...);
 
 static int sleep(unsigned int msec) {
-     long val = 0;
+    long val = 0;
+    (void)msec;
     asm volatile("mov $0, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
     return val;
 
 }
 static int print(char *msg) {
     long val = 0;
+    (void)msg;
     asm volatile("mov $1, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
     return val;
 }
 
 static int open(char *path, int flags) {
     long val = 0;
+    (void)path;
+    (void)flags;
     asm volatile("mov $2, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
     return val;
 }
 
 static int close(int fd) {
     long val = 0;
+    (void)fd;
     asm volatile("mov $3, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
     return val;
 }
 
 static int read(int fd,void *buf, int count) {
     long val = 0;
+    (void)fd;
+    (void)count;
+    (void)buf;
     asm volatile("mov $4, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
     return val;
 }
