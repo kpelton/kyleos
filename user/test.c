@@ -131,7 +131,8 @@ void read_test()
     int retval = 0;
     int fd = 0;
     char buffer[1025];
-    fd = open("/bible.txt",123);
+    //1 is rdonly
+    fd = open("/bible.txt", 1);
     printf("open returned %d\n",fd);
     if (fd >= 0 ) {
         retval = read(fd,buffer,1024);
@@ -151,7 +152,7 @@ void read_fullpath_test()
     int retval = 0;
     int fd = 0;
     char buffer[1025];
-    fd = open("/cs/cs200/a03/a03.c",123);
+    fd = open("/cs/cs200/a03/a03.c",1);
     if (fd >= 0 ) {
         retval = read(fd,buffer,1024);
         printf("read returned %d\n",retval);
@@ -174,7 +175,7 @@ void test1() {
         printf("sleep returned %d\n",retval);
         read_test();
 
-        retval = open("/bible.txt",123);
+        retval = open("/bible.txt",1);
         printf("open returned %d\n",retval);
         retval = close(retval);
         printf("close returned %d\n",retval);
@@ -183,27 +184,79 @@ void test1() {
 }
 }
 
+void testopendir() {
+    int retval = 0;
+
+        retval = sleep(2000);
+        
+        printf("sleep returned %d\n",retval);
+        retval = open("/cs",1);
+        printf("open returned %d\n",retval);
+//        retval = close(retval);
+ //       printf("close returned %d\n",retval);
+  //      retval = close(-1);
+  //      printf("invalid close check %d\n",retval);
+}
+
+
 void forktest() {
-    open("/bible.txt",123);
+    int bytes;
+    char buffer[20000];
+    int fd = open("/bible.txt",1);
+    sleep(5000);
+    printf("open returned %d\n",fd);
+
     printf("starting fork!\n");
     int pid = fork();
     printf("Fork returned %d\n",pid);
-    if(pid != 0) 
+    if(pid != 0) {        
         printf("I'm the parent\n");
+        printf("parent reads in 100 bytes\n");
+        bytes = read(fd,buffer,100);
+        buffer[bytes] ='\0';
+        printf("parent: %s\n",buffer);
+        printf("Parent reads in 100 bytes\n");
+        bytes = read(fd,buffer,100);
+        buffer[bytes] ='\0';
+        printf("parent: %s\n",buffer);
+        close(fd);
+        printf("I'm the parent\n");
+
+    }
     else{
         printf("I'm the child\n");
-        sleep(2000);
-        test1();
+        printf("child reads in 100 bytes\n");
+        bytes = read(fd,buffer,100);
+        buffer[bytes] ='\0';
+        printf("%s\n",buffer);
+        printf("child reads in 100 bytes\n");
+        bytes = read(fd,buffer,100);
+        buffer[bytes] ='\0';
+        printf("%s\n",buffer);
+        
+        bytes = 0;
+        sleep(10000);
+        do {
+            bytes = read(fd,buffer,10000);
+            //printf("read returned %d\n",bytes);
+            if(bytes > 0) {
+            buffer[bytes] ='\0';
+            printf("%s",buffer);
+            }
+        }
+        while(bytes>0);
+
     }
-    read_fullpath_test();
    // }
 }
 
 int _start() 
 {
         //forktest();
-        read_test();
-        read_fullpath_test();
+//        read_test();
+//        read_fullpath_test();
+//        forktest();
+        //testopendir();    
         forktest();
         printf("Done\n");
         for(;;);

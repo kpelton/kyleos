@@ -374,7 +374,7 @@ for(;;) {
             if(itmp != NULL) {
                 asm("cli");
                 //vfs_cat_inode_file(itmp);
-                rfile = vfs_open_file(itmp);
+                rfile = vfs_open_file(itmp,O_RDONLY);
                 rbuffer = kmalloc(itmp->file_size+1);
                 bytes = vfs_read_file(rfile,rbuffer,itmp->file_size);
                 asm("sti");

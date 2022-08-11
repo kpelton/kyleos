@@ -21,7 +21,6 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count);
 #define FAT_END_OF_CHAIN 0x0FFFFFF8
 #define FAT_LONG_FILENAME 0xf
 
-
 // how many bytes per long file name record
 #define FAT_LFNAME_RECORD_SIZE 13
 #define FAT_DIR 0x10
@@ -35,20 +34,19 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count);
 #define FAT_LFNAME_LAST_ENTRY 0x40
 #define FAT_MAX_STD_NAME 8
 
-
 //#define DEBUG
 
 static void read_fat_to_mem(struct fatFS *fs)
 {
     kprintf("reading in 0x%x sectors\n", fs->fat_size);
     fs->fat_ptr = kmalloc(ATA_SECTOR_SIZE * fs->fat_size);
-    uint32_t *FAT_table = kmalloc(ATA_SECTOR_SIZE/sizeof(uint32_t));
+    uint32_t *FAT_table = kmalloc(ATA_SECTOR_SIZE / sizeof(uint32_t));
     int k = 0;
 
     for (uint32_t i = 0; i < fs->fat_size; i++)
     {
         read_sec(fs->first_fat_sector + i, FAT_table);
-        for (uint32_t j = 0; j < ATA_SECTOR_SIZE/sizeof(uint32_t); j++)
+        for (uint32_t j = 0; j < ATA_SECTOR_SIZE / sizeof(uint32_t); j++)
         {
             fs->fat_ptr[k] = FAT_table[j] & 0x0fffffff;
             k++;
@@ -152,8 +150,8 @@ static uint32_t add_new_link_to_chain(uint32_t cluster_num, struct fatFS *fs)
 
 int fat_create_dir(struct inode *parent, char *name)
 {
-    char truncated_name[FAT_MAX_FNAME+1];
-    kstrncpy(truncated_name,name,FAT_MAX_FNAME+1);
+    char truncated_name[FAT_MAX_FNAME + 1];
+    kstrncpy(truncated_name, name, FAT_MAX_FNAME + 1);
     write_directory(parent, truncated_name);
     return 1;
 }
@@ -186,7 +184,7 @@ struct dnode *fat_read_root_dir(struct vfs_device *dev)
 struct dnode *read_inode_dir(struct inode *i_node)
 {
     struct dnode *dir;
-    //printf("inode_dir_alloc\n");
+    // printf("inode_dir_alloc\n");
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     dir->root_inode->i_ino = i_node->i_ino;
@@ -243,20 +241,33 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count)
     uint32_t j = 0;
     uint32_t i = 0;
     uint64_t total_read = 0;
-    
+    // Need to cache which cluster we are on for next call
     while (cluster < FAT_END_OF_CHAIN && bytes_read < count)
     {
-        read_cluster((cluster - 2) * sectors_per_cluster + first_data_sector, sectors_per_cluster, cluster_dest);
-
-        cluster = rfile->dev->finfo.fat->fat_ptr[cluster];
         j = 0;
+        //optimization to skip reading data cluster if we are below file pos
+        if (total_read / (sectors_per_cluster * ATA_SECTOR_SIZE) < rfile->pos / (sectors_per_cluster * ATA_SECTOR_SIZE))
+        {
+            total_read += sectors_per_cluster * ATA_SECTOR_SIZE;
+            //kprintf("%d\n",total_read);
+            //read next cluster
+            cluster = rfile->dev->finfo.fat->fat_ptr[cluster];
+
+            continue;
+        }
+        else
+        {
+            read_cluster((cluster - 2) * sectors_per_cluster + first_data_sector, sectors_per_cluster, cluster_dest);
+            cluster = rfile->dev->finfo.fat->fat_ptr[cluster];
+        }
+
         while (j < sectors_per_cluster * ATA_SECTOR_SIZE && bytes_read < rfile->i_node.file_size && bytes_read < count)
         {
             if (total_read >= rfile->pos)
             {
                 bytes_read++;
                 buffer[i] = cluster_dest[j];
-                //kprintf("%d, %d %d\n",i,j, rfile->pos);
+                // kprintf("%d, %d %d\n",i,j, rfile->pos);
                 i++;
             }
             j++;
@@ -265,7 +276,7 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count)
     }
     rfile->pos += bytes_read;
     kfree(cluster_dest);
-    //kprintf("read inode total bytes read %d\n",bytes_read);
+    // kprintf("read inode total bytes read %d\n",bytes_read);
     return bytes_read;
 }
 
@@ -283,11 +294,11 @@ static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t firs
     kfree(cluster_dest);
 }
 
-static int fat_read_lfname_entry(char *dest, char *src, uint64_t len,uint64_t *dest_offset)
+static int fat_read_lfname_entry(char *dest, char *src, uint64_t len, uint64_t *dest_offset)
 {
     uint64_t j = 0;
-    for (j = 0; j < len; (*dest_offset)++, j+=2)
-        dest[*dest_offset] = src[j];  
+    for (j = 0; j < len; (*dest_offset)++, j += 2)
+        dest[*dest_offset] = src[j];
     return 1;
 }
 
@@ -295,16 +306,16 @@ static void fat_read_lfilename(char longfname[], uint8_t *dir_ptr)
 {
     uint64_t i = 0;
     // Calculate where in char array this long file name goes
-    struct fat_long_fmt *fptr = (struct fat_long_fmt *) dir_ptr;
+    struct fat_long_fmt *fptr = (struct fat_long_fmt *)dir_ptr;
 
     i = (FAT_LFNAME_RECORD_SIZE * ((fptr->order & FAT_MAX_LFNAME_RECORDS) - 1));
 
-    fat_read_lfname_entry(longfname,fptr->first_entry,sizeof(fptr->first_entry), &i);
-    fat_read_lfname_entry(longfname,fptr->second_entry,sizeof(fptr->second_entry), &i);
-    fat_read_lfname_entry(longfname,fptr->third_entry,sizeof(fptr->third_entry), &i);
+    fat_read_lfname_entry(longfname, fptr->first_entry, sizeof(fptr->first_entry), &i);
+    fat_read_lfname_entry(longfname, fptr->second_entry, sizeof(fptr->second_entry), &i);
+    fat_read_lfname_entry(longfname, fptr->third_entry, sizeof(fptr->third_entry), &i);
 }
 
-static int fat_write_lfname_entry(char *dest, char *src, uint64_t len, uint32_t *bytes_read,uint64_t *src_offset)
+static int fat_write_lfname_entry(char *dest, char *src, uint64_t len, uint32_t *bytes_read, uint64_t *src_offset)
 {
     uint64_t i = 0;
     for (i = 0; i < len; i += 2, (*src_offset)++)
@@ -322,14 +333,15 @@ static uint32_t fat_write_lfilename(char longfname[], uint8_t *dir_ptr, uint32_t
     uint64_t j = 0;
     uint32_t bytes_read = 0;
     memzero8(dir_ptr, FAT_DIR_RECORD_SIZE);
-    struct fat_long_fmt *fptr = (struct fat_long_fmt *) dir_ptr;
+    struct fat_long_fmt *fptr = (struct fat_long_fmt *)dir_ptr;
 
     fptr->order = fat_lfname_record_num & FAT_MAX_LFNAME_RECORDS;
     fptr->attribute = FAT_LONG_FILENAME;
 
-    if (! fat_write_lfname_entry(fptr->first_entry,longfname,sizeof(fptr->first_entry),&bytes_read, &j) || 
-        ! fat_write_lfname_entry(fptr->second_entry,longfname,sizeof(fptr->second_entry),&bytes_read, &j) ||
-        ! fat_write_lfname_entry(fptr->third_entry,longfname,sizeof(fptr->third_entry),&bytes_read, &j)) {
+    if (!fat_write_lfname_entry(fptr->first_entry, longfname, sizeof(fptr->first_entry), &bytes_read, &j) ||
+        !fat_write_lfname_entry(fptr->second_entry, longfname, sizeof(fptr->second_entry), &bytes_read, &j) ||
+        !fat_write_lfname_entry(fptr->third_entry, longfname, sizeof(fptr->third_entry), &bytes_read, &j))
+    {
         // if we exit early mark it as the final record
         fptr->order |= FAT_LFNAME_LAST_ENTRY;
     }

@@ -168,13 +168,13 @@ usermode_int:
     push r15
     pushfq
     ;;load syscall addr and call it
-    push rsi
+    ;push rsi
     mov r8, syscall_tbl
     lea r8, [r8+rax*8]
     ;save $rip
-    lea r14, [$+7]
-    call save_context_asm
-    pop rsi
+    ;lea r14, [$+7]
+    ;call save_context_asm
+    ;pop rsi
     call [r8]
     mov bx, (4 * 8)
 	mov ds, bx

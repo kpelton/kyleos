@@ -13,7 +13,7 @@ bool exec_from_inode(struct inode *ifile)
 {
     int bytes = 0;
     int i;
-    struct file *rfile = vfs_open_file(ifile);
+    struct file *rfile = vfs_open_file(ifile,O_RDONLY);
     struct elfhdr hdr;
     struct proghdr phdr;
     struct p_memblock *head = NULL;

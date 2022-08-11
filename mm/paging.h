@@ -3,6 +3,7 @@
 #include <include/types.h>
 #define addr_start 0xffffffff80000000
 #define phys_memmap_start 0xffff888000000000
+#define KERN_SPACE_BOUNDRY addr_start
 #define PAGE_PRESENT 1
 #define READ_WRITE 1<<1
 #define SUPERVISOR 1<<2

@@ -40,13 +40,20 @@ struct dnode {
     //children files and folders
     struct inode_list* head;
 };
+//File open flags
+#define O_RDONLY 0x1
+#define O_WRONLY 0x2
+#define O_RDWR   0x4
+#define MAX_FILE_FLAGS (O_RDONLY | O_WRONLY | O_RDWR)
 
 struct file {
     uint32_t refcount;
     struct inode i_node;
     struct vfs_device* dev;
     uint64_t pos;
+    uint32_t flags;
 };
+
 
 struct vfs_ops {
     int (*read)(char* path,union fsinfo);
@@ -69,7 +76,7 @@ void vfs_copy_inode(struct inode *src,struct inode *dst);
 int vfs_read_file(struct file * rfile,void *buf,int count);
 int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset);
 int vfs_create_dir(struct inode* parent, char *name);
-struct file* vfs_open_file(struct inode * i_node);
+struct file* vfs_open_file(struct inode * i_node,uint32_t flags);
 void vfs_close_file(struct file *ofile);
 struct inode * vfs_walk_path(char *path, struct dnode *pwd,enum inode_type type);
 #endif
