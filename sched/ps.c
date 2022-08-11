@@ -48,6 +48,26 @@ int user_process_read_fd(struct ktask *t, int fd, void *buf, int count)
 void user_process_exit(struct ktask *t, int code)
 {
     t->exit_code = code;
-    sched_process_kill(t->pid);
+    sched_process_kill(t->pid,false);
     schedule();
+}
+
+int user_process_wait(struct ktask *t, int pid)
+{
+    struct ktask *child;
+    while(1) {
+
+        child = sched_get_process(pid);
+        if (child == NULL)
+            return -1;
+        if(child->state == TASK_DONE){
+            //TODO: Move this to sched.c
+            //Reap child
+            child->pid = -1;
+            return child->exit_code;
+        }
+        //try again in 100 ms
+        ksleepm(100);
+    }
+    return 0;
 }

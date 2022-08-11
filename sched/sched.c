@@ -42,7 +42,7 @@ static int find_free_task()
     int i = 0;
     int found_task = ktasks[i].pid;
     int trys = 0;
-    while (found_task != -1)
+    while (found_task != -1 && ktasks[i].state != TASK_DONE)
     {
         i = (i + 1) % SCHED_MAX_TASKS;
         found_task = ktasks[i].pid;
@@ -87,17 +87,14 @@ struct ktask *get_current_process()
 {
     return &ktasks[prev_task];
 }
-int forkret()
-{
-    struct ktask *curr = get_current_process();
-    curr->type = USER_PROCESS;
-    user_switch_paging(curr->mm);
-    curr->s_rbp = ktasks[curr->parent].s_rbp;
-    curr->s_rsp = ktasks[curr->parent].s_rsp;
 
-    kprintf("Resuming to 0x%x", curr->s_rsp);
-    switch_to(curr->save_rsp, curr->save_rip);
-    return 0;
+struct ktask *sched_get_process(int pid)
+{
+    for (int i = 0; i < SCHED_MAX_TASKS; i++)
+        if (ktasks[i].pid  == pid)
+            return &ktasks[i];
+
+    return NULL;
 }
 
 void sched_save_context(uint64_t rip, uint64_t rsp)
@@ -257,7 +254,7 @@ static void free_memblock_list(struct p_memblock *head)
     }
 }
 
-bool sched_process_kill(int pid)
+bool sched_process_kill(int pid,bool cleanup)
 {
     int i;
     int j;
@@ -296,7 +293,8 @@ bool sched_process_kill(int pid)
                 }        
 
             t->state = TASK_DONE;
-
+            if(cleanup == true)
+                t->pid = -1;
             t->mem_list = NULL;
 
             asm("sti");
@@ -349,7 +347,7 @@ static int find_next_task(int current_task)
     {
 
         i = (i + 1) % SCHED_MAX_TASKS;
-        if (ktasks[i].pid != -1)
+        if (ktasks[i].pid != -1 && ktasks[i].state != TASK_DONE)
         {
             found_task = i;
         }

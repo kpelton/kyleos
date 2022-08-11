@@ -352,7 +352,7 @@ for(;;) {
             *cptr = '\0';
             pid = atoi(buffer + 5);
             asm("cli");
-            if (sched_process_kill(pid) == false)
+            if (sched_process_kill(pid,true) == false)
                 kprintf("Kill failed\n");
             asm("sti");
         }

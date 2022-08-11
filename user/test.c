@@ -52,11 +52,21 @@ static int fork() {
     return val;
 }
 
+
 static void exit(int code) {
     (void)code;
     long val = 0;
     asm volatile("mov $6, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
     }
+
+static int wait(int pid) {
+    long val = 0;
+    (void)pid;
+    asm volatile("mov $7, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
+    return val;
+}
+
+
 
 static char * itoa( unsigned long value, char * str, int base ) {
     char * rc;
@@ -227,6 +237,7 @@ void forktest() {
         printf("parent: %s\n",buffer);
         close(fd);
         printf("I'm the parent\n");
+        wait(pid);
         exit(0);
 
     }
@@ -257,6 +268,27 @@ void forktest() {
    // }
 }
 
+void waittest() {
+    int pid = fork();
+    int ret;
+    printf("Fork returned %d\n",pid);
+    if(pid != 0) {        
+        printf("I'm the parent\n");
+        printf("waiting on child");
+        ret = wait(pid);
+         printf("child returned %d\n",ret);
+        exit(0);
+
+    }
+    else{
+        printf("I'm the child\n");
+        sleep(10000);
+        printf("Child Returning 1\n");
+        exit(12345);
+    }
+}
+
+
 int _start() 
 {
         //forktest();
@@ -264,10 +296,10 @@ int _start()
 //        read_fullpath_test();
        // forktest();
         //testopendir();
-        printf("Test\n");
-        sleep(5000);
-        //forktest();
-        printf("Done\n");
+        //printf("Test\n");
+         waittest();
+        sleep(100000);
+        //printf("Done\n");
         exit(0);
     
 }
