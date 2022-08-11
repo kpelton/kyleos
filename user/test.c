@@ -52,6 +52,12 @@ static int fork() {
     return val;
 }
 
+static void exit(int code) {
+    (void)code;
+    long val = 0;
+    asm volatile("mov $6, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
+    }
+
 static char * itoa( unsigned long value, char * str, int base ) {
     char * rc;
     char * ptr;
@@ -221,6 +227,7 @@ void forktest() {
         printf("parent: %s\n",buffer);
         close(fd);
         printf("I'm the parent\n");
+        exit(0);
 
     }
     else{
@@ -245,7 +252,7 @@ void forktest() {
             }
         }
         while(bytes>0);
-
+        exit(0);
     }
    // }
 }
@@ -255,10 +262,12 @@ int _start()
         //forktest();
 //        read_test();
 //        read_fullpath_test();
-//        forktest();
-        //testopendir();    
-        forktest();
+       // forktest();
+        //testopendir();
+        printf("Test\n");
+        sleep(5000);
+        //forktest();
         printf("Done\n");
-        for(;;);
+        exit(0);
     
 }

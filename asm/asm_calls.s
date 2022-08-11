@@ -168,13 +168,13 @@ usermode_int:
     push r15
     pushfq
     ;;load syscall addr and call it
-    ;push rsi
+    push rsi
     mov r8, syscall_tbl
     lea r8, [r8+rax*8]
     ;save $rip
-    ;lea r14, [$+7]
-    ;call save_context_asm
-    ;pop rsi
+    lea r14, [$+7]
+    call save_context_asm
+    pop rsi
     call [r8]
     mov bx, (4 * 8)
 	mov ds, bx
@@ -246,6 +246,11 @@ kbd_handler:
     push r14
     push r15
     pushfq
+    push rsi
+    ;save $rip
+    lea r14, [$+7]
+    call save_context_asm
+    pop rsi
     mov ax, (2 * 8)
 	mov ds, ax
 	mov es, ax 
@@ -288,6 +293,11 @@ timer_handler:
     push r14
     push r15
     pushfq
+    push rsi
+    ;save $rip
+    lea r14, [$+7]
+    call save_context_asm
+    pop rsi
     mov ax, (2 * 8)
 	mov ds, ax
 	mov es, ax 
@@ -330,6 +340,11 @@ serial_handler:
     push r14
     push r15
     pushfq
+    push rsi
+    ;save $rip
+    lea r14, [$+7]
+    call save_context_asm
+    pop rsi
     mov ax, (2 * 8)
 	mov ds, ax
 	mov es, ax 
@@ -371,6 +386,11 @@ rtc_handler:
     push r14
     push r15
     pushfq
+    push rsi
+    ;save $rip
+    lea r14, [$+7]
+    call save_context_asm
+    pop rsi
     mov ax, (2 * 8)
     mov ds, ax
     mov es, ax

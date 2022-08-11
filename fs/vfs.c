@@ -115,8 +115,6 @@ static struct file *vfs_get_open_file(struct inode *i_node)
             open_files[i].dev = i_node->dev;
             vfs_copy_inode(i_node, &open_files[i].i_node);
             open_files[i].refcount++;
-            kprintf("asdfasdf%d\n",open_files[i].refcount);
-            kprintf("asdfasdf%x\n",(&open_files[i])->refcount);
             return &(open_files[i]);
         }
     }

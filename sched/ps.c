@@ -16,8 +16,6 @@ int user_process_open_fd(struct ktask *t, struct inode *iptr, uint32_t flags)
         if (t->open_fds[j] == NULL)
         {
             t->open_fds[j] = fptr;
-                                kprintf("         refcount -> %d\n", t->open_fds[j]->refcount);
-
             fd = j;
             return fd;
         }
@@ -42,9 +40,14 @@ int user_process_read_fd(struct ktask *t, int fd, void *buf, int count)
 {
     if (fd >= 0 && fd < MAX_TASK_OPEN_FILES && t->open_fds[fd] != NULL)
     {
-                                        kprintf("         refcount -> %d\n", t->open_fds[fd]->refcount);
-
         return vfs_read_file(t->open_fds[fd], buf, count);
     }
     return -1;
+}
+
+void user_process_exit(struct ktask *t, int code)
+{
+    t->exit_code = code;
+    sched_process_kill(t->pid);
+    schedule();
 }

@@ -17,7 +17,8 @@ static int pid = 0;
 void switch_to(uint64_t *rsp, uint64_t *addr);
 void resume_p(uint64_t *rsp, uint64_t *rbp);
 static const char process_types_str[PROCESS_TYPES_LEN][20] = {"Kernel", "User"};
-static const char task_type_str[TASK_STATE_NUM][20] = {"RUNNING", "READY", "NEW", "BLOCKED", "DONE"};
+const char task_type_str[TASK_STATE_NUM][20] = {"RUNNING", "READY", "NEW", "BLOCKED", "DONE"};
+
 
 void ksleepm(uint32_t ms)
 {
@@ -137,7 +138,7 @@ int user_process_fork()
 
     memcpy8((uint8_t *)KERN_PHYS_TO_PVIRT(KERN_VIRT_TO_PHYS((uint64_t)t->user_stack_alloc)),
             (uint8_t *)KERN_PHYS_TO_PVIRT(KERN_VIRT_TO_PHYS((uint64_t)curr->user_stack_alloc)),
-            USER_STACK_SIZE * 4096);
+            USER_STACK_SIZE * PAGE_SIZE);
 
     t->s_rbp = (uint64_t *)curr->s_rbp;
     t->s_rsp = (uint64_t *)t->start_stack;
@@ -207,38 +208,6 @@ int user_process_fork()
     return -1;
 }
 
-int user_process_add(void (*fptr)(), char *name)
-{
-    struct ktask *t;
-    t = &ktasks[find_free_task()];
-    int pid_ret;
-    clear_fd_table(t);
-
-    // kprintf("Allocating Stack\n");
-    t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
-    t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
-    t->mm = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
-    t->mm->pml4 = (uint64_t *)KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
-    kprintf("sched pml4 %x\n", t->mm->pml4);
-    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS((uint64_t)fptr), 0, 1, USER_PAGE_RO);
-    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
-
-    t->state = TASK_NEW;
-    t->start_addr = (uint64_t *)(((uint64_t)fptr - addr_start) & 0xfff);
-    kprintf("start add 0x%x\n", t->start_addr);
-    t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
-    t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (4096 * USER_STACK_SIZE) - 16);
-    t->pid = pid;
-    t->type = USER_PROCESS;
-    t->timer.state = TIMER_UNUSED;
-    t->mem_list = NULL;
-    kstrcpy(t->name, name);
-    t->context_switches = 0;
-    pid_ret = pid;
-    pid += 1;
-    return pid_ret;
-}
-
 int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, struct p_memblock *head)
 {
     struct ktask *t;
@@ -256,7 +225,7 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
     t->s_rbp = t->user_start_stack;
-    t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (4096 * USER_STACK_SIZE) - 16);
+    t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 16);
     t->pid = pid;
     t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
@@ -297,7 +266,7 @@ bool sched_process_kill(int pid)
     for (i = 0; i < SCHED_MAX_TASKS; i++)
     {
 
-        if (ktasks[i].pid != -1 && ktasks[i].pid == pid)
+        if (ktasks[i].pid != -1 && ktasks[i].pid == pid && ktasks[i].state != TASK_DONE)
         {
 
             struct ktask *t;
@@ -312,6 +281,9 @@ bool sched_process_kill(int pid)
                     pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc + (PAGE_SIZE * j)));
 
                 free_memblock_list(t->mem_list);
+            }else{
+                //Kernel threads do not need to be "reaped"
+                t->pid = -1;
             }
             kfree(t->stack_alloc);
             kprintf("Killed %d\n", t->pid);
@@ -324,7 +296,7 @@ bool sched_process_kill(int pid)
                 }        
 
             t->state = TASK_DONE;
-            t->pid = -1;
+
             t->mem_list = NULL;
 
             asm("sti");

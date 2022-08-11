@@ -443,11 +443,6 @@ for(;;) {
         {
             ksleepm(1000);
         }
-        else if (kstrcmp(buffer, "addproc\n") == 0)
-        {
-            user_process_add(&test_user_function5, "Test userspace3");
-            //asm("cli;hlt");
-        }
         else if (kstrcmp(buffer, "addkproc\n") == 0)
         {
             kthread_add(kthread_test, "kthread");

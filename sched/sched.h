@@ -19,7 +19,6 @@ struct p_memblock {
 
 
 void kthread_add(void (*fptr)(),char * name);
-int user_process_add(void (*fptr)(),char * name);
 void schedule();
 void sched_stats();
 void ksleepm(uint32_t ms);
@@ -47,6 +46,7 @@ enum process_types {
 struct ktask{
     int pid;
     int parent;
+    int exit_code;
     char name[SCHED_MAX_NAME];
     uint8_t state;
     uint8_t type;
