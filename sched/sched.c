@@ -8,11 +8,13 @@
 
 #define USER_STACK_VADDR 0x600000000
 #define USER_STACK_SIZE 32
+#define IDLE_PID 0
 
 static struct ktask ktasks[SCHED_MAX_TASKS];
 static uint32_t next_task = 0;
 static int prev_task = -1;
 static int pid = 0;
+
 
 void switch_to(uint64_t *rsp, uint64_t *addr);
 void resume_p(uint64_t *rsp, uint64_t *rbp);
@@ -450,9 +452,23 @@ void schedule()
         }
 
         int i = next_task;
-
-        next_task = find_next_task(i);
+        bool skip_idle = false;
         update_timers();
+        next_task = find_next_task(i);
+
+        //If we are on the idle PID skip it if there is something else to run
+        if (i == IDLE_PID) {
+            for (int j = IDLE_PID+1; j < SCHED_MAX_TASKS; j++)
+                if(ktasks[j].pid != -1 && (ktasks[j].state == TASK_NEW || ktasks[j].state == TASK_READY)) {
+                    skip_idle = true;
+                    break;
+                }
+            if(skip_idle == true){
+                continue; // go to next task
+            }else{
+                //kprintf("idle\n");
+            }
+        }
 
         prev_task = i;
         if (ktasks[i].state == TASK_NEW && ktasks[i].type == KERNEL_PROCESS)
