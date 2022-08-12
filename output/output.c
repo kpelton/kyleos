@@ -202,7 +202,7 @@ void print_regs(unsigned long exception,unsigned long rip) {
 }
 
 static void puts( char *str) {
-    vga_kprintf(str);
+   // vga_kprintf(str);
     serial_kprintf(str);
 }
 
@@ -210,7 +210,7 @@ static void putc( char c) {
     char buffer[2] = {'\0'};
     buffer[0] = c;
 
-    vga_kprintf(buffer);
+   // vga_kprintf(buffer);
     serial_kprintf(buffer);
 
 }

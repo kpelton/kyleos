@@ -19,7 +19,6 @@ void resume_p(uint64_t *rsp, uint64_t *rbp);
 static const char process_types_str[PROCESS_TYPES_LEN][20] = {"Kernel", "User"};
 const char task_type_str[TASK_STATE_NUM][20] = {"RUNNING", "READY", "NEW", "BLOCKED", "DONE"};
 
-
 void ksleepm(uint32_t ms)
 {
     struct ktask *process = get_current_process();
@@ -80,6 +79,7 @@ void kthread_add(void (*fptr)(), char *name)
     t->mem_list = NULL;
     kstrcpy(t->name, name);
     t->context_switches = 0;
+    t->parent = -1;
     pid += 1;
 }
 
@@ -91,7 +91,7 @@ struct ktask *get_current_process()
 struct ktask *sched_get_process(int pid)
 {
     for (int i = 0; i < SCHED_MAX_TASKS; i++)
-        if (ktasks[i].pid  == pid)
+        if (ktasks[i].pid == pid)
             return &ktasks[i];
 
     return NULL;
@@ -168,7 +168,8 @@ int user_process_fork()
     // Set parent return value
     rptr->rax = pid;
 
-    for (int j; j < MAX_TASK_OPEN_FILES; j++) {
+    for (int j; j < MAX_TASK_OPEN_FILES; j++)
+    {
         t->open_fds[j] = curr->open_fds[j];
         if (t->open_fds[j] != NULL)
             t->open_fds[j]->refcount++;
@@ -204,6 +205,37 @@ int user_process_fork()
     // Return will not apply since eax will be popped off stack
     return -1;
 }
+
+int user_process_replace_exec(struct ktask *t, uint64_t startaddr,char *name,struct pg_tbl *tbl, struct p_memblock *head)
+{
+    int pid = t->pid;
+    int parent = t->parent;
+    sched_process_kill(t->pid,true);
+    clear_fd_table(t);
+    t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
+    t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
+    t->mm = tbl;
+    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
+    t->state = TASK_NEW;
+    t->start_addr = (uint64_t *)startaddr;
+    t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
+    t->s_rbp = t->user_start_stack;
+    t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 16);
+    t->pid = pid;
+    t->parent = parent;
+    t->type = USER_PROCESS;
+    t->timer.state = TIMER_UNUSED;
+    t->mem_list = head;
+    kstrcpy(t->name, name);
+    t->context_switches = 0;
+    kprintf("All done!\n");
+    schedule();
+
+    //will never return
+    return 0;
+}
+
+
 
 int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, struct p_memblock *head)
 {
@@ -254,7 +286,7 @@ static void free_memblock_list(struct p_memblock *head)
     }
 }
 
-bool sched_process_kill(int pid,bool cleanup)
+bool sched_process_kill(int pid, bool cleanup)
 {
     int i;
     int j;
@@ -278,31 +310,44 @@ bool sched_process_kill(int pid,bool cleanup)
                     pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc + (PAGE_SIZE * j)));
 
                 free_memblock_list(t->mem_list);
-            }else{
-                //Kernel threads do not need to be "reaped"
+            }
+            else
+            {
+                // Kernel threads do not need to be "reaped"
                 t->pid = -1;
             }
             kfree(t->stack_alloc);
             kprintf("Killed %d\n", t->pid);
 
-            //Close any opened files
+            // Close any opened files
             for (int j; j < MAX_TASK_OPEN_FILES; j++)
-                if (t->open_fds[j] != NULL) {
+                if (t->open_fds[j] != NULL)
+                {
                     vfs_close_file(t->open_fds[j]);
                     t->open_fds[j] = NULL;
-                }        
+                }
 
             t->state = TASK_DONE;
-            if(cleanup == true)
+            // TODO: have init process handle reaping all pids and update children PIDs
+            if (cleanup == true || t->parent <= 0)
                 t->pid = -1;
             t->mem_list = NULL;
 
-            asm("sti");
-            return true;
+            goto done;
+            // manually
+        }
+        else if (ktasks[i].pid == pid && ktasks[i].state == TASK_DONE)
+        {
+            ktasks[i].pid = -1;
+            goto done;
         }
     }
     asm("sti");
     return false;
+
+done:
+    asm("sti");
+    return true;
 }
 
 void sched_stats()
@@ -314,7 +359,8 @@ void sched_stats()
         if (ktasks[i].pid != -1)
         {
 
-            kprintf("PID %d\n", ktasks[i].pid);
+            kprintf("PID:%d\n", ktasks[i].pid);
+            kprintf("  parent:%d\n", ktasks[i].parent);
             kprintf("  name:%s\n", ktasks[i].name);
             kprintf("  stack:           0x%x\n", ktasks[i].start_stack);
             kprintf("  stack end:       0x%x\n", ktasks[i].start_stack - KTHREAD_STACK_SIZE);
@@ -326,11 +372,11 @@ void sched_stats()
             for (j = 0; j < MAX_TASK_OPEN_FILES; j++)
             {
                 kprintf("    %d -> %x\n", j, ktasks[i].open_fds[j]);
-                if(ktasks[i].open_fds[j] != NULL) {
+                if (ktasks[i].open_fds[j] != NULL)
+                {
 
                     kprintf("         refcount -> %d\n", ktasks[i].open_fds[j]->refcount);
                     kprintf("         flags -> 0x%x\n", ktasks[i].open_fds[j]->flags);
-
                 }
             }
         }
@@ -380,7 +426,7 @@ void schedule()
     asm("cli");
     // kprintf("schedule\n");
     bool success = false;
-    if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_DONE)
+    if (prev_task != -1 && ktasks[prev_task].state == TASK_RUNNING)
     {
         ktasks[prev_task].state = TASK_READY;
         // save old stack
@@ -389,9 +435,15 @@ void schedule()
         asm volatile("movq %%rbp ,%0"
                      : "=g"(ktasks[prev_task].s_rbp));
     }
-
     while (success == false)
     {
+        // only set to ready if someone else has not changed the state
+        if (prev_task != -1 && ktasks[prev_task].state == TASK_RUNNING)
+        {
+            ktasks[prev_task].state = TASK_READY;
+            // save old stack
+        }
+
         int i = next_task;
 
         next_task = find_next_task(i);

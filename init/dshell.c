@@ -399,13 +399,34 @@ for(;;) {
             dptr = vfs_read_inode_dir(pwd);
             itmp = read_path(buffer + 5, dptr,I_FILE);
             if(itmp != NULL) {
-                exec_from_inode(itmp);
+                int pid = exec_from_inode(itmp,false);
+                kprintf("new pid: %d",pid);
+            }else
+            {
+                kprintf("cat failed\n");
+            }
+        }
+        else if (buffer[0] == 'e' && buffer[1] == 'x' && buffer[2] == 'e' && buffer[3] == 'w' && buffer[4] ==  ' ' && buffer[5] != '\n')
+        {
+            cptr = buffer + 5;
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+            }
+            *cptr = '\0';
+            dptr = vfs_read_inode_dir(pwd);
+            itmp = read_path(buffer + 5, dptr,I_FILE);
+            if(itmp != NULL) {
+                int pid = exec_from_inode(itmp,false);
+                if(pid >= 0)
+                    process_wait(pid);
 
             }else
             {
                 kprintf("cat failed\n");
             }
         }
+
         else if (kstrcmp(buffer, "mem\n") == 0)
         {
             mm_print_stats();

@@ -9,7 +9,7 @@
 #include <sched/sched.h>
 
 //Add elf file to runqueue given an inode. Will return false if something bad happened. 
-bool exec_from_inode(struct inode *ifile)
+int exec_from_inode(struct inode *ifile,bool replace)
 {
     int bytes = 0;
     int i;
@@ -19,12 +19,12 @@ bool exec_from_inode(struct inode *ifile)
     struct p_memblock *head = NULL;
     struct p_memblock *track = NULL;
     bytes = vfs_read_file(rfile, &hdr, sizeof(struct elfhdr));
-    bool retval = true;
+    int retval = -1;
     uint32_t size;
     void *block;
     struct pg_tbl *new_pg_tbl = NULL;
     uint64_t page_ops;
-
+    char name[VFS_MAX_FNAME];
 
     if (hdr.magic == ELF_MAGIC)
     {
@@ -88,13 +88,21 @@ bool exec_from_inode(struct inode *ifile)
             kprintf("  Read in %d\n", bytes);
 
         }
-        if (new_pg_tbl != NULL)
-            user_process_add_exec(hdr.entry,ifile->i_name,new_pg_tbl,head);
+        if (new_pg_tbl != NULL){
+
+            if (replace == false)
+                retval = user_process_add_exec(hdr.entry,ifile->i_name,new_pg_tbl,head);
+            else{
+                struct ktask *t = get_current_process();
+                kstrcpy(name,ifile->i_name);
+                vfs_free_inode(ifile);
+                retval = user_process_replace_exec(t,hdr.entry,name,new_pg_tbl,head);
+            }
+        }
     }
     else
     {
         kprintf("Not an ELF executable!\n");
-        retval = false;
     }
     vfs_close_file(rfile);
 

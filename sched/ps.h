@@ -8,5 +8,5 @@ int user_process_open_fd(struct ktask *t, struct inode *iptr,uint32_t flags);
 int user_process_close_fd(struct ktask *t,int fd);
 int user_process_read_fd(struct ktask *t,int fd, void *buf, int count);
 void user_process_exit(struct ktask *t, int code);
-int user_process_wait(struct ktask *t, int pid);
+int process_wait(int pid);
 #endif

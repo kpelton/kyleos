@@ -66,6 +66,13 @@ static int wait(int pid) {
     return val;
 }
 
+static int exec(char *path) {
+    long val = 0;
+    (void)path;
+    asm volatile("mov $8, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
+    return val;
+}
+
 
 
 static char * itoa( unsigned long value, char * str, int base ) {
@@ -274,7 +281,7 @@ void waittest() {
     printf("Fork returned %d\n",pid);
     if(pid != 0) {        
         printf("I'm the parent\n");
-        printf("waiting on child");
+        printf("waiting on child\n");
         ret = wait(pid);
          printf("child returned %d\n",ret);
         exit(0);
@@ -289,16 +296,40 @@ void waittest() {
 }
 
 
+void exectest() {
+    int pid = fork();
+    int ret;
+    printf("Fork returned %d\n",pid);
+    if(pid != 0) {        
+        printf("I'm the parent\n");
+        printf("waiting on child\n");
+        ret = wait(pid);
+         printf("child returned %d\n",ret);
+        exit(0);
+
+    }
+    else{
+        printf("I'm the child\n");
+        ret = exec("/testfork2");
+        printf("child fakeexec returned %d\n",ret);
+
+        exec("/testfork");
+        exit(12345);
+    }
+}
+
+
+
 int _start() 
 {
         //forktest();
 //        read_test();
 //        read_fullpath_test();
-       // forktest();
+        exectest();
         //testopendir();
         //printf("Test\n");
-         waittest();
-        sleep(100000);
+         //waittest();
+        //sleep(100000);
         //printf("Done\n");
         exit(0);
     

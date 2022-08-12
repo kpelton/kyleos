@@ -52,7 +52,7 @@ void user_process_exit(struct ktask *t, int code)
     schedule();
 }
 
-int user_process_wait(struct ktask *t, int pid)
+int process_wait(int pid)
 {
     struct ktask *child;
     while(1) {
