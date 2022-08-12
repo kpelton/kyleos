@@ -186,7 +186,9 @@ static void paging_free_page_dir(uint64_t* pgdir_addr) {
 
     for (i=0; i<512; i++) {
         if((pgdir_addr[i]  & PAGE_PRESENT) != 0) {
+#ifdef PAGING_DEBUG
             kprintf("free pgdir %x\n",pgdir_addr[i] & PHYS_ADDR_MASK );
+#endif
             pmem_free_block(pgdir_addr[i] & PHYS_ADDR_MASK);
         } 
     }
@@ -198,7 +200,9 @@ static void paging_free_page_tab(uint64_t* pgtb_addr) {
     for (i=0; i<512; i++) {
         if((pgtb_addr[i]  & PAGE_PRESENT) != 0) {
             paging_free_page_dir((uint64_t*)KERN_PHYS_TO_PVIRT((pgtb_addr[i] & PHYS_ADDR_MASK)));
+#ifdef PAGING_DEBUG
             kprintf("free pgtab %x\n",pgtb_addr[i] & PHYS_ADDR_MASK );
+#endif
             pmem_free_block(pgtb_addr[i] & PHYS_ADDR_MASK);
         } 
     }
@@ -210,7 +214,9 @@ static void paging_free_pml4(uint64_t* pml4_addr) {
     for (i=0; i<512; i++) {
         if((pml4_addr[i]  & PAGE_PRESENT) != 0) {
             paging_free_page_tab((uint64_t*) KERN_PHYS_TO_PVIRT((pml4_addr[i] & PHYS_ADDR_MASK)));
+#ifdef PAGING_DEBUG
             kprintf("free pml4 %x\n",pml4_addr[i] & PHYS_ADDR_MASK );
+#endif
             pmem_free_block(pml4_addr[i] & PHYS_ADDR_MASK);
         } 
 
@@ -221,7 +227,9 @@ static void paging_free_pml4(uint64_t* pml4_addr) {
 bool paging_free_pg_tbl(struct pg_tbl *pg)
 {
     //TODO: implement this
+#ifdef PAGING_DEBUG
     kprintf("free %x\n",pg->pml4);
+#endif
     paging_free_pml4(pg->pml4);
     return true;
 }

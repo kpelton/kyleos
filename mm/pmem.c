@@ -82,7 +82,9 @@ void pmem_addr_set_block(uint64_t addr, uint64_t *bitmap)
 void pmem_addr_set_region(uint64_t addr, uint64_t size, uint64_t *bitmap) 
 {
     uint64_t curr_size = size;
+#ifdef PMEM_DEBUG
     kprintf("pmem_addr_set_region 0x%x 0x%d\n",addr,curr_size);
+#endif
     while (curr_size >  0) {
         pmem_addr_set_block(addr,bitmap);
         //kprintf("pmem setting %x %x \n",addr,curr_size);
@@ -125,7 +127,10 @@ uint64_t pmem_addr_find_first_chunk(uint64_t size,uint64_t chunk_size, uint64_t 
         if (bitmap[i] == 0x0){
             found_size+=(BLOCK_SIZE*BIT_SIZE);
             if(found_size >= chunk_size ) {
+
+#ifdef PMEM_DEBUG
                 kprintf("chunk at P:0x%x of at least %d pages\n",addr,chunk_size);
+#endif
                 return addr;
             }
         }else{
@@ -143,7 +148,9 @@ void pmem_addr_free_block(uint64_t addr, uint64_t *bitmap)
     uint64_t block = get_block(bit);
     bit  = get_bit_in_block(bit);
     bitmap[block] &=  ~(1UL <<bit);
+#ifdef PMEM_DEBUG
     kprintf("pmem Clearing 0x%x\n",addr);
+#endif
 
 }
 

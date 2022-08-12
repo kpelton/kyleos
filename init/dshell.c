@@ -12,6 +12,8 @@
 #include <mm/pmem.h>
 #include <fs/elf.h>
 #include <sched/exec.h>
+#include <sched/ps.h>
+
 
 void test_user_function5();
 static const char OS_PROMPT[] = "Kyle OS |";
@@ -264,8 +266,8 @@ for(;;) {
     {
         for (;;)
         {
-            kprintf("test frok kthread!\n");
-            ksleepm(1000);
+           // kprintf("test frok kthread!\n");
+           // ksleepm(1000);
         }
     }
 

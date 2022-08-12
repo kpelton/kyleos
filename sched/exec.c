@@ -11,14 +11,14 @@
 //Add elf file to runqueue given an inode. Will return false if something bad happened. 
 int exec_from_inode(struct inode *ifile,bool replace)
 {
-    int bytes = 0;
+    //int bytes = 0;
     int i;
     struct file *rfile = vfs_open_file(ifile,O_RDONLY);
     struct elfhdr hdr;
     struct proghdr phdr;
     struct p_memblock *head = NULL;
     struct p_memblock *track = NULL;
-    bytes = vfs_read_file(rfile, &hdr, sizeof(struct elfhdr));
+    vfs_read_file(rfile, &hdr, sizeof(struct elfhdr));
     int retval = -1;
     uint32_t size;
     void *block;
@@ -28,17 +28,20 @@ int exec_from_inode(struct inode *ifile,bool replace)
 
     if (hdr.magic == ELF_MAGIC)
     {
+#ifdef EXEC_DEBUG
         kprintf("Elf ph offset: 0x%x\n", hdr.phoff);
         kprintf("Elf ph count: 0x%x\n", hdr.phnum);
         kprintf("Elf ph size: 0x%x\n", hdr.phentsize);
         kprintf("Elf entry offset: 0x%x\n", hdr.entry);
+#endif
         for (i = 0; i < hdr.phnum; i++)
         {
-            bytes = vfs_read_file_offset(rfile, &phdr, sizeof(struct proghdr), 
+            vfs_read_file_offset(rfile, &phdr, sizeof(struct proghdr), 
                                          hdr.phoff + (sizeof(struct proghdr) * i));
 
             if (phdr.type != ELF_PROG_LOAD)
                 continue;
+#ifdef EXEC_DEBUG
             kprintf("-- %d --\n", i);
             kprintf("  Elf phdr type: 0x%x\n", phdr.type);
             kprintf("  Elf phdr flags: 0x%x\n", phdr.flags);
@@ -47,6 +50,7 @@ int exec_from_inode(struct inode *ifile,bool replace)
             kprintf("  Elf phdr off: 0x%x\n", phdr.off);
             kprintf("  Elf phdr memsz: 0x%x\n", phdr.memsz);
             kprintf("  Elf phdr align: 0x%x\n", phdr.align);
+#endif
             if(new_pg_tbl == NULL) {
                 new_pg_tbl = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
                 new_pg_tbl->pml4 = (uint64_t *)KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
@@ -70,22 +74,25 @@ int exec_from_inode(struct inode *ifile,bool replace)
                 head = track;
             }
             page_ops = USER_PAGE;
+#ifdef EXEC_DEBUG
             kprintf("block: %x\n",block);
-            bytes = vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT(block),phdr.memsz,phdr.off);
+#endif
+            vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT(block),phdr.memsz,phdr.off);
+#ifdef EXEC_DEBUG
             kprintf("%x\n", KERN_PHYS_TO_PVIRT(block));
             kprintf("%x\n", *(uint64_t *)KERN_PHYS_TO_PVIRT(block));
             kprintf("mapping %x\n",size);
-
+#endif
             //if write is not set for this program section map section as RO
             if ((phdr.flags  & ELF_PROG_FLAG_WRITE) == 0) {
-                kprintf("Setting phdr.vaddr:%x %d  RO\n",phdr.vaddr,i);
+                //kprintf("Setting phdr.vaddr:%x %d  RO\n",phdr.vaddr,i);
                 page_ops = USER_PAGE_RO;
             }
             track->pg_opts = page_ops;
             track->vaddr = phdr.vaddr;
             paging_map_user_range(new_pg_tbl,(uint64_t) block,phdr.vaddr,size,page_ops);
 
-            kprintf("  Read in %d\n", bytes);
+            //kprintf("  Read in %d\n", bytes);
 
         }
         if (new_pg_tbl != NULL){

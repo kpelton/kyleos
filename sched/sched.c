@@ -279,7 +279,9 @@ static void free_memblock_list(struct p_memblock *head)
         p = p->next;
         for (j = 0; j < curr->count; j++)
         {
+#ifdef SCHED_DEBUG
             kprintf("Freeing 0x%x\n", (uint64_t)curr->block + (PAGE_SIZE * j));
+#endif
             pmem_free_block((uint64_t)curr->block + (PAGE_SIZE * j));
         }
         kfree(curr);
@@ -291,7 +293,9 @@ bool sched_process_kill(int pid, bool cleanup)
     int i;
     int j;
     asm("cli");
+#ifdef SCHED_DEBUG
     kprintf("Killing %d\n", pid);
+#endif
     for (i = 0; i < SCHED_MAX_TASKS; i++)
     {
 
@@ -317,8 +321,9 @@ bool sched_process_kill(int pid, bool cleanup)
                 t->pid = -1;
             }
             kfree(t->stack_alloc);
+#ifdef SCHED_DEBUG
             kprintf("Killed %d\n", t->pid);
-
+#endif
             // Close any opened files
             for (int j; j < MAX_TASK_OPEN_FILES; j++)
                 if (t->open_fds[j] != NULL)
@@ -426,7 +431,7 @@ void schedule()
     asm("cli");
     // kprintf("schedule\n");
     bool success = false;
-    if (prev_task != -1 && ktasks[prev_task].state == TASK_RUNNING)
+    if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_NEW && ktasks[prev_task].state != TASK_DONE )
     {
         ktasks[prev_task].state = TASK_READY;
         // save old stack
@@ -438,7 +443,7 @@ void schedule()
     while (success == false)
     {
         // only set to ready if someone else has not changed the state
-        if (prev_task != -1 && ktasks[prev_task].state == TASK_RUNNING)
+        if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_NEW && ktasks[prev_task].state != TASK_DONE )
         {
             ktasks[prev_task].state = TASK_READY;
             // save old stack
