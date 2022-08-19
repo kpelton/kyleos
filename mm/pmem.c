@@ -190,7 +190,7 @@ void *pmem_alloc_block(unsigned int size_in_pages) {
         pmem_addr_set_region(addr,size_in_pages,phys_mem_zones[phys_first_region].bitmap);
     }
     //We need to add the base address here because all bitmaps start at 0
-    return (void *)addr +phys_mem_zones[phys_first_region].base_addr;
+    return (void *)(addr +phys_mem_zones[phys_first_region].base_addr);
 
 }
 
@@ -217,7 +217,7 @@ void *pmem_alloc_page() {
 #ifdef PMEM_DEBUG
     kprintf("Alloc 0x%x\n",addr +phys_mem_zones[phys_first_region].base_addr);
 #endif
-    return (void *)addr +phys_mem_zones[phys_first_region].base_addr;
+    return (void *)(addr +phys_mem_zones[phys_first_region].base_addr);
 
 }
 
@@ -275,8 +275,6 @@ void phys_mem_early_init(uint64_t  mb_info) {
     struct multiboot_info header;
     struct multiboot_mmap_entry entry;
     uint32_t offset = 0;
-    uint64_t addr,max_addr;
-    uint64_t len;
 
     for(i=0; i<MAX_PHYS_ZONES; i++)
         phys_mem_zones[i].in_use = 0;
@@ -287,9 +285,9 @@ void phys_mem_early_init(uint64_t  mb_info) {
     header = *((struct multiboot_info *) mb_info);
     while (offset < header.mmap_length)  {
         entry = *(struct multiboot_mmap_entry *)( (uint64_t)header.mmap_addr + offset);
-        addr = ((uint64_t)(entry.addr_high))<<32 | entry.addr_low;
-        len = ((uint64_t)(entry.len_high))<<32  | entry.len_low;
-        max_addr = (addr+len)-1;
+        uint64_t addr = ((uint64_t)(entry.addr_high)) <<32 | entry.addr_low;
+        uint64_t len = ((uint64_t)(entry.len_high)) <<32  | entry.len_low;
+        uint64_t max_addr = (addr + len) - 1;
         phys_mem_zones[i].in_use = 1;
         phys_mem_zones[i].base_addr = addr;
         phys_mem_zones[i].len = len;
