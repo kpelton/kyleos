@@ -328,7 +328,7 @@ int _start()
         exectest();
         //testopendir();
         //printf("Test\n");
-         //waittest();
+//         waittest();
         //sleep(100000);
         //printf("Done\n");
         exit(0);

@@ -57,7 +57,7 @@ static int find_free_task()
 }
 static void clear_fd_table(struct ktask *t)
 {
-    for (int j; j < MAX_TASK_OPEN_FILES; j++)
+    for (int j = 0; j < MAX_TASK_OPEN_FILES; j++)
         t->open_fds[j] = NULL;
 }
 
@@ -170,7 +170,7 @@ int user_process_fork()
     // Set parent return value
     rptr->rax = pid;
 
-    for (int j; j < MAX_TASK_OPEN_FILES; j++)
+    for (int j =0 ; j < MAX_TASK_OPEN_FILES; j++)
     {
         t->open_fds[j] = curr->open_fds[j];
         if (t->open_fds[j] != NULL)
@@ -327,7 +327,7 @@ bool sched_process_kill(int pid, bool cleanup)
             kprintf("Killed %d\n", t->pid);
 #endif
             // Close any opened files
-            for (int j; j < MAX_TASK_OPEN_FILES; j++)
+            for (int j = 0 ; j < MAX_TASK_OPEN_FILES; j++)
                 if (t->open_fds[j] != NULL)
                 {
                     vfs_close_file(t->open_fds[j]);

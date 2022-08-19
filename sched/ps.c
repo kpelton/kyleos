@@ -10,7 +10,7 @@ int user_process_open_fd(struct ktask *t, struct inode *iptr, uint32_t flags)
         kprintf("fail in user_process_open_fd\n");
         goto done;
     }
-    for (int j; j < MAX_TASK_OPEN_FILES; j++)
+    for (int j = 0; j < MAX_TASK_OPEN_FILES; j++)
     {
 
         if (t->open_fds[j] == NULL)
