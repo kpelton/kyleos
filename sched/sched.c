@@ -210,7 +210,8 @@ int user_process_fork()
 
 int user_process_replace_exec(struct ktask *t, uint64_t startaddr,char *name,struct pg_tbl *tbl, struct p_memblock *head)
 {
-    int pid = t->pid;
+    //save old pid and parent pid since kill will clear them
+    int c_pid = t->pid;
     int parent = t->parent;
     sched_process_kill(t->pid,true);
     clear_fd_table(t);
@@ -223,7 +224,7 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr,char *name,str
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
     t->s_rbp = t->user_start_stack;
     t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 16);
-    t->pid = pid;
+    t->pid = c_pid;
     t->parent = parent;
     t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
@@ -273,13 +274,12 @@ static void free_memblock_list(struct p_memblock *head)
 {
     struct p_memblock *p = head;
     struct p_memblock *curr = NULL;
-    uint32_t j = 0;
 
     while (p != NULL)
     {
         curr = p;
         p = p->next;
-        for (j = 0; j < curr->count; j++)
+        for (uint32_t j = 0; j < curr->count; j++)
         {
 #ifdef SCHED_DEBUG
             kprintf("Freeing 0x%x\n", (uint64_t)curr->block + (PAGE_SIZE * j));
@@ -327,7 +327,7 @@ bool sched_process_kill(int pid, bool cleanup)
             kprintf("Killed %d\n", t->pid);
 #endif
             // Close any opened files
-            for (int j = 0 ; j < MAX_TASK_OPEN_FILES; j++)
+            for (j = 0 ; j < MAX_TASK_OPEN_FILES; j++)
                 if (t->open_fds[j] != NULL)
                 {
                     vfs_close_file(t->open_fds[j]);
@@ -433,6 +433,8 @@ void schedule()
     asm("cli");
     // kprintf("schedule\n");
     bool success = false;
+    bool skip_idle = false;
+
     if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_NEW && ktasks[prev_task].state != TASK_DONE )
     {
         ktasks[prev_task].state = TASK_READY;
@@ -452,12 +454,13 @@ void schedule()
         }
 
         int i = next_task;
-        bool skip_idle = false;
         update_timers();
         next_task = find_next_task(i);
 
         //If we are on the idle PID skip it if there is something else to run
         if (i == IDLE_PID) {
+            skip_idle = false;
+
             for (int j = IDLE_PID+1; j < SCHED_MAX_TASKS; j++)
                 if(ktasks[j].pid != -1 && (ktasks[j].state == TASK_NEW || ktasks[j].state == TASK_READY)) {
                     skip_idle = true;
