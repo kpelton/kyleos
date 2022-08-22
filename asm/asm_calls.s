@@ -124,9 +124,9 @@ fork_int:
     call [r8]
 .forkret:
     mov bx, (4 * 8)
-	mov ds, bx
-	mov es, bx 
-	mov fs, bx 
+    mov ds, bx
+    mov es, bx 
+    mov fs, bx 
     popfq
     pop r15
     pop r14
@@ -177,9 +177,9 @@ usermode_int:
     pop rsi
     call [r8]
     mov bx, (4 * 8)
-	mov ds, bx
-	mov es, bx 
-	mov fs, bx 
+    mov ds, bx
+    mov es, bx 
+    mov fs, bx 
     popfq
     pop r15
     pop r14
@@ -203,17 +203,17 @@ usermode_int:
 ;rdi address to jump to
 ;rsi user stack
 jump_usermode:
-	mov ax, (4 * 8) | 3 ; ring 3 data with bottom 2 bits set for ring 3
-	mov ds, ax
-	mov es, ax 
-	mov fs, ax 
-	mov gs, ax ; SS is handled by iret
-	; set up the stack frame iret expects
-	push (4 * 8) | 3 ; data selector
-	push rsi ; current esp
+    mov ax, (4 * 8) | 3 ; ring 3 data with bottom 2 bits set for ring 3
+    mov ds, ax
+    mov es, ax 
+    mov fs, ax 
+    mov gs, ax ; SS is handled by iret
+    ; set up the stack frame iret expects
+    push (4 * 8) | 3 ; data selector
+    push rsi ; current esp
     pushf
-	push (3 * 8) | 3 ; code selector (ring 3 code with bottom 2 bits set for ring 3)
-	push rdi ; instruction address to return to
+    push (3 * 8) | 3 ; code selector (ring 3 code with bottom 2 bits set for ring 3)
+    push rdi ; instruction address to return to
     ; clear gp registers beforing jumping to userspace
     mov rax,0
     mov rbx,0
@@ -230,7 +230,7 @@ jump_usermode:
     mov r13,0
     mov r14,0
     mov r15,0
-	iretq
+    iretq
 
 setup_long_mode:
   ret 
@@ -238,7 +238,7 @@ setup_long_mode:
 idt_flush:
     mov rax, strict qword ip_t
     lidt [rax]
-	ret
+    ret
 
 [global std_handler] ; global int handler
 std_handler:
@@ -267,9 +267,9 @@ kbd_handler:
     call save_context_asm
     pop rsi
     mov ax, (2 * 8)
-	mov ds, ax
-	mov es, ax 
-	mov fs, ax 
+    mov ds, ax
+    mov es, ax 
+    mov fs, ax 
     call kbd_irq
     popfq
     pop r15
@@ -314,10 +314,10 @@ timer_handler:
     call save_context_asm
     pop rsi
     mov ax, (2 * 8)
-	mov ds, ax
-	mov es, ax 
-	mov fs, ax 
-	mov gs, ax ; SS is handled by iret
+    mov ds, ax
+    mov es, ax 
+    mov fs, ax 
+    mov gs, ax ; SS is handled by iret
     call timer_irq
     popfq
     pop r15
@@ -361,9 +361,9 @@ serial_handler:
     call save_context_asm
     pop rsi
     mov ax, (2 * 8)
-	mov ds, ax
-	mov es, ax 
-	mov fs, ax 
+    mov ds, ax
+    mov es, ax 
+    mov fs, ax 
     call serial_irq
     popfq
     pop r15
