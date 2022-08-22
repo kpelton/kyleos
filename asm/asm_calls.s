@@ -14,8 +14,6 @@
 [global gdt_flush]
 [global load_page_directory]
 [global setup_long_mode]
-HelloString db 'hello',0xa, 0
-
 
 gdt_flush:
  mov rax, strict qword gp
@@ -35,31 +33,6 @@ flush2:
 tss_flush:
     mov ax, 5*8 | 3
     ltr ax
-    ret
-
-test_user_function2:
-    add eax,123
-    ;;int 0x80
-    ;;sti
-    ret
-[global test_user_function]
-test_user_function:
-    mov rax,10000
-    int 0x80
-    call test_user_function2
-    jmp test_user_function
-    ret
-
-[global test_user_function5]
-test_user_function5:
-    mov rax,10
-    int 0x80
-    mov rax,16
-    mov rcx,1
-    ;mov  [rax],rcx
-    ;sti
-    ;;call test_user_function2
-    jmp test_user_function5
     ret
 
 save_context_asm:
@@ -98,6 +71,7 @@ save_context_asm:
     pop rcx
     pop rbx
     ret
+
 fork_int:
     push rax
     push rbx
@@ -240,9 +214,6 @@ idt_flush:
     lidt [rax]
     ret
 
-[global std_handler] ; global int handler
-std_handler:
-    iretq
 [global kbd_handler] ; global int handler
 kbd_handler:
     push rax
@@ -429,7 +400,7 @@ rtc_handler:
     pop rax
     iretq
 
-
+;; TODO: These two functions are broken as they don't save/restore state for kernel threads
 [global switch_to] ; global int handler
 switch_to:
     mov rsp,rdi
