@@ -208,13 +208,28 @@ jump_usermode:
 	mov es, ax 
 	mov fs, ax 
 	mov gs, ax ; SS is handled by iret
-    sti
 	; set up the stack frame iret expects
 	push (4 * 8) | 3 ; data selector
 	push rsi ; current esp
     pushf
 	push (3 * 8) | 3 ; code selector (ring 3 code with bottom 2 bits set for ring 3)
 	push rdi ; instruction address to return to
+    ; clear gp registers beforing jumping to userspace
+    mov rax,0
+    mov rbx,0
+    mov rcx,0
+    mov rdx,0
+    mov rsi,0
+    mov rdi,0
+    mov rbp,0
+    mov r8,0
+    mov r9,0
+    mov r10,0
+    mov r11,0
+    mov r12,0
+    mov r13,0
+    mov r14,0
+    mov r15,0
 	iretq
 
 setup_long_mode:
