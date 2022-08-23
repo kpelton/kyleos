@@ -226,7 +226,6 @@ void forktest() {
     int bytes;
     char buffer[20000];
     int fd = open("/bible.txt",1);
-    sleep(5000);
     printf("open returned %d\n",fd);
 
     printf("starting fork!\n");
@@ -260,7 +259,6 @@ void forktest() {
         printf("%s\n",buffer);
         
         bytes = 0;
-        sleep(10000);
         do {
             bytes = read(fd,buffer,10000);
             //printf("read returned %d\n",bytes);
@@ -317,20 +315,44 @@ void exectest() {
         exit(12345);
     }
 }
+void printtest() {
+    int pid = fork();
+    int ret;
+    printf("Fork returned %d\n",pid);
+    if(pid != 0) {
+        for(;;){
+            for(int i=0; i<200; i++);
+            sleep(1);
+    }
+        printf("waiting on child\n");
+        ret = wait(pid);
+         printf("child returned %d\n",ret);
+        exit(0);
+
+    }
+    else{
+                for(int i=0; i<200; i++){
+       // printf("I'm the child\n");
+        sleep(1);
+    }
+        exit(12345);
+    }
+}
 
 
 
 int _start() 
 {
         //forktest();
-//        read_test();
-//        read_fullpath_test();
-        exectest();
+  //      read_test();
+//       read_fullpath_test();
+     //   exectest();
         //testopendir();
         //printf("Test\n");
 //         waittest();
         //sleep(100000);
         //printf("Done\n");
+        printtest();
         exit(0);
         return 0;
 }

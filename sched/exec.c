@@ -7,7 +7,13 @@
 #include <mm/mm.h>
 #include <mm/pmem.h>
 #include <sched/sched.h>
+#include <locks/mutex.h>
 
+static struct mutex exec_mutex;
+#define EXEC_DEBUG_LL
+void exec_init(){
+    init_mutex(&exec_mutex);
+}
 //Add elf file to runqueue given an inode. Will return false if something bad happened. 
 int exec_from_inode(struct inode *ifile,bool replace)
 {
@@ -36,11 +42,16 @@ int exec_from_inode(struct inode *ifile,bool replace)
 #endif
         for (i = 0; i < hdr.phnum; i++)
         {
+                //acquire_mutex(&exec_mutex);
+
             vfs_read_file_offset(rfile, &phdr, sizeof(struct proghdr), 
                                          hdr.phoff + (sizeof(struct proghdr) * i));
 
-            if (phdr.type != ELF_PROG_LOAD)
+            if (phdr.type != ELF_PROG_LOAD) {
+
+               // r
                 continue;
+            }
 #ifdef EXEC_DEBUG
             kprintf("-- %d --\n", i);
             kprintf("  Elf phdr type: 0x%x\n", phdr.type);
@@ -51,6 +62,7 @@ int exec_from_inode(struct inode *ifile,bool replace)
             kprintf("  Elf phdr memsz: 0x%x\n", phdr.memsz);
             kprintf("  Elf phdr align: 0x%x\n", phdr.align);
 #endif
+        acquire_mutex(&exec_mutex);
             if(new_pg_tbl == NULL) {
                 new_pg_tbl = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
                 new_pg_tbl->pml4 = (uint64_t *)KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
@@ -74,8 +86,9 @@ int exec_from_inode(struct inode *ifile,bool replace)
                 head = track;
             }
             page_ops = USER_PAGE;
-#ifdef EXEC_DEBUG
-            kprintf("block: %x\n",block);
+            release_mutex(&exec_mutex);
+#ifdef EXEC_DEBUG_LL
+            kprintf("track->next: %x\n",track->next);
 #endif
             vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT(block),phdr.memsz,phdr.off);
 #ifdef EXEC_DEBUG
@@ -92,6 +105,7 @@ int exec_from_inode(struct inode *ifile,bool replace)
             track->vaddr = phdr.vaddr;
             paging_map_user_range(new_pg_tbl,(uint64_t) block,phdr.vaddr,size,page_ops);
 
+
             //kprintf("  Read in %d\n", bytes);
 
         }
@@ -106,7 +120,11 @@ int exec_from_inode(struct inode *ifile,bool replace)
                 retval = user_process_replace_exec(t,hdr.entry,name,new_pg_tbl,head);
             }
         }
+       // release_mutex(&exec_mutex);
+
+
     }
+            
     else
     {
         kprintf("Not an ELF executable!\n");

@@ -14,6 +14,13 @@
 [global gdt_flush]
 [global load_page_directory]
 [global setup_long_mode]
+[global get_flags_reg]
+get_flags_reg:
+    sub rsp,8
+    pushfq
+    pop rax
+    add rsp,8
+    ret
 
 gdt_flush:
  mov rax, strict qword gp
@@ -123,7 +130,6 @@ fork_int:
 [global usermode_int] ;
 usermode_int:
     ;;rax is return val from syscall
-    cli
     cmp rax,5
     je fork_int
     push rbx
@@ -169,7 +175,6 @@ usermode_int:
     pop rdx
     pop rcx
     pop rbx
-    sti
     iretq
 
 [global jump_usermode]

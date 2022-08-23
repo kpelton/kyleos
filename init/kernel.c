@@ -13,6 +13,7 @@
 #include <init/dshell.h>
 #include <include/multiboot.h>
 #include <include/types.h>
+#include <sched/exec.h>
 #define STACK_PAGES 256
 
 void test_user_function ();
@@ -123,6 +124,7 @@ void kinit(void)
     vfs_init();
     ata_init();
     timer_system_init();
+    exec_init();
     sched_init();
 
     kernel();

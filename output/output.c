@@ -198,7 +198,8 @@ void print_regs(unsigned long exception,unsigned long rip) {
     kprintf("\n");
     print_reg("cr4",dump.cr4);
     kprintf("\n");
-
+    print_reg("flags",dump.flags);
+    kprintf("\n");
 }
 
 static void puts( char *str) {

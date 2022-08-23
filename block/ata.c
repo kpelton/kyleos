@@ -4,6 +4,7 @@
 #include <mm/mm.h>
 #include <block/ata.h>
 #include <fs/fat.h>
+#include <locks/mutex.h>
 
 #define DATA_REG 0
 #define ERROR_REG 1
@@ -26,6 +27,7 @@
 //#define ATA_DEBUG
 
 struct mbr_info fs1;
+static struct mutex ata_mutex;
 
 uint8_t read_status(void)
 {
@@ -94,6 +96,8 @@ int read_sec(uint32_t sec, void *buffer)
 #ifdef ATA_DEBUG
     print_drive_status();
 #endif
+    acquire_mutex(&ata_mutex);
+
     outb(PRIMARY + DRIVE_HEAD_REG, 0xE0);
     outb(PRIMARY + ERROR_REG, 0x00);
     // read 1 sectors =0x200
@@ -123,6 +127,8 @@ int read_sec(uint32_t sec, void *buffer)
         data[i] = inw(PRIMARY);
     }
     status = read_status();
+    release_mutex(&ata_mutex);
+
     return 0;
 }
 
@@ -140,6 +146,7 @@ void ata_init(void)
     part_size = mbr[0x1ca] | mbr[0x1cb] << 8 | mbr[0x1cc] << 16 | mbr[0x1cd] << 24;
     valid_mbr = mbr[0x1fe] | mbr[0x1ff] << 8;
     part_type = mbr[0x1c2];
+    init_mutex(&ata_mutex);
 
     // Look for valid MBR 0x55aa
     if (valid_mbr == 0xaa55)

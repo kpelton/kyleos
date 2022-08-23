@@ -20,20 +20,25 @@ void timer_system_init() {
 
 int update_timer(struct basic_timer* t) 
 {
+    //acquire_spinlock(&t->timer_lock);
     if (t->state == TIMER_RUNNING) {
         uint32_t current = read_jiffies();
         if (current  >= t->end_time) {
             t->state = TIMER_EXPIRED;
+            //release_spinlock(&t->timer_lock);
             return 1;
+
         }
     }
+    //release_spinlock(&t->timer_lock);
     return 0;
 }
 
 struct basic_timer new_timer(uint32_t ms) 
 {
-    struct basic_timer t;
 
+    struct basic_timer t;
+    //init_spinlock(&t.timer_lock);
     t.start_time = read_jiffies();
     t.end_time = t.start_time + ms ;
     t.state = TIMER_RUNNING;

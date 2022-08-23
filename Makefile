@@ -43,7 +43,7 @@ output: output/output.o output/vga.o output/uart.o output/keyboard.o output/inpu
 timer: timer/pit.o timer/timer.o timer/rtc.o
 	$(MAKE) -C timer
 
-locks: locks/spinlock.o
+locks: locks/spinlock.o locks/mutex.o
 	$(MAKE) -C locks
 
 user:kernel.img

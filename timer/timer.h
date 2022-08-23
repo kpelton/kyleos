@@ -1,7 +1,7 @@
 #ifndef TIMER_H
 #define TIMER_H
 #include <include/types.h>
-
+#include <locks/spinlock.h>
 enum timer_states{
     TIMER_EXPIRED,
     TIMER_RUNNING,
@@ -17,6 +17,7 @@ struct basic_timer {
     uint32_t start_time;
     uint32_t end_time;
     uint8_t state;
+    struct spinlock timer_lock;
 };
 
 int update_timer(struct basic_timer *t);

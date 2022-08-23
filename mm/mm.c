@@ -3,6 +3,8 @@
 #include <include/types.h>
 #include <mm/pmem.h>
 #include <mm/paging.h>
+#include <locks/mutex.h>
+static struct mutex kmem_mutex;
 
 char * kernel_heap;
 #define FREE 1
@@ -21,6 +23,7 @@ void * kmalloc(unsigned int p_size)
     struct  mm_block *lptr = head;
     unsigned int size = p_size;
     size+=MM_MIN_SIZE - (size % MM_MIN_SIZE);
+        acquire_mutex(&kmem_mutex);
 
     while(lptr != 0) {
         if (size <= lptr->size && lptr->free == FREE ) {
@@ -32,6 +35,7 @@ void * kmalloc(unsigned int p_size)
                 continue;
             }
             //kprintf("MM Allocating 0x%x 0x%x\n",p_size,lptr->addr);
+        release_mutex(&kmem_mutex);
 
             return lptr->addr;
         }
@@ -57,23 +61,30 @@ void * kmalloc(unsigned int p_size)
    // kprintf("MM Alloc 0x%x %x\n",KERN_VIRT_TO_PHYS(ret),size);
     kernel_heap+=size;
     total_used +=size;
+            release_mutex(&kmem_mutex);
+
     return ret;
 
 }
 
 void kfree(void *ptr)
 {
+        acquire_mutex(&kmem_mutex);
+
     struct  mm_block *lptr = (struct mm_block *) ((uint64_t ) ptr - (sizeof(struct mm_block)));
     if (lptr->addr == ptr) {
             lptr->free = FREE;
     } else {
         panic("Memory courrption detected on free\n");
     }
+        release_mutex(&kmem_mutex);
+
+
 }
 
 void mm_print_stats()
 {
-
+    acquire_mutex(&kmem_mutex);
     struct  mm_block *lptr = head;
     unsigned long size = 0;
     unsigned long ll_size = 0;
@@ -87,6 +98,7 @@ void mm_print_stats()
         lptr = lptr->next;
     }
 
+    release_mutex(&kmem_mutex);
     kprintf("Total Used Memory     %dK\n", size/1024);
     kprintf("LL nodes              %d\n", ll_size);
     kprintf("LL node size          %dK\n", (ll_size*sizeof(struct mm_block)) /1024);
@@ -97,6 +109,7 @@ void mm_print_stats()
 
 void mm_init()
 {
+    init_mutex(&kmem_mutex);
     setup_paging();
     char * heap_loc = pmem_alloc_block(HEAP_SIZE);
     kprintf("Heap Loc:0x%x\n",heap_loc);

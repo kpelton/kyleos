@@ -5,7 +5,8 @@
 #include <mm/paging.h>
 #include <mm/mm.h>
 #include <mm/pmem.h>
-
+#include <locks/mutex.h>
+#include <locks/spinlock.h>
 #define USER_STACK_VADDR 0x600000000
 #define USER_STACK_SIZE 32
 #define IDLE_PID 0
@@ -14,13 +15,14 @@ static struct ktask ktasks[SCHED_MAX_TASKS];
 static uint32_t next_task = 0;
 static int prev_task = -1;
 static int pid = 0;
-
+static struct mutex sched_mutex;
+static struct spinlock sched_spinlock;
 
 void switch_to(uint64_t *rsp, uint64_t *addr);
 void resume_p(uint64_t *rsp, uint64_t *rbp);
 static const char process_types_str[PROCESS_TYPES_LEN][20] = {"Kernel", "User"};
 const char task_type_str[TASK_STATE_NUM][20] = {"RUNNING", "READY", "NEW", "BLOCKED", "DONE"};
-
+#define SCHED_DEBUG
 void ksleepm(uint32_t ms)
 {
     struct ktask *process = get_current_process();
@@ -35,6 +37,8 @@ void sched_init()
     int i;
     for (i = 0; i < SCHED_MAX_TASKS; i++)
         ktasks[i].pid = -1;
+    init_mutex(&sched_mutex);
+        init_spinlock(&sched_spinlock);
 }
 
 static int find_free_task()
@@ -87,15 +91,19 @@ void kthread_add(void (*fptr)(), char *name)
 
 struct ktask *get_current_process()
 {
-    return &ktasks[prev_task];
+    struct ktask *val;
+    val =  &ktasks[prev_task];
+    return val;
+
 }
 
 struct ktask *sched_get_process(int pid)
 {
-    for (int i = 0; i < SCHED_MAX_TASKS; i++)
-        if (ktasks[i].pid == pid)
+    for (int i = 0; i < SCHED_MAX_TASKS; i++) {
+        if (ktasks[i].pid == pid) {
             return &ktasks[i];
-
+        }
+    }
     return NULL;
 }
 
@@ -210,15 +218,18 @@ int user_process_fork()
 
 int user_process_replace_exec(struct ktask *t, uint64_t startaddr,char *name,struct pg_tbl *tbl, struct p_memblock *head)
 {
+
     //save old pid and parent pid since kill will clear them
     int c_pid = t->pid;
     int parent = t->parent;
-    sched_process_kill(t->pid,true);
+
+
     clear_fd_table(t);
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
     t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
     t->mm = tbl;
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
+
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
@@ -232,6 +243,7 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr,char *name,str
     kstrcpy(t->name, name);
     t->context_switches = 0;
     kprintf("All done!\n");
+
     schedule();
 
     //will never return
@@ -266,6 +278,7 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     t->context_switches = 0;
     pid_ret = pid;
     pid += 1;
+
     return pid_ret;
 }
 
@@ -277,8 +290,10 @@ static void free_memblock_list(struct p_memblock *head)
 
     while (p != NULL)
     {
+        kprintf("p %x\n",p);
         curr = p;
         p = p->next;
+        kprintf("curr %x\n",curr);
         for (uint32_t j = 0; j < curr->count; j++)
         {
 #ifdef SCHED_DEBUG
@@ -294,7 +309,7 @@ bool sched_process_kill(int pid, bool cleanup)
 {
     int i;
     int j;
-    asm("cli");
+    acquire_spinlock(&sched_spinlock);
 #ifdef SCHED_DEBUG
     kprintf("Killing %d\n", pid);
 #endif
@@ -349,11 +364,12 @@ bool sched_process_kill(int pid, bool cleanup)
             goto done;
         }
     }
-    asm("sti");
+    release_spinlock(&sched_spinlock);
     return false;
 
 done:
-    asm("sti");
+    release_spinlock(&sched_spinlock);
+
     return true;
 }
 
