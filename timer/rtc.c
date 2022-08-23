@@ -1,6 +1,7 @@
 #include <timer/rtc.h>
 #include <irq/irq.h>
 #include <asm/asm.h>
+#include <locks/spinlock.h>
 #include <output/output.h>
 
 #define CMOS_ADDR 0x70
@@ -23,6 +24,9 @@
 static struct sys_time current_time;
 static void set_time(uint8_t hour, uint8_t min, uint8_t sec,
                 uint8_t day,uint8_t month, uint16_t year);
+            
+static struct spinlock spinlock_rtc;
+
 //Enable rtc interrupt
 void rtc_init() {
    outb(CMOS_ADDR,REG_B);
@@ -32,6 +36,7 @@ void rtc_init() {
    outb(CMOS_ADDR,REG_B);
    uint8_t reg = inb(CMOS_DATA);
    outb(CMOS_DATA,reg|6);
+   init_spinlock(&spinlock_rtc);
 }
 static void set_time(uint8_t hour, uint8_t min, uint8_t sec,
                 uint8_t day,uint8_t month, uint16_t year) {
@@ -48,6 +53,7 @@ struct sys_time get_time() {
 }
 
 void rtc_irq() {
+    acquire_spinlock(&spinlock_rtc);
     uint8_t sec;
     uint8_t hour;
     uint8_t min;
@@ -82,5 +88,8 @@ void rtc_irq() {
    }
 
     set_time(hour,min,sec,day,month,year);
+
+    release_spinlock(&spinlock_rtc);
+
 
 }

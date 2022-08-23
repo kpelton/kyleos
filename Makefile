@@ -43,6 +43,9 @@ output: output/output.o output/vga.o output/uart.o output/keyboard.o output/inpu
 timer: timer/pit.o timer/timer.o timer/rtc.o
 	$(MAKE) -C timer
 
+locks: locks/spinlock.o
+	$(MAKE) -C locks
+
 user:kernel.img
 	$(MAKE) -C user
     
@@ -54,7 +57,7 @@ clean:
 	rm -rfv kernel.bin
 	rm -rfv kernel32.bin
 
-kernel.bin: asm block init irq mm output timer sched fs
+kernel.bin: asm block init irq mm output timer sched fs locks
 	$(LD) -T linker.ld -o kernel.bin $(OBJ_FILES) 
 
 kernel.img: kernel.bin
