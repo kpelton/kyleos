@@ -5,9 +5,11 @@
 #include <asm/asm.h>
 #include <include/stdarg.h>
 #include <include/types.h>
+
 void output_init() {
     vga_clear();
     serial_init();
+    input_init();
 }
 
 int kpow(int base,int exp) {

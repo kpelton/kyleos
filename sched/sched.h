@@ -7,14 +7,16 @@
 #define MAX_TASK_OPEN_FILES 8
 #define SCHED_MAX_TASKS 1024
 #define SCHED_MAX_NAME 32
-#define KTHREAD_STACK_SIZE 0x8000
+#define KTHREAD_STACK_SIZE 4096*8
 
 struct p_memblock {
     void *block;
     uint32_t count;
+            struct p_memblock *next;
+
     uint32_t pg_opts;
     uint64_t vaddr;
-    struct p_memblock *next;
+
 };
 
 

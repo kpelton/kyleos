@@ -22,7 +22,7 @@ void switch_to(uint64_t *rsp, uint64_t *addr);
 void resume_p(uint64_t *rsp, uint64_t *rbp);
 static const char process_types_str[PROCESS_TYPES_LEN][20] = {"Kernel", "User"};
 const char task_type_str[TASK_STATE_NUM][20] = {"RUNNING", "READY", "NEW", "BLOCKED", "DONE"};
-#define SCHED_DEBUG
+//#define SCHED_DEBUG
 void ksleepm(uint32_t ms)
 {
     struct ktask *process = get_current_process();
@@ -38,7 +38,7 @@ void sched_init()
     for (i = 0; i < SCHED_MAX_TASKS; i++)
         ktasks[i].pid = -1;
     init_mutex(&sched_mutex);
-        init_spinlock(&sched_spinlock);
+    init_spinlock(&sched_spinlock);
 }
 
 static int find_free_task()
@@ -117,7 +117,7 @@ void sched_save_context(uint64_t rip, uint64_t rsp)
 int user_process_fork()
 {
     // TODO:Change below to copy on write
-
+    acquire_spinlock(&sched_spinlock);
     struct ktask *curr = get_current_process();
     struct ktask *t;
     struct p_memblock *c_mem;
@@ -213,6 +213,7 @@ int user_process_fork()
 
     pid += 1;
     // Return will not apply since eax will be popped off stack
+    release_spinlock(&sched_spinlock);
     return -1;
 }
 
@@ -290,10 +291,9 @@ static void free_memblock_list(struct p_memblock *head)
 
     while (p != NULL)
     {
-        kprintf("p %x\n",p);
         curr = p;
         p = p->next;
-        kprintf("curr %x\n",curr);
+
         for (uint32_t j = 0; j < curr->count; j++)
         {
 #ifdef SCHED_DEBUG
@@ -301,6 +301,8 @@ static void free_memblock_list(struct p_memblock *head)
 #endif
             pmem_free_block((uint64_t)curr->block + (PAGE_SIZE * j));
         }
+        curr->block = 0;
+        curr->next = 0;
         kfree(curr);
     }
 }
@@ -337,7 +339,6 @@ bool sched_process_kill(int pid, bool cleanup)
                 // Kernel threads do not need to be "reaped"
                 t->pid = -1;
             }
-            kfree(t->stack_alloc);
 #ifdef SCHED_DEBUG
             kprintf("Killed %d\n", t->pid);
 #endif
@@ -354,7 +355,8 @@ bool sched_process_kill(int pid, bool cleanup)
             if (cleanup == true || t->parent <= 0)
                 t->pid = -1;
             t->mem_list = NULL;
-
+            kfree(t->stack_alloc);
+            t->stack_alloc = NULL;
             goto done;
             // manually
         }
@@ -412,6 +414,7 @@ static int find_next_task(int current_task)
     int i = current_task;
     int found_task = -1;
     int trys = 0;
+    acquire_spinlock(&sched_spinlock);
     while (found_task == -1)
     {
 
@@ -424,7 +427,7 @@ static int find_next_task(int current_task)
         if (trys == SCHED_MAX_TASKS * 2)
             panic("Could not find a task to run!");
     }
-
+release_spinlock(&sched_spinlock);
     return found_task;
 }
 
@@ -495,6 +498,8 @@ void schedule()
             ktasks[i].state = TASK_RUNNING;
             switch_to(ktasks[i].start_stack, ktasks[i].start_addr);
             success = true;
+            kernel_switch_paging();
+
         }
         else if (ktasks[i].state == TASK_NEW && ktasks[i].type == USER_PROCESS)
         {
@@ -514,6 +519,8 @@ void schedule()
             if (ktasks[i].type == USER_PROCESS)
             {
                 user_switch_paging(ktasks[i].mm);
+            }else{
+                kernel_switch_paging();
             }
             // kprintf("%d %x\n",i,ktasks[i].s_rsp);
             resume_p(ktasks[i].s_rsp, ktasks[i].s_rbp);

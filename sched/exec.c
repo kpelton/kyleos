@@ -7,16 +7,17 @@
 #include <mm/mm.h>
 #include <mm/pmem.h>
 #include <sched/sched.h>
-#include <locks/mutex.h>
+#include <locks/spinlock.h>
 
-static struct mutex exec_mutex;
+static struct spinlock exec_spinlock;
 #define EXEC_DEBUG_LL
 void exec_init(){
-    init_mutex(&exec_mutex);
+    init_spinlock(&exec_spinlock);
 }
 //Add elf file to runqueue given an inode. Will return false if something bad happened. 
 int exec_from_inode(struct inode *ifile,bool replace)
 {
+            acquire_spinlock(&exec_spinlock);
     //int bytes = 0;
     int i;
     struct file *rfile = vfs_open_file(ifile,O_RDONLY);
@@ -42,7 +43,7 @@ int exec_from_inode(struct inode *ifile,bool replace)
 #endif
         for (i = 0; i < hdr.phnum; i++)
         {
-                //acquire_mutex(&exec_mutex);
+                //acquire_spinlock(&exec_spinlock);
 
             vfs_read_file_offset(rfile, &phdr, sizeof(struct proghdr), 
                                          hdr.phoff + (sizeof(struct proghdr) * i));
@@ -59,10 +60,9 @@ int exec_from_inode(struct inode *ifile,bool replace)
             kprintf("  Elf phdr vaddr: 0x%x\n", phdr.vaddr);
             kprintf("  Elf phdr paddr: 0x%x\n", phdr.paddr);
             kprintf("  Elf phdr off: 0x%x\n", phdr.off);
-            kprintf("  Elf phdr memsz: 0x%x\n", phdr.memsz);
             kprintf("  Elf phdr align: 0x%x\n", phdr.align);
 #endif
-        acquire_mutex(&exec_mutex);
+
             if(new_pg_tbl == NULL) {
                 new_pg_tbl = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
                 new_pg_tbl->pml4 = (uint64_t *)KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
@@ -70,10 +70,10 @@ int exec_from_inode(struct inode *ifile,bool replace)
             size = phdr.memsz/PAGE_SIZE;
             if (phdr.memsz % PAGE_SIZE != 0)
                 size++;
-
             //track pages allocated for program image in stack linked list
             block = pmem_alloc_block(size);
             track = kmalloc(sizeof(struct p_memblock));
+            memzero8(track,sizeof(struct p_memblock));
 
             track->block = block;
             track->count = size;
@@ -86,10 +86,6 @@ int exec_from_inode(struct inode *ifile,bool replace)
                 head = track;
             }
             page_ops = USER_PAGE;
-            release_mutex(&exec_mutex);
-#ifdef EXEC_DEBUG_LL
-            kprintf("track->next: %x\n",track->next);
-#endif
             vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT(block),phdr.memsz,phdr.off);
 #ifdef EXEC_DEBUG
             kprintf("%x\n", KERN_PHYS_TO_PVIRT(block));
@@ -120,7 +116,7 @@ int exec_from_inode(struct inode *ifile,bool replace)
                 retval = user_process_replace_exec(t,hdr.entry,name,new_pg_tbl,head);
             }
         }
-       // release_mutex(&exec_mutex);
+        release_spinlock(&exec_spinlock);
 
 
     }

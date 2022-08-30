@@ -1,8 +1,14 @@
 #include <output/output.h>
+#include <output/input.h>
 #define MAX_CHARS 512
 static char input_buffer[MAX_CHARS] = {'\0'};
 static char internal_input_buffer[MAX_CHARS];
 static int input_current_place =0;
+
+void input_init() 
+{
+    kbd_init();
+}
 
 void input_read(char* dest)
 {

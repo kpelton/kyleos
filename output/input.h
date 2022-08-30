@@ -3,5 +3,5 @@
 
 void input_read(char* dest);
 void input_add_char(char in);
-
+void input_init();
 #endif

@@ -5,7 +5,7 @@
 #include <include/types.h>
 #define VFS_MAX_DEVICES 10
 #define FAT_FS 0
-#define VFS_MAX_FNAME 256
+#define VFS_MAX_FNAME 257
 enum inode_type {
     I_DIR,
     I_FILE,

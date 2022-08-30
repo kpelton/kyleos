@@ -2,12 +2,14 @@
 #include <include/types.h>
 #include <irq/irq.h>
 #include <output/input.h>
+#include <locks/spinlock.h>
 
 #define BACKSPACE 0x0E
 #define ENTER 0x1C
-
-
 #define SC_MAX 57
+
+static struct spinlock kbd_spinlock;
+
 const char *sc_name[] = {"ERROR", "Esc", "1", "2", "3", "4", "5", "6",
                          "7", "8", "9", "0", "-", "=", "Backspace", "Tab", "Q", "W", "E",
                          "R", "T", "Y", "U", "I", "O", "P", "[", "]", "Enter", "Lctrl",
@@ -40,6 +42,14 @@ static void keyboard_callback()
 
 void kbd_irq()
 {
+    acquire_spinlock(&kbd_spinlock);
     PIC_sendEOI(1);
     keyboard_callback();
+    release_spinlock(&kbd_spinlock);
+
+}
+
+void kbd_init() 
+{
+    init_spinlock(&kbd_spinlock);
 }

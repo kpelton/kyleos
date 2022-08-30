@@ -4,7 +4,7 @@
 #include <mm/mm.h>
 #include <block/ata.h>
 #include <fs/fat.h>
-#include <locks/mutex.h>
+#include <locks/spinlock.h>
 
 #define DATA_REG 0
 #define ERROR_REG 1
@@ -27,7 +27,7 @@
 //#define ATA_DEBUG
 
 struct mbr_info fs1;
-static struct mutex ata_mutex;
+static struct spinlock ata_spinlock;
 
 uint8_t read_status(void)
 {
@@ -96,7 +96,6 @@ int read_sec(uint32_t sec, void *buffer)
 #ifdef ATA_DEBUG
     print_drive_status();
 #endif
-    acquire_mutex(&ata_mutex);
 
     outb(PRIMARY + DRIVE_HEAD_REG, 0xE0);
     outb(PRIMARY + ERROR_REG, 0x00);
@@ -118,6 +117,7 @@ int read_sec(uint32_t sec, void *buffer)
         print_drive_status();
 #endif
     }
+    acquire_spinlock(&ata_spinlock);
 
     // data is ready
     for (i = 0; i < 256; i++)
@@ -127,7 +127,7 @@ int read_sec(uint32_t sec, void *buffer)
         data[i] = inw(PRIMARY);
     }
     status = read_status();
-    release_mutex(&ata_mutex);
+    release_spinlock(&ata_spinlock);
 
     return 0;
 }
@@ -146,7 +146,7 @@ void ata_init(void)
     part_size = mbr[0x1ca] | mbr[0x1cb] << 8 | mbr[0x1cc] << 16 | mbr[0x1cd] << 24;
     valid_mbr = mbr[0x1fe] | mbr[0x1ff] << 8;
     part_type = mbr[0x1c2];
-    init_mutex(&ata_mutex);
+    init_spinlock(&ata_spinlock);
 
     // Look for valid MBR 0x55aa
     if (valid_mbr == 0xaa55)

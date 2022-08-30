@@ -76,3 +76,5 @@ debug: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -hda test-hd.img -serial stdio -s -S
 gdb: kernel.bin
 	gdb -ex "target remote localhost:1234" kernel.bin
+test-int: kernel32.bin
+	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img 2>log
