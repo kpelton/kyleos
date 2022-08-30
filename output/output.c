@@ -205,7 +205,7 @@ void print_regs(unsigned long exception,unsigned long rip) {
 }
 
 static void puts( char *str) {
-   // vga_kprintf(str);
+    vga_kprintf(str);
     serial_kprintf(str);
 }
 
@@ -213,7 +213,7 @@ static void putc( char c) {
     char buffer[2] = {'\0'};
     buffer[0] = c;
 
-   // vga_kprintf(buffer);
+    vga_kprintf(buffer);
     serial_kprintf(buffer);
 
 }
@@ -270,8 +270,11 @@ int kstrlen(char *str) {
 
 void panic(char *msg)
 {
+    uint64_t rip;
+    //Copy return address to rip variable
+    asm volatile("movq 8(%%rbp) ,%0" : "=g"(rip));
     kprintf(msg);
-    print_regs(0xdeadbeef,0xdeadbeef);
+    print_regs(0xdeadbeef,rip);
     asm("cli");
     asm("hlt");
 
