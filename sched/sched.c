@@ -47,7 +47,7 @@ static int find_free_task()
     int i = 0;
     int found_task = ktasks[i].pid;
     int trys = 0;
-    while (found_task != -1 && ktasks[i].state != TASK_DONE)
+    while (found_task != -1)
     {
         i = (i + 1) % SCHED_MAX_TASKS;
         found_task = ktasks[i].pid;
@@ -99,11 +99,15 @@ struct ktask *get_current_process()
 
 struct ktask *sched_get_process(int pid)
 {
+   acquire_spinlock(&sched_spinlock);
     for (int i = 0; i < SCHED_MAX_TASKS; i++) {
         if (ktasks[i].pid == pid) {
+            release_spinlock(&sched_spinlock);
             return &ktasks[i];
         }
     }
+        release_spinlock(&sched_spinlock);
+
     return NULL;
 }
 
