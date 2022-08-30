@@ -95,7 +95,7 @@ void kinit(void)
 {
     kprintf("Booting.......\n");
     kprintf("Kyle OS.......\n");
-    kprintf("Copyright:Kyle Pelton 2020-2021 all rights reserved\n");
+    kprintf("Copyright:Kyle Pelton 2020-2022 all rights reserved\n");
     kprintf("Install GDT\n");
     gdt_install();
     tss_flush();
