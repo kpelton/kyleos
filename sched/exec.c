@@ -73,7 +73,6 @@ int exec_from_inode(struct inode *ifile,bool replace)
             //track pages allocated for program image in stack linked list
             block = pmem_alloc_block(size);
             track = kmalloc(sizeof(struct p_memblock));
-            memzero8(track,sizeof(struct p_memblock));
 
             track->block = block;
             track->count = size;
