@@ -65,7 +65,7 @@ struct ktask{
     uint64_t context_switches;
     uint64_t *save_rsp;
     uint64_t *save_rip;
-    uint64_t heap_size; //in bytes
+    uint64_t heap_size; //in pages
     struct pg_tbl *mm;
     struct basic_timer timer;
     struct p_memblock *mem_list;

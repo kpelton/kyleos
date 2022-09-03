@@ -146,6 +146,11 @@ int user_process_fork()
     t->context_switches = 0;
     t->parent = curr->pid;
 
+    //TODO: Copy over heap
+    t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(curr->heap_size));
+    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, curr->heap_size, USER_PAGE);
+    t->heap_size = curr->heap_size;
+
     kstrcpy(t->name, curr->name);
     // Copy over parent data using brute force;
 
@@ -236,9 +241,12 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr,char *name,str
     t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
     t->mm = tbl;
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
+
+
     t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_HEAP_SIZE));
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
-    t->user_start_heap = USER_HEAP_VADDR;
+    t->heap_size = USER_HEAP_SIZE;
+
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
@@ -274,9 +282,13 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
     t->mm = tbl;
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
-        t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_HEAP_SIZE));
+
+    //heap
+    t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_HEAP_SIZE));
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
-    t->user_start_heap = USER_HEAP_VADDR;
+    t->heap_size = USER_HEAP_SIZE;
+
+    t->user_start_heap = (uint64_t *) USER_HEAP_VADDR;
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
@@ -342,6 +354,10 @@ bool sched_process_kill(int pid, bool cleanup)
                 t->mm = NULL;
                 for (j = 0; j < USER_STACK_SIZE; j++)
                     pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc + (PAGE_SIZE * j)));
+
+                //TODO: switch heap to use memblock list once size can be adjusted
+                for (uint64_t k = 0; k < t->heap_size; k++)
+                    pmem_free_block(KERN_VIRT_TO_PHYS(t->user_start_heap + (PAGE_SIZE * k)));
 
                 free_memblock_list(t->mem_list);
             }
