@@ -11,6 +11,7 @@
 
 static struct spinlock exec_spinlock;
 #define EXEC_DEBUG_LL
+#define EXEC_DEBUG
 void exec_init(){
     init_spinlock(&exec_spinlock);
 }
@@ -29,6 +30,7 @@ int exec_from_inode(struct inode *ifile,bool replace)
     int retval = -1;
     uint32_t size;
     void *block;
+    uint64_t *blockm;
     struct pg_tbl *new_pg_tbl = NULL;
     uint64_t page_ops;
     char name[VFS_MAX_FNAME];
@@ -61,6 +63,8 @@ int exec_from_inode(struct inode *ifile,bool replace)
             kprintf("  Elf phdr paddr: 0x%x\n", phdr.paddr);
             kprintf("  Elf phdr off: 0x%x\n", phdr.off);
             kprintf("  Elf phdr align: 0x%x\n", phdr.align);
+            kprintf("  Elf phdr memsz: 0x%x\n", phdr.memsz);
+            kprintf("  Elf phdr filesz: 0x%x\n", phdr.filesz);
 #endif
 
             if(new_pg_tbl == NULL) {
@@ -74,6 +78,13 @@ int exec_from_inode(struct inode *ifile,bool replace)
             block = pmem_alloc_block(size);
             track = kmalloc(sizeof(struct p_memblock));
 
+            //bss section zero pages
+            if (phdr.memsz != phdr.filesz) {
+                blockm = (uint64_t *) KERN_PHYS_TO_PVIRT(block);
+                for(uint32_t j = 0; j< (size*PAGE_SIZE)/sizeof(uint64_t); j++)
+                    blockm[j] = 0;
+            }
+            
             track->block = block;
             track->count = size;
             track->next = NULL;
@@ -85,7 +96,8 @@ int exec_from_inode(struct inode *ifile,bool replace)
                 head = track;
             }
             page_ops = USER_PAGE;
-            vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT(block),phdr.memsz,phdr.off);
+            //if (phdr.vaddr != 0x40a000)
+            vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT(block),phdr.filesz,phdr.off);
 #ifdef EXEC_DEBUG
             kprintf("%x\n", KERN_PHYS_TO_PVIRT(block));
             kprintf("%x\n", *(uint64_t *)KERN_PHYS_TO_PVIRT(block));

@@ -60,6 +60,12 @@ static int close(int fd)
     return user_process_close_fd(pid, fd);
 }
 
+static void *sbrk(uint64_t increment)
+{
+    struct ktask *pid = get_current_process();
+    return user_process_sbrk(pid,increment);
+}
+
 static void exit(int code)
 {
     struct ktask *pid = get_current_process();
@@ -101,6 +107,7 @@ void *syscall_tbl[] = {
     (void *)&exit,       //6
     (void *)&wait,       //7
     (void *)&exec,       //8
+    (void *)&sbrk,       //9
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

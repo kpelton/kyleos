@@ -9,6 +9,8 @@
 #include <locks/spinlock.h>
 #define USER_STACK_VADDR 0x600000000
 #define USER_STACK_SIZE 32
+#define USER_HEAP_VADDR 0x700000000
+#define USER_HEAP_SIZE 32
 #define IDLE_PID 0
 
 static struct ktask ktasks[SCHED_MAX_TASKS];
@@ -234,7 +236,9 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr,char *name,str
     t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
     t->mm = tbl;
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
-
+    t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_HEAP_SIZE));
+    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
+    t->user_start_heap = USER_HEAP_VADDR;
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
@@ -270,6 +274,9 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
     t->mm = tbl;
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
+        t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_HEAP_SIZE));
+    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
+    t->user_start_heap = USER_HEAP_VADDR;
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;

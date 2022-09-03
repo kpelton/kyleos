@@ -58,12 +58,14 @@ struct ktask{
     uint64_t *start_stack;
     uint64_t *user_stack_alloc;
     uint64_t *user_start_stack;
+    uint64_t *user_start_heap;
     uint64_t *start_addr;
     uint64_t *s_rsp;
     uint64_t *s_rbp;
     uint64_t context_switches;
     uint64_t *save_rsp;
     uint64_t *save_rip;
+    uint64_t heap_size; //in bytes
     struct pg_tbl *mm;
     struct basic_timer timer;
     struct p_memblock *mem_list;

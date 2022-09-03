@@ -52,6 +52,14 @@ void user_process_exit(struct ktask *t, int code)
     schedule();
 }
 
+void *user_process_sbrk(struct ktask *t, uint64_t increment) 
+{
+    kprintf("Sbrk called with %x\n", increment);
+    void * ret = t->user_start_heap;
+    kprintf("Returning %x\n",ret);
+    return ret;
+}
+
 int process_wait(int pid)
 {
     struct ktask *child;

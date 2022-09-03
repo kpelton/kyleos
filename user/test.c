@@ -359,7 +359,7 @@ void printtest()
     else
     {
         // printf("I'm the child\n");
-        sleep(1000);
+        sleep(10000);
         exit(12345);
     }
 }
@@ -376,7 +376,7 @@ int _start()
     // sleep(100000);
     // printf("Done\n");
     printtest();
-    forktest();
+    //forktest();
     exit(0);
     return 0;
 }
