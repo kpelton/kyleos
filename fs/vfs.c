@@ -160,6 +160,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
     char *blah = path;
     char buffer[1024];
     struct inode_list *ptr;
+    struct inode *iptr;
     struct dnode *dptr = pwd;
     // if (*blah == '/')
     //     return;
@@ -197,9 +198,10 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
         // kprintf("%s\n",ptr->current->i_name);
         if (kstrcmp(ptr->current->i_name, blah) == 0 && ptr->current->i_type == (int)type)
         {
-
+            iptr = kmalloc(sizeof(struct inode));
+            vfs_copy_inode(ptr->current,iptr);
             vfs_free_dnode(dptr);
-            return ptr->current;
+            return iptr;
         }
         ptr = ptr->next;
     }

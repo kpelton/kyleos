@@ -1,5 +1,6 @@
 #include <sched/ps.h>
 #include <output/output.h>
+#define START_USER_FD 3
 
 int user_process_open_fd(struct ktask *t, struct inode *iptr, uint32_t flags)
 {
@@ -10,7 +11,7 @@ int user_process_open_fd(struct ktask *t, struct inode *iptr, uint32_t flags)
         kprintf("fail in user_process_open_fd\n");
         goto done;
     }
-    for (int j = 0; j < MAX_TASK_OPEN_FILES; j++)
+    for (int j = START_USER_FD; j < MAX_TASK_OPEN_FILES; j++)
     {
 
         if (t->open_fds[j] == NULL)
@@ -21,8 +22,8 @@ int user_process_open_fd(struct ktask *t, struct inode *iptr, uint32_t flags)
         }
     }
 done:
-    kprintf("Returning %d\n", fd);
-    return fd;
+    panic("unable to open file");
+    return -1;
 }
 
 int user_process_close_fd(struct ktask *t, int fd)

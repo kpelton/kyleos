@@ -190,7 +190,7 @@ jump_usermode:
     ; set up the stack frame iret expects
     push (4 * 8) | 3 ; data selector
     push rsi ; current esp
-    pushf
+    push 0x200 ;Enable interrupts in userspace
     push (3 * 8) | 3 ; code selector (ring 3 code with bottom 2 bits set for ring 3)
     push rdi ; instruction address to return to
     ; clear gp registers beforing jumping to userspace

@@ -20,10 +20,9 @@ static int open(char *path, uint32_t flags)
     if (flags > MAX_FILE_FLAGS)
         goto done;
 
-    struct dnode *dptr = vfs_read_root_dir("/");
-    struct inode *iptr = vfs_walk_path(path, dptr, I_FILE);
+    struct inode *iptr = vfs_walk_path(path, vfs_read_root_dir("/"), I_FILE);
     struct ktask *pid = get_current_process();
-    vfs_free_dnode(dptr);
+    //vfs_free_dnode(dptr);
 
     if (iptr != NULL)
     {
