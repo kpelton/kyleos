@@ -84,12 +84,18 @@ void *kmalloc(unsigned int p_size)
 void kfree(void *ptr)
 {
     acquire_spinlock(&kmem_spinlock);
-
+    //kprintf("kfree called %x\n",ptr);
     struct mm_block *lptr = (struct mm_block *)(((uint64_t)ptr) - (sizeof(struct mm_block)));
     if (lptr->addr == ptr)
     {
-        lptr->free = FREE;
-      //  kprintf("MM Free %x size:%x\n", lptr->addr, lptr->size);
+        if(lptr->free == FREE) {
+            kprintf("block already freed:0x%x\n",lptr->addr);
+            for(;;);
+        }
+        else
+        {
+            lptr->free = FREE;
+        }
     }
     else
     {
