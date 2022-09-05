@@ -11,6 +11,7 @@ static struct mutex uart_print_mutex;
 
 void serial_kprintf(char* str)
 {
+   acquire_mutex(&uart_print_mutex);
 
     char* strp = str;
     while (*strp != '\0')  {
@@ -20,6 +21,8 @@ void serial_kprintf(char* str)
         strp++;
         
     }
+       release_mutex(&uart_print_mutex);
+
 }
 
 void serial_init()

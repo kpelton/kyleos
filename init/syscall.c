@@ -78,9 +78,16 @@ static int wait(int pid)
 
 static int debugprint(char *msg)
 {
-    kprintf("%s", msg);
+    kprintf(msg);
+    //serial_kprintf(msg);
     return 0;
 }
+
+static void debug_read_input(char *dst)
+{
+    read_input(dst);
+}
+
 //TODO add support for arguments
 static int exec(char *path)
 {
@@ -107,6 +114,7 @@ void *syscall_tbl[] = {
     (void *)&wait,       //7
     (void *)&exec,       //8
     (void *)&sbrk,       //9
+    (void *)&debug_read_input,       //10
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

@@ -150,6 +150,7 @@ int user_process_fork()
     t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(curr->heap_size));
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, curr->heap_size, USER_PAGE);
     t->heap_size = curr->heap_size;
+    t->user_heap_loc = curr->user_heap_loc;
 
     kstrcpy(t->name, curr->name);
     // Copy over parent data using brute force;
@@ -246,6 +247,7 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr,char *name,str
     t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_HEAP_SIZE));
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
     t->heap_size = USER_HEAP_SIZE;
+    t->user_heap_loc = t->user_start_heap;
 
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
@@ -287,8 +289,9 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_HEAP_SIZE));
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
     t->heap_size = USER_HEAP_SIZE;
-
     t->user_start_heap = (uint64_t *) USER_HEAP_VADDR;
+    t->user_heap_loc = t->user_start_heap;
+
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
@@ -414,8 +417,7 @@ void sched_stats()
             kprintf("PID:%d\n", ktasks[i].pid);
             kprintf("  parent:%d\n", ktasks[i].parent);
             kprintf("  name:%s\n", ktasks[i].name);
-            kprintf("  stack:           0x%x\n", ktasks[i].start_stack);
-            kprintf("  stack end:       0x%x\n", ktasks[i].start_stack - KTHREAD_STACK_SIZE);
+            kprintf("  stack:           0x%x\n", ktasks[i].stack_alloc);
             kprintf("  Process State:   %s\n", task_type_str[ktasks[i].state]);
             kprintf("  context switches:0x%x\n", ktasks[i].context_switches);
             kprintf("  Process Type:    %s\n", process_types_str[ktasks[i].type]);

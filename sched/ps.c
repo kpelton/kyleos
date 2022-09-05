@@ -55,9 +55,16 @@ void user_process_exit(struct ktask *t, int code)
 
 void *user_process_sbrk(struct ktask *t, uint64_t increment) 
 {
+    void *ret = NULL;
     kprintf("Sbrk called with %x\n", increment);
-    void * ret = t->user_start_heap;
-    kprintf("Returning %x\n",ret);
+    if (increment == 0)
+        ret = t->user_start_heap;
+    else {
+        t->user_heap_loc += increment;
+        ret = t->user_heap_loc;
+        
+    }
+    kprintf("sbrk Returning %x %x\n",increment, ret);
     return ret;
 }
 

@@ -59,6 +59,7 @@ struct ktask{
     uint64_t *user_stack_alloc;
     uint64_t *user_start_stack;
     uint64_t *user_start_heap;
+    uint64_t *user_heap_loc;
     uint64_t *start_addr;
     uint64_t *s_rsp;
     uint64_t *s_rbp;
