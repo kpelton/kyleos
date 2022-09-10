@@ -64,3 +64,9 @@ debug: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -hda test-hd.img -serial stdio -s -S
 gdb: kernel.bin
 	gdb -ex "target remote localhost:1234" kernel.bin
+iso: kernel.bin
+	cp kernel.bin iso
+	grub-mkrescue -o bootable.iso iso
+iso-test: bootable.iso
+	qemu-system-x86_64 -m 60M -cdrom bootable.iso  -serial stdio
+
