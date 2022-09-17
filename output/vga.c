@@ -29,7 +29,7 @@ void vga_scroll()
 {
     int width = 80 * 2; // 2 bytes per char
     int rows = 25;
-    memcpy64(vram,vram +width,width*rows);
+    memcpy64((uint64_t *)vram,(uint64_t *)(vram + width),width*rows);
 
 }
 
