@@ -81,6 +81,15 @@ char * kstrncpy(char *dest, const char *src,int bytes) {
     return dest;
 }
 
+ inline uint64_t * memzero64(uint64_t *dest,uint64_t bytes) {
+    uint64_t i;
+    uint64_t j;
+    for (i=0, j=0; j <bytes; j+=sizeof(uint64_t), i++) {
+        dest[i] = 0;
+    }
+    return dest;
+}
+
 uint8_t * memzero8(uint8_t *dest,uint64_t bytes) {
     uint64_t i;
     for (i=0; i <=bytes; i++) {

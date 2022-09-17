@@ -21,7 +21,7 @@ static struct mutex sched_mutex;
 static struct spinlock sched_spinlock;
 
 void switch_to(uint64_t *rsp, uint64_t *addr);
-void resume_p(uint64_t *rsp, uint64_t *rbp);
+extern void resume_p(uint64_t *rsp, uint64_t *rbp);
 static const char process_types_str[PROCESS_TYPES_LEN][20] = {"Kernel", "User"};
 const char task_type_str[TASK_STATE_NUM][20] = {"RUNNING", "READY", "NEW", "BLOCKED", "DONE"};
 //#define SCHED_DEBUG
@@ -551,7 +551,6 @@ void schedule()
             }else{
                 kernel_switch_paging();
             }
-            // kprintf("%d %x\n",i,ktasks[i].s_rsp);
             resume_p(ktasks[i].s_rsp, ktasks[i].s_rbp);
             success = true;
         }
