@@ -274,11 +274,10 @@ for(;;) {
     //
     while (1)
     {
-        for (int i = 0; i < 512; i++)
-            buffer[i] = '\0';
         read_input(buffer);
         if (buffer[0] == '\0')
         {
+            asm("hlt");
             continue;
         }
         if (kstrcmp(buffer, "ls\n") == 0)

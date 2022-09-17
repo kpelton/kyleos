@@ -1,4 +1,6 @@
 #include <output/vga.h>
+#include <output/output.h>
+
 #include <asm/asm.h>
 static int cursor_x = 0;
 static int cursor_y = 0;
@@ -25,25 +27,10 @@ void vga_clear()
 }
 void vga_scroll()
 {
-    int i=0;
-    int j=0;
-    int offset = 0;
-    int from_offset = 0;
-        for(j=1; j<25; j+=1) {
-            for(i=0; i<80;  i+=1) {
-                offset = (i*2)+(((j-1)*80)*2);
-                from_offset = (i*2)+(((j)*80)*2);
-                vram[offset] = vram[from_offset];
-                vram[offset+1] = vram[from_offset+1];
-                //vram[offset+1] = vram[from_offset+1] ;
-        }
-    }
-    for(i=0; i<80;  i+=1) {
-        offset = (i*2)+(((24)*80)*2);
-        vram[offset]=0;
-        vram[offset+1]=0;
-    }
- 
+    int width = 80 * 2; // 2 bytes per char
+    int rows = 25;
+    memcpy64(vram,vram +width,width*rows);
+
 }
 
 void print_loc(const int x, const int y, 
