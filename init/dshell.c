@@ -277,7 +277,7 @@ for(;;) {
         read_input(buffer);
         if (buffer[0] == '\0')
         {
-            asm("hlt");
+            asm("sti;hlt");
             continue;
         }
         if (kstrcmp(buffer, "ls\n") == 0)
