@@ -419,6 +419,7 @@ resume_p:
     mov rsp,rdi
     mov rbp,rsi
     sub rsp ,8
+    sti
     ret
 
 [global panic_handler] ; global int handler
