@@ -23,7 +23,7 @@ uint64_t initial_pml4[512] __attribute__((aligned(0x20)));         // must be al
 uint64_t initial_page_dir_tab[512] __attribute__((aligned(0x20))); // must be aligned to (at least)0x20, ...
 uint64_t initial_page_dir[512] __attribute__((aligned(0x1000)));   // must be aligned to page boundary
 uint64_t initial_page_tab[INITIAL_PAGE_TAB][512] __attribute__((aligned(0x1000)));
-uint64_t initial_iden_page_dir_tab[512];
+uint64_t initial_iden_page_dir_tab[512] __attribute__((aligned(0x1000)));
 
 
 uint64_t *kernel_pml4;
