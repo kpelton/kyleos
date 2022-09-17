@@ -536,7 +536,16 @@ void schedule()
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
             user_switch_paging(ktasks[i].mm);
 
-            jump_usermode((uint64_t)ktasks[i].start_addr, ktasks[i].user_start_stack);
+           // jump_usermode((uint64_t)ktasks[i].start_addr, ktasks[i].user_start_stack);
+
+           ///Need to call fucntion with inline asm because due to issues with -O2
+                asm volatile("movq %0,%%rdi\n\t"
+                "movq %1,%%rsi\n\t"
+                "movq %2, %%rax\n\t"
+                "callq *%%rax"
+                 :: "g"(ktasks[i].start_addr),"g"(ktasks[i].user_start_stack),"g"(&jump_usermode):
+                 "rdi","rsi","rax");
+
             success = true;
         }
         else if (ktasks[i].state == TASK_READY)
@@ -551,7 +560,16 @@ void schedule()
             }else{
                 kernel_switch_paging();
             }
-            resume_p(ktasks[i].s_rsp, ktasks[i].s_rbp);
+            //resume_p(ktasks[i].s_rsp, ktasks[i].s_rbp);
+           ///Need to call fucntion with inline asm because due to issues with -O2
+
+                asm volatile("movq %0,%%rdi\n\t"
+                "movq %1,%%rsi\n\t"
+                "movq %2, %%rax\n\t"
+                "callq *%%rax"
+                 :: "g"(ktasks[i].s_rsp),"g"(ktasks[i].s_rbp),"g"(&resume_p):
+                 "rdi","rsi","rax");
+
             success = true;
         }
     }
