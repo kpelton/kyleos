@@ -94,21 +94,22 @@ void kthread_add(void (*fptr)(), char *name)
 struct ktask *get_current_process()
 {
     struct ktask *val;
-    val =  &ktasks[prev_task];
+    val = &ktasks[prev_task];
     return val;
-
 }
 
 struct ktask *sched_get_process(int pid)
 {
-   acquire_spinlock(&sched_spinlock);
-    for (int i = 0; i < SCHED_MAX_TASKS; i++) {
-        if (ktasks[i].pid == pid) {
+    acquire_spinlock(&sched_spinlock);
+    for (int i = 0; i < SCHED_MAX_TASKS; i++)
+    {
+        if (ktasks[i].pid == pid)
+        {
             release_spinlock(&sched_spinlock);
             return &ktasks[i];
         }
     }
-        release_spinlock(&sched_spinlock);
+    release_spinlock(&sched_spinlock);
 
     return NULL;
 }
@@ -146,7 +147,7 @@ int user_process_fork()
     t->context_switches = 0;
     t->parent = curr->pid;
 
-    //TODO: Copy over heap
+    // TODO: Copy over heap
     t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(curr->heap_size));
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, curr->heap_size, USER_PAGE);
     t->heap_size = curr->heap_size;
@@ -190,7 +191,7 @@ int user_process_fork()
     // Set parent return value
     rptr->rax = pid;
 
-    for (int j =0 ; j < MAX_TASK_OPEN_FILES; j++)
+    for (int j = 0; j < MAX_TASK_OPEN_FILES; j++)
     {
         t->open_fds[j] = curr->open_fds[j];
         if (t->open_fds[j] != NULL)
@@ -229,20 +230,18 @@ int user_process_fork()
     return -1;
 }
 
-int user_process_replace_exec(struct ktask *t, uint64_t startaddr,char *name,struct pg_tbl *tbl, struct p_memblock *head)
+int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct pg_tbl *tbl, struct p_memblock *head)
 {
 
-    //save old pid and parent pid since kill will clear them
+    // save old pid and parent pid since kill will clear them
     int c_pid = t->pid;
     int parent = t->parent;
-
 
     clear_fd_table(t);
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
     t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
     t->mm = tbl;
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
-
 
     t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_HEAP_SIZE));
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
@@ -265,11 +264,9 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr,char *name,str
 
     schedule();
 
-    //will never return
+    // will never return
     return 0;
 }
-
-
 
 int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, struct p_memblock *head)
 {
@@ -285,11 +282,11 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     t->mm = tbl;
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
 
-    //heap
+    // heap
     t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_HEAP_SIZE));
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
     t->heap_size = USER_HEAP_SIZE;
-    t->user_start_heap = (uint64_t *) USER_HEAP_VADDR;
+    t->user_start_heap = (uint64_t *)USER_HEAP_VADDR;
     t->user_heap_loc = t->user_start_heap;
 
     t->state = TASK_NEW;
@@ -358,7 +355,7 @@ bool sched_process_kill(int pid, bool cleanup)
                 for (j = 0; j < USER_STACK_SIZE; j++)
                     pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc + (PAGE_SIZE * j)));
 
-                //TODO: switch heap to use memblock list once size can be adjusted
+                // TODO: switch heap to use memblock list once size can be adjusted
                 for (uint64_t k = 0; k < t->heap_size; k++)
                     pmem_free_block(KERN_VIRT_TO_PHYS(t->user_start_heap + (PAGE_SIZE * k)));
 
@@ -373,7 +370,7 @@ bool sched_process_kill(int pid, bool cleanup)
             kprintf("Killed %d\n", t->pid);
 #endif
             // Close any opened files
-            for (j = 0 ; j < MAX_TASK_OPEN_FILES; j++)
+            for (j = 0; j < MAX_TASK_OPEN_FILES; j++)
                 if (t->open_fds[j] != NULL)
                 {
                     vfs_close_file(t->open_fds[j]);
@@ -456,7 +453,7 @@ static int find_next_task(int current_task)
         if (trys == SCHED_MAX_TASKS * 2)
             panic("Could not find a task to run!");
     }
-release_spinlock(&sched_spinlock);
+    release_spinlock(&sched_spinlock);
     return found_task;
 }
 
@@ -483,7 +480,7 @@ void schedule()
     bool success = false;
     bool skip_idle = false;
 
-    if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_NEW && ktasks[prev_task].state != TASK_DONE )
+    if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_NEW && ktasks[prev_task].state != TASK_DONE)
     {
         ktasks[prev_task].state = TASK_READY;
         // save old stack
@@ -495,7 +492,7 @@ void schedule()
     while (success == false)
     {
         // only set to ready if someone else has not changed the state
-        if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_NEW && ktasks[prev_task].state != TASK_DONE )
+        if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_NEW && ktasks[prev_task].state != TASK_DONE)
         {
             ktasks[prev_task].state = TASK_READY;
             // save old stack
@@ -505,19 +502,24 @@ void schedule()
         update_timers();
         next_task = find_next_task(i);
 
-        //If we are on the idle PID skip it if there is something else to run
-        if (i == IDLE_PID) {
+        // If we are on the idle PID skip it if there is something else to run
+        if (i == IDLE_PID)
+        {
             skip_idle = false;
 
-            for (int j = IDLE_PID+1; j < SCHED_MAX_TASKS; j++)
-                if(ktasks[j].pid != -1 && (ktasks[j].state == TASK_NEW || ktasks[j].state == TASK_READY)) {
+            for (int j = IDLE_PID + 1; j < SCHED_MAX_TASKS; j++)
+                if (ktasks[j].pid != -1 && (ktasks[j].state == TASK_NEW || ktasks[j].state == TASK_READY))
+                {
                     skip_idle = true;
                     break;
                 }
-            if(skip_idle == true){
+            if (skip_idle == true)
+            {
                 continue; // go to next task
-            }else{
-                //kprintf("idle\n");
+            }
+            else
+            {
+                // kprintf("idle\n");
             }
         }
 
@@ -528,7 +530,6 @@ void schedule()
             switch_to(ktasks[i].start_stack, ktasks[i].start_addr);
             success = true;
             kernel_switch_paging();
-
         }
         else if (ktasks[i].state == TASK_NEW && ktasks[i].type == USER_PROCESS)
         {
@@ -536,15 +537,15 @@ void schedule()
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
             user_switch_paging(ktasks[i].mm);
 
-           // jump_usermode((uint64_t)ktasks[i].start_addr, ktasks[i].user_start_stack);
+            // jump_usermode((uint64_t)ktasks[i].start_addr, ktasks[i].user_start_stack);
 
-           ///Need to call fucntion with inline asm because due to issues with -O2
-                asm volatile("movq %0,%%rdi\n\t"
-                "movq %1,%%rsi\n\t"
-                "movq %2, %%rax\n\t"
-                "callq *%%rax"
-                 :: "g"(ktasks[i].start_addr),"g"(ktasks[i].user_start_stack),"g"(&jump_usermode):
-                 "rdi","rsi","rax");
+            /// Need to call fucntion with inline asm because due to issues with -O2
+            asm volatile("movq %0,%%rdi\n\t"
+                         "movq %1,%%rsi\n\t"
+                         "movq %2, %%rax\n\t"
+                         "callq *%%rax" ::"g"(ktasks[i].start_addr),
+                         "g"(ktasks[i].user_start_stack), "g"(&jump_usermode)
+                         : "rdi", "rsi", "rax");
 
             success = true;
         }
@@ -557,18 +558,20 @@ void schedule()
             if (ktasks[i].type == USER_PROCESS)
             {
                 user_switch_paging(ktasks[i].mm);
-            }else{
+            }
+            else
+            {
                 kernel_switch_paging();
             }
-            //resume_p(ktasks[i].s_rsp, ktasks[i].s_rbp);
-           ///Need to call fucntion with inline asm because due to issues with -O2
+            // resume_p(ktasks[i].s_rsp, ktasks[i].s_rbp);
+            /// Need to call fucntion with inline asm because due to issues with -O2
 
-                asm volatile("movq %0,%%rdi\n\t"
-                "movq %1,%%rsi\n\t"
-                "movq %2, %%rax\n\t"
-                "callq *%%rax"
-                 :: "g"(ktasks[i].s_rsp),"g"(ktasks[i].s_rbp),"g"(&resume_p):
-                 "rdi","rsi","rax");
+            asm volatile("movq %0,%%rdi\n\t"
+                         "movq %1,%%rsi\n\t"
+                         "movq %2, %%rax\n\t"
+                         "callq *%%rax" ::"g"(ktasks[i].s_rsp),
+                         "g"(ktasks[i].s_rbp), "g"(&resume_p)
+                         : "rdi", "rsi", "rax");
 
             success = true;
         }
