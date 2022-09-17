@@ -539,7 +539,7 @@ void schedule()
 
             // jump_usermode((uint64_t)ktasks[i].start_addr, ktasks[i].user_start_stack);
 
-            /// Need to call fucntion with inline asm because due to issues with -O2
+            /// Need to call fucntion with inline asm due to issues with -O2
             asm volatile("movq %0,%%rdi\n\t"
                          "movq %1,%%rsi\n\t"
                          "movq %2, %%rax\n\t"
@@ -564,7 +564,7 @@ void schedule()
                 kernel_switch_paging();
             }
             // resume_p(ktasks[i].s_rsp, ktasks[i].s_rbp);
-            /// Need to call fucntion with inline asm because due to issues with -O2
+            /// Need to call fucntion with inline asm due to issues with -O2
 
             asm volatile("movq %0,%%rdi\n\t"
                          "movq %1,%%rsi\n\t"
