@@ -72,7 +72,7 @@ char * kstrncpy(char *dest, const char *src,int bytes) {
 }
 
 
- uint64_t * memcpy64(uint64_t *dest, const uint64_t *src,uint64_t bytes) {
+ inline uint64_t * memcpy64(uint64_t *dest, const uint64_t *src,uint64_t bytes) {
     uint64_t i;
     uint64_t j;
     for (i=0, j=0; j <bytes; j+=sizeof(uint64_t), i++) {

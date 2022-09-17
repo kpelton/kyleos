@@ -33,7 +33,7 @@ void vga_scroll()
 
 }
 
-void print_loc(const int x, const int y, 
+static inline void print_loc(const int x, const int y,
         const int back, const int fore, 
         const char c, const int blink)
 {
@@ -68,7 +68,8 @@ void vga_kprintf(char *str)
                 cursor_y=24;
             }
         }
-        update_cursor(cursor_y,cursor_x);
     }
+        update_cursor(cursor_y,cursor_x);
+
 }
 
