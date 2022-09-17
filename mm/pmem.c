@@ -121,7 +121,7 @@ uint64_t pmem_addr_find_first_chunk(uint64_t size,uint64_t chunk_size, uint64_t 
 {
     uint64_t i;
     uint64_t addr=0;
-    uint64_t found_size;
+    uint64_t found_size=0;
     for (i=0; i<get_block_count(size); i++) {
 
         if (bitmap[i] == 0x0){
