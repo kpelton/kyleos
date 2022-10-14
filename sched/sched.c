@@ -151,6 +151,8 @@ int user_process_fork()
     t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(curr->heap_size));
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, curr->heap_size, USER_PAGE);
     t->heap_size = curr->heap_size;
+    t->requested_heap_size = curr->requested_heap_size;
+    t->requested_heap_increase = curr->requested_heap_increase;
     t->user_heap_loc = curr->user_heap_loc;
 
     kstrcpy(t->name, curr->name);
@@ -247,6 +249,8 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
     t->heap_size = USER_HEAP_SIZE;
     t->user_heap_loc = t->user_start_heap;
+    t->requested_heap_size = 0;
+    t->requested_heap_increase = 0;
 
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
@@ -288,7 +292,8 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     t->heap_size = USER_HEAP_SIZE;
     t->user_start_heap = (uint64_t *)USER_HEAP_VADDR;
     t->user_heap_loc = t->user_start_heap;
-
+    t->requested_heap_size = 0;
+    t->requested_heap_increase = 0;
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
@@ -419,6 +424,7 @@ void sched_stats()
             kprintf("  context switches:0x%x\n", ktasks[i].context_switches);
             kprintf("  Process Type:    %s\n", process_types_str[ktasks[i].type]);
             kprintf("  Sleep state:     %s\n", str_timer_states[ktasks[i].timer.state]);
+            kprintf("  User Heap size        0x%x\n", ktasks[i].requested_heap_size);
             kprintf("  File Table\n");
             for (j = 0; j < MAX_TASK_OPEN_FILES; j++)
             {
@@ -564,7 +570,7 @@ void schedule()
                 kernel_switch_paging();
             }
             // resume_p(ktasks[i].s_rsp, ktasks[i].s_rbp);
-            /// Need to call fucntion with inline asm due to issues with -O2
+            /// Need to call fucntion with inline asm  due to issues with -O2
 
             asm volatile("movq %0,%%rdi\n\t"
                          "movq %1,%%rsi\n\t"

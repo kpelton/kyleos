@@ -28,9 +28,11 @@ int exec_from_inode(struct inode *ifile,bool replace)
     struct p_memblock *track = NULL;
     vfs_read_file(rfile, &hdr, sizeof(struct elfhdr));
     int retval = -1;
-    uint32_t size;
+    uint32_t size = 0;
+    uint64_t vaddr;
     void *block;
     uint64_t *blockm;
+    uint32_t offset_delta = 0;
     struct pg_tbl *new_pg_tbl = NULL;
     uint64_t page_ops;
     char name[VFS_MAX_FNAME];
@@ -55,6 +57,8 @@ int exec_from_inode(struct inode *ifile,bool replace)
                // r
                 continue;
             }
+            offset_delta = 0;
+            size = 0;
 #ifdef EXEC_DEBUG
             kprintf("-- %d --\n", i);
             kprintf("  Elf phdr type: 0x%x\n", phdr.type);
@@ -71,7 +75,16 @@ int exec_from_inode(struct inode *ifile,bool replace)
                 new_pg_tbl = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
                 new_pg_tbl->pml4 = (uint64_t *)KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
             }
-            size = phdr.memsz/PAGE_SIZE;
+
+            if (((phdr.vaddr) & 0x0000000000000fff) != 0UL) {
+                vaddr = phdr.vaddr & 0xfffffffffffff000;
+                offset_delta += phdr.vaddr &0xfff;
+                kprintf("not paged aligned\n");
+                size++;
+            }else{
+                vaddr = phdr.vaddr;
+            }
+            size += phdr.memsz/PAGE_SIZE;
             if (phdr.memsz % PAGE_SIZE != 0)
                 size++;
             //track pages allocated for program image in stack linked list
@@ -97,7 +110,8 @@ int exec_from_inode(struct inode *ifile,bool replace)
             }
             page_ops = USER_PAGE;
             //if (phdr.vaddr != 0x40a000)
-            vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT(block),phdr.filesz,phdr.off);
+            kprintf("Reading to %x \n",vaddr+offset_delta);
+            vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT((uint8_t*)block+offset_delta),phdr.filesz,phdr.off);
 #ifdef EXEC_DEBUG
             kprintf("%x\n", KERN_PHYS_TO_PVIRT(block));
             kprintf("%x\n", *(uint64_t *)KERN_PHYS_TO_PVIRT(block));
@@ -109,8 +123,8 @@ int exec_from_inode(struct inode *ifile,bool replace)
                 page_ops = USER_PAGE_RO;
             }
             track->pg_opts = page_ops;
-            track->vaddr = phdr.vaddr;
-            paging_map_user_range(new_pg_tbl,(uint64_t) block,phdr.vaddr,size,page_ops);
+            track->vaddr = vaddr;
+            paging_map_user_range(new_pg_tbl,(uint64_t) block,vaddr,size,page_ops);
 
 
             //kprintf("  Read in %d\n", bytes);
