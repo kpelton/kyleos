@@ -7,11 +7,7 @@
 #include <mm/pmem.h>
 #include <locks/mutex.h>
 #include <locks/spinlock.h>
-#define USER_STACK_VADDR 0x600000000
-#define USER_STACK_SIZE 32
-#define USER_HEAP_VADDR 0x700000000
-#define USER_HEAP_SIZE 32
-#define IDLE_PID 0
+
 
 static struct ktask ktasks[SCHED_MAX_TASKS];
 static uint32_t next_task = 0;

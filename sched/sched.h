@@ -9,6 +9,12 @@
 #define SCHED_MAX_NAME 32
 #define KTHREAD_STACK_SIZE 4096*8
 
+#define USER_STACK_VADDR 0x600000000
+#define USER_STACK_SIZE 32
+#define USER_HEAP_VADDR 0x700000000
+#define USER_HEAP_SIZE 32
+#define IDLE_PID 0
+
 struct p_memblock {
     void *block;
     uint32_t count;
