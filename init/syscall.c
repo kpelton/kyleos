@@ -78,7 +78,7 @@ static int wait(int pid)
 
 static int debugprint(char *msg)
 {
-    kprintf(msg);
+    kprintf("%s",msg);
     //serial_kprintf(msg);
     return 0;
 }

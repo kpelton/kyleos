@@ -42,9 +42,9 @@ struct dnode {
     struct inode_list* head;
 };
 //File open flags
-#define O_RDONLY 0x1
-#define O_WRONLY 0x2
-#define O_RDWR   0x4
+#define O_RDONLY 0x0
+#define O_WRONLY 0x1
+#define O_RDWR   0x2
 #define MAX_FILE_FLAGS (O_RDONLY | O_WRONLY | O_RDWR)
 
 struct file {
