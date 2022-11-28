@@ -162,6 +162,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
     struct inode_list *ptr;
     struct inode *iptr;
     struct dnode *dptr = pwd;
+    bool found = false;
     // if (*blah == '/')
     //     return;
 
@@ -177,6 +178,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
         }
         // printf("%s\n",blah);
         ptr = dptr->head;
+        found = false;
         while (ptr)
         {
             // kprintf("%s %s\n",ptr->current->i_name,buffer);
@@ -186,10 +188,15 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
                 if (dptr != pwd)
                     vfs_free_dnode(dptr);
                 dptr = vfs_read_inode_dir(ptr->current);
+                //Current entry on path was found
+                found = true;
                 break;
             }
             ptr = ptr->next;
         }
+        //IF we didn't find anything and we are not on the last or first node then return NULL
+        if(!found && end > 0)
+            return NULL;
     }
 
     ptr = dptr->head;
