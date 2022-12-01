@@ -96,6 +96,7 @@ int read_sec(uint32_t sec, void *buffer)
 #ifdef ATA_DEBUG
     print_drive_status();
 #endif
+    acquire_mutex(&ata_mutex);
 
     outb(PRIMARY + DRIVE_HEAD_REG, 0xE0);
     outb(PRIMARY + ERROR_REG, 0x00);
@@ -117,7 +118,6 @@ int read_sec(uint32_t sec, void *buffer)
         print_drive_status();
 #endif
     }
-    acquire_mutex(&ata_mutex);
 
     // data is ready
     for (i = 0; i < 256; i++)
