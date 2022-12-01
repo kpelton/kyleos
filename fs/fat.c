@@ -167,7 +167,7 @@ static inline uint32_t clust2sec(uint32_t cluster, struct fatFS *fs)
 struct dnode *fat_read_root_dir(struct vfs_device *dev)
 {
     struct dnode *dir;
-    kprintf("read_root_dir\n");
+    //kprintf("read_root_dir\n");
 
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
