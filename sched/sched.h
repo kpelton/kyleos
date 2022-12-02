@@ -18,8 +18,7 @@
 struct p_memblock {
     void *block;
     uint32_t count;
-            struct p_memblock *next;
-
+    struct p_memblock *next;
     uint32_t pg_opts;
     uint64_t vaddr;
 
