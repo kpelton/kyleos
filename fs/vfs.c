@@ -153,7 +153,8 @@ void vfs_close_file(struct file *ofile)
         }
     }
 }
-
+//walk path and find inode given absolute path
+//TODO redo this monster
 struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
 {
     int end = 0;
@@ -185,8 +186,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
 
             if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
             {
-                if (dptr != pwd)
-                    vfs_free_dnode(dptr);
+                vfs_free_dnode(dptr);
                 dptr = vfs_read_inode_dir(ptr->current);
                 //Current entry on path was found
                 found = true;
@@ -195,8 +195,11 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
             ptr = ptr->next;
         }
         //IF we didn't find anything and we are not on the last or first node then return NULL
-        if(!found && end > 0)
+        if(!found && end > 0) {
+             if (dptr != NULL)
+                vfs_free_dnode(dptr);
             return NULL;
+        }
     }
 
     ptr = dptr->head;
@@ -208,11 +211,12 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
             iptr = kmalloc(sizeof(struct inode));
             vfs_copy_inode(ptr->current,iptr);
             vfs_free_dnode(dptr);
+            dptr = NULL;
             return iptr;
         }
         ptr = ptr->next;
     }
-    if (dptr != pwd)
+    if (dptr != NULL)
         vfs_free_dnode(dptr);
     return NULL;
 }
