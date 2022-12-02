@@ -212,7 +212,8 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
         }
         ptr = ptr->next;
     }
-    vfs_free_dnode(dptr);
+    if (dptr != pwd)
+        vfs_free_dnode(dptr);
     return NULL;
 }
 
