@@ -125,7 +125,8 @@ static struct file *vfs_get_open_file(struct inode *i_node)
 struct file *vfs_open_file(struct inode *i_node, uint32_t flags)
 {
     struct file *retfile = NULL;
-    if (flags > MAX_FILE_FLAGS && (flags != O_RDONLY && flags != O_RDWR && flags != O_WRONLY))
+    //Only O_RDONLY flag is supported cucrrently
+    if (flags > MAX_FILE_FLAGS || (flags > O_RDONLY ))
     {
         kprintf("fail");
         goto done;
@@ -153,6 +154,7 @@ void vfs_close_file(struct file *ofile)
         }
     }
 }
+
 //walk path and find inode given absolute path
 //TODO redo this monster
 struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)

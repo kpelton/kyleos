@@ -12,7 +12,7 @@
 #define USER_STACK_VADDR 0x600000000
 #define USER_STACK_SIZE 32
 #define USER_HEAP_VADDR 0x700000000
-#define USER_HEAP_SIZE 32
+#define USER_HEAP_SIZE 1 // in pages
 #define IDLE_PID 0
 
 struct p_memblock {
@@ -64,6 +64,7 @@ struct ktask{
     uint64_t *user_stack_alloc;
     uint64_t *user_start_stack;
     uint64_t *user_start_heap;
+    uint64_t *end_heap;
     uint64_t *user_heap_loc;
     uint64_t *start_addr;
     uint64_t *s_rsp;
@@ -72,8 +73,6 @@ struct ktask{
     uint64_t *save_rsp;
     uint64_t *save_rip;
     uint64_t heap_size; //in pages
-    uint64_t requested_heap_size; //in pages
-    uint64_t requested_heap_increase; //in pages
     struct pg_tbl *mm;
     struct basic_timer timer;
     struct p_memblock *mem_list;

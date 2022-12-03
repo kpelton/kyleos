@@ -1,5 +1,7 @@
 #include <sched/ps.h>
 #include <output/output.h>
+#include <mm/paging.h>
+#include <mm/pmem.h>
 #define START_USER_FD 3
 
 int user_process_open_fd(struct ktask *t, struct inode *iptr, uint32_t flags)
@@ -56,13 +58,12 @@ void user_process_exit(struct ktask *t, int code)
 void *user_process_sbrk(struct ktask *t, uint64_t increment) 
 {
     void *ret = NULL;
-    uint64_t val = increment;
-    kprintf("Sbrk called with %x\n", increment);
+    uint64_t *newblock;
+    //kprintf("Sbrk called with %x\n", increment);
 
-        //t->user_heap_loc += t->requested_heap_increase;
-        t->requested_heap_increase = 0;
     if (increment == 0){
         ret = t->user_heap_loc;
+
     }else if (increment > 0) {
         t->user_heap_loc += increment;
         ret = t->user_heap_loc;
@@ -70,6 +71,26 @@ void *user_process_sbrk(struct ktask *t, uint64_t increment)
     else{
         panic("can't handle negative sbrk");
     }
+    //kprintf("%x\n",(uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
+    if((uint64_t)t->user_heap_loc >= (uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE){
+        uint64_t delta = (uint64_t)t->user_heap_loc - ((uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
+        uint64_t end_heap = ((uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
+        uint64_t pages = delta/PAGE_SIZE + 1;
+
+
+        if (pages == 1)
+            newblock = (uint64_t *)(pmem_alloc_page());
+        else
+            newblock = (uint64_t *)(pmem_alloc_block(pages));
+
+        //kprintf("we are short 0x%x bytes allocating: 0x%x pages at 0x%x\n",delta,pages,end_heap);
+
+        newblock = (uint64_t *)(pmem_alloc_block(pages));
+        t->heap_size += pages; 
+        //remap in page table
+        paging_map_user_range(t->mm, (uint64_t) newblock, (uint64_t)end_heap, pages, USER_PAGE);
+    }
+    //kprintf("sbrk returning %x\n",ret);
     return ret;
 }
 
