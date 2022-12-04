@@ -341,7 +341,8 @@ void exectest()
         ret = exec("/testfork2");
         printf("child fakeexec returned %d\n", ret);
 
-        exec("/testfork");
+        exec("/names_boy");
+        printf("Should never print\n");
         exit(12345);
     }
 }
@@ -369,7 +370,7 @@ int _start()
     // 
     //      read_test();
     //       read_fullpath_test();
-    //   exectest();
+       exectest();
     // testopendir();
     // printf("Test\n");
     //         waittest();

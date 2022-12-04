@@ -93,8 +93,6 @@ static int exec(char *path)
     int retval = -1;
     struct dnode *dptr = vfs_read_root_dir("/");
     struct inode *iptr = vfs_walk_path(path, dptr, I_FILE);
-    vfs_free_dnode(dptr);
-
     if (iptr != NULL)
     {
         retval = exec_from_inode(iptr,true);

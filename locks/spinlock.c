@@ -6,7 +6,7 @@ int acquire_spinlock(struct spinlock *s)
 {
     while (__sync_val_compare_and_swap (&(s->lock), 0, 1) != 0)
     {
-        kprintf("aa\n\n\n\n\n");
+        kprintf("waiting for spinlock\n");
     }
 
     if ((get_flags_reg() & INTERRUPT_ENABLE_FLAG) == INTERRUPT_ENABLE_FLAG) {
