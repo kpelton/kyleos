@@ -60,19 +60,22 @@ void *user_process_sbrk(struct ktask *t, uint64_t increment)
 {
     void *ret = NULL;
     uint64_t *newblock;
-    //kprintf("Sbrk called with %x\n", increment);
+    uint64_t inc;
+   // kprintf("Sbrk called with %x %x\n", increment,t->user_heap_loc);
 
     if (increment == 0){
         ret = t->user_heap_loc;
 
     }else if (increment > 0) {
-        t->user_heap_loc += increment;
+        //return previous break
         ret = t->user_heap_loc;
+        inc = ((uint64_t) t->user_heap_loc) + increment;
+        t->user_heap_loc = (uint64_t *) inc;
     }
     else{
         panic("can't handle negative sbrk");
     }
-    //kprintf("%x\n",(uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
+    //kprintf("%x %x\n",(uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE,t->user_heap_loc);
     if((uint64_t)t->user_heap_loc >= (uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE){
         uint64_t delta = (uint64_t)t->user_heap_loc - ((uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
         uint64_t end_heap = ((uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
@@ -85,13 +88,11 @@ void *user_process_sbrk(struct ktask *t, uint64_t increment)
         else
             newblock = (uint64_t *)(pmem_alloc_block(pages));
 
-
-//        kprintf("we are short 0x%x bytes allocating: 0x%x pages at 0x%x\n",delta,pages,end_heap);
-
-        newblock = (uint64_t *)(pmem_alloc_block(pages));
+       // kprintf("we are short 0x%x bytes allocating: 0x%x pages at 0x%x\n",delta,pages,end_heap);
         t->heap_size += pages; 
         //remap in page table
         paging_map_user_range(t->mm, (uint64_t) newblock, (uint64_t)end_heap, pages, USER_PAGE);
+        //TODO add memtype for pagelist
         track->count= pages;
         track->next= t->mem_list;
         track->pg_opts = USER_PAGE;

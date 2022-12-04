@@ -248,8 +248,8 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     new_head->next = head;
     paging_map_user_range(t->mm,(uint64_t)new_head->block, USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
     t->user_start_heap = (uint64_t *)USER_HEAP_VADDR;
-    t->user_heap_loc = t->user_start_heap;
     t->heap_size = USER_HEAP_SIZE;
+    t->user_heap_loc = (uint64_t *)((uint64_t)t->user_start_heap+t->heap_size*PAGE_SIZE);
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
@@ -293,7 +293,7 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     paging_map_user_range(t->mm, (uint64_t) new_head->block, USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
     t->heap_size = USER_HEAP_SIZE;
     t->user_start_heap = (uint64_t *)USER_HEAP_VADDR;
-    t->user_heap_loc = t->user_start_heap;
+    t->user_heap_loc = (uint64_t *)((uint64_t)t->user_start_heap+t->heap_size*PAGE_SIZE);
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;

@@ -10,8 +10,8 @@
 #include <locks/spinlock.h>
 
 static struct spinlock exec_spinlock;
-#define EXEC_DEBUG_LL
-#define EXEC_DEBUG
+//#define EXEC_DEBUG_LL
+//#define EXEC_DEBUG
 void exec_init(){
     init_spinlock(&exec_spinlock);
 }
@@ -110,7 +110,9 @@ int exec_from_inode(struct inode *ifile,bool replace)
             }
             page_ops = USER_PAGE;
             //if (phdr.vaddr != 0x40a000)
+#ifdef EXEC_DEBUG
             kprintf("Reading to %x \n",vaddr+offset_delta);
+#endif
             vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT((uint8_t*)block+offset_delta),phdr.filesz,phdr.off);
 #ifdef EXEC_DEBUG
             kprintf("%x\n", KERN_PHYS_TO_PVIRT(block));
