@@ -229,13 +229,11 @@ int user_process_fork()
 int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct pg_tbl *tbl, struct p_memblock *head)
 {
 
-    // save old pid and parent pid since kill will clear them
     int c_pid = t->pid;
     int parent = t->parent;
     struct p_memblock *new_head = kmalloc(sizeof(struct p_memblock));
-
-
-    clear_fd_table(t);
+    // save old pid and parent pid since kill will clear them
+    sched_process_kill(t->pid,false);
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
     t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
     t->mm = tbl;
