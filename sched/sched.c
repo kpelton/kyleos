@@ -144,10 +144,9 @@ int user_process_fork()
     t->parent = curr->pid;
 
     // TODO: Copy over heap
-    t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(curr->heap_size));
-    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, curr->heap_size, USER_PAGE);
-    t->heap_size = curr->heap_size;
+    t->user_start_heap = (uint64_t *) USER_HEAP_VADDR;
     t->user_heap_loc = curr->user_heap_loc;
+    t->heap_size = curr->heap_size;
 
     kstrcpy(t->name, curr->name);
     // Copy over parent data using brute force;
@@ -195,6 +194,7 @@ int user_process_fork()
     }
 
     // copy over allocated memory pages to process
+    // Heap will be coppied over in these steps
     c_mem = curr->mem_list;
     while (c_mem != NULL)
     {
@@ -232,6 +232,8 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     // save old pid and parent pid since kill will clear them
     int c_pid = t->pid;
     int parent = t->parent;
+    struct p_memblock *new_head = kmalloc(sizeof(struct p_memblock));
+
 
     clear_fd_table(t);
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
@@ -239,11 +241,15 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     t->mm = tbl;
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
 
-    t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_HEAP_SIZE));
-    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
-    t->heap_size = USER_HEAP_SIZE;
+    new_head->block = pmem_alloc_block(USER_HEAP_SIZE);
+    new_head->count = USER_HEAP_SIZE;
+    new_head->vaddr = USER_HEAP_VADDR;
+    new_head->pg_opts = USER_PAGE;
+    new_head->next = head;
+    paging_map_user_range(t->mm,(uint64_t)new_head->block, USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
+    t->user_start_heap = (uint64_t *)USER_HEAP_VADDR;
     t->user_heap_loc = t->user_start_heap;
-
+    t->heap_size = USER_HEAP_SIZE;
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
@@ -253,7 +259,7 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     t->parent = parent;
     t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
-    t->mem_list = head;
+    t->mem_list = new_head;
     kstrcpy(t->name, name);
     t->context_switches = 0;
     kprintf("All done!\n");
@@ -269,7 +275,7 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     struct ktask *t;
     t = &ktasks[find_free_task()];
     int pid_ret;
-
+    struct p_memblock *new_head = kmalloc(sizeof(struct p_memblock));
     clear_fd_table(t);
 
     // kprintf("Allocating Stack\n");
@@ -279,8 +285,12 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
 
     // heap
-    t->user_start_heap = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_HEAP_SIZE));
-    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_start_heap), USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
+    new_head->block = pmem_alloc_block(USER_HEAP_SIZE);
+    new_head->count = USER_HEAP_SIZE;
+    new_head->vaddr = USER_HEAP_VADDR;
+    new_head->pg_opts = USER_PAGE;
+    new_head->next = head;
+    paging_map_user_range(t->mm, (uint64_t) new_head->block, USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
     t->heap_size = USER_HEAP_SIZE;
     t->user_start_heap = (uint64_t *)USER_HEAP_VADDR;
     t->user_heap_loc = t->user_start_heap;
@@ -292,7 +302,7 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     t->pid = pid;
     t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
-    t->mem_list = head;
+    t->mem_list = new_head;
     kstrcpy(t->name, name);
     t->context_switches = 0;
     pid_ret = pid;
@@ -301,7 +311,7 @@ int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, st
     return pid_ret;
 }
 
-// Free list of used blocks allocated for program image
+// Free list of used blocks allocated for program pages
 static void free_memblock_list(struct p_memblock *head)
 {
     struct p_memblock *p = head;
@@ -349,10 +359,6 @@ bool sched_process_kill(int pid, bool cleanup)
                 t->mm = NULL;
                 for (j = 0; j < USER_STACK_SIZE; j++)
                     pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc + (PAGE_SIZE * j)));
-
-                // TODO: switch heap to use memblock list once size can be adjusted
-                for (uint64_t k = 0; k < t->heap_size; k++)
-                    pmem_free_block(KERN_VIRT_TO_PHYS(t->user_start_heap + (PAGE_SIZE * k)));
 
                 free_memblock_list(t->mem_list);
             }

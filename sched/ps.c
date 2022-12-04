@@ -2,6 +2,7 @@
 #include <output/output.h>
 #include <mm/paging.h>
 #include <mm/pmem.h>
+#include <mm/mm.h>
 #define START_USER_FD 3
 
 int user_process_open_fd(struct ktask *t, struct inode *iptr, uint32_t flags)
@@ -77,18 +78,27 @@ void *user_process_sbrk(struct ktask *t, uint64_t increment)
         uint64_t end_heap = ((uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
         uint64_t pages = delta/PAGE_SIZE + 1;
 
+        struct p_memblock *track = (struct p_memblock *) kmalloc(sizeof(struct p_memblock));
 
         if (pages == 1)
             newblock = (uint64_t *)(pmem_alloc_page());
         else
             newblock = (uint64_t *)(pmem_alloc_block(pages));
 
-        //kprintf("we are short 0x%x bytes allocating: 0x%x pages at 0x%x\n",delta,pages,end_heap);
+
+//        kprintf("we are short 0x%x bytes allocating: 0x%x pages at 0x%x\n",delta,pages,end_heap);
 
         newblock = (uint64_t *)(pmem_alloc_block(pages));
         t->heap_size += pages; 
         //remap in page table
         paging_map_user_range(t->mm, (uint64_t) newblock, (uint64_t)end_heap, pages, USER_PAGE);
+        track->count= pages;
+        track->next= t->mem_list;
+        track->pg_opts = USER_PAGE;
+        track->vaddr = end_heap;
+        track->block = newblock;
+        t->mem_list = track;
+
     }
     //kprintf("sbrk returning %x\n",ret);
     return ret;
