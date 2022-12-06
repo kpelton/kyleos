@@ -9,5 +9,9 @@ paging.o:  paging.c paging.h
 pmem.o:  pmem.c pmem.h
 	$(CC) $(CFLAGS) -o $@ -c pmem.c pmem.h
 
+vmm.o:  vmm.c vmm.h
+	$(CC) $(CFLAGS) -o $@ -c $<
+
+
 clean:
 	rm -rfv *.o

@@ -141,7 +141,6 @@ int exec_from_inode(struct inode *ifile,bool replace)
                 kstrcpy(name,ifile->i_name);
                 vfs_free_inode(ifile);
                 release_spinlock(&exec_spinlock);
-
                 retval = user_process_replace_exec(t,hdr.entry,name,new_pg_tbl,head);
             }
         }

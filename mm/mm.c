@@ -2,6 +2,7 @@
 #include <output/output.h>
 #include <include/types.h>
 #include <mm/pmem.h>
+#include <mm/vmm.h>
 #include <mm/paging.h>
 #include <locks/spinlock.h>
 static struct spinlock kmem_spinlock;
@@ -140,4 +141,5 @@ void mm_init()
     kprintf("Heap Loc:0x%x\n", heap_loc);
     kernel_heap = (char *)KERN_PHYS_TO_VIRT(heap_loc);
     paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_heap), HEAP_SIZE);
+    vmm_init();
 }
