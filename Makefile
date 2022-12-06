@@ -16,6 +16,9 @@ all: kernel.img user
 install: user
 	$(MAKE) -C user install
 
+utils: utils/llist.o
+	$(MAKE) -C utils
+
 asm: asm/asm.o asm/asm_calls.o
 	$(MAKE) -C asm
 
@@ -57,7 +60,7 @@ clean:
 	rm -rfv kernel.bin
 	rm -rfv kernel32.bin
 
-kernel.bin: asm block init irq mm output timer sched fs locks
+kernel.bin: asm block init irq mm output timer sched fs locks utils
 	$(LD) -T linker.ld -o kernel.bin $(OBJ_FILES) 
 
 kernel.img: kernel.bin

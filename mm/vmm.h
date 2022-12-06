@@ -12,7 +12,7 @@ enum vmm_block_type {
 //each process will have a mm_area mapping all its pages
 struct vmm_map {
     struct vmm_block *vmm_areas[VMM_BLOCK_TYPE_NUM];
-    uint64_t total_pages;
+    uint64_t total_pages; 
 };
 
 struct vmm_block {
@@ -25,5 +25,5 @@ struct vmm_block {
 
 //create new vmm_map
 struct vmm_map *new_vmm_map();
-
+bool vmm_init();
 #endif
