@@ -322,11 +322,8 @@ static void free_memblock_list(struct p_memblock *head)
         kfree(curr);
     }
 }
-bool sched_process_kill(int pid, bool cleanup){
-    return false;
-}
 
-/*
+
 bool sched_process_kill(int pid, bool cleanup)
 {
     int i;
@@ -346,13 +343,7 @@ bool sched_process_kill(int pid, bool cleanup)
 
             if (t->type == USER_PROCESS)
             {
-                paging_free_pg_tbl(t->mm->);
-                kfree(t->mm);
-                t->mm = NULL;
-                for (j = 0; j < USER_STACK_SIZE; j++)
-                    pmem_free_block(KERN_VIRT_TO_PHYS(t->user_stack_alloc + (PAGE_SIZE * j)));
-
-                free_memblock_list(t->mem_list);
+                vmm_free(ktasks[i].mm);
             }
             else
             {
@@ -374,7 +365,6 @@ bool sched_process_kill(int pid, bool cleanup)
             // TODO: have init process handle reaping all pids and update children PIDs
             if (cleanup == true || t->parent <= 0)
                 t->pid = -1;
-            t->mem_list = NULL;
             kfree(t->stack_alloc);
             t->stack_alloc = NULL;
             goto done;
@@ -394,7 +384,7 @@ done:
 
     return true;
 }
-*/
+
 
 void sched_stats()
 {
@@ -414,6 +404,12 @@ void sched_stats()
             kprintf("  Process Type:    %s\n", process_types_str[ktasks[i].type]);
             kprintf("  Sleep state:     %s\n", str_timer_states[ktasks[i].timer.state]);
             kprintf("  User Heap size   %d\n", ktasks[i].heap_size);
+            if(ktasks[i].type == USER_PROCESS) {
+                kprintf("  Total pages      %d\n", ktasks[i].mm->total_pages);
+                kprintf("      Stack pages      %d\n", ktasks[i].mm->vmm_areas[VMM_STACK]->count);
+                kprintf("      Text pages      %d\n", ktasks[i].mm->vmm_areas[VMM_TEXT]->count);
+                kprintf("      Data pages      %d\n", ktasks[i].mm->vmm_areas[VMM_DATA]->count);
+            }
             kprintf("  File Table\n");
             for (j = 0; j < MAX_TASK_OPEN_FILES; j++)
             {

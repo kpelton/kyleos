@@ -95,6 +95,7 @@ int exec_from_inode(struct inode *ifile,bool replace)
                 page_ops = USER_PAGE_RO;
             }
             zero = phdr.memsz != phdr.filesz;
+            kprintf("Calling add map 0x%x, %d\n",vaddr,size);
             block = vmm_add_new_mapping(map,VMM_TEXT,vaddr,size,page_ops,zero);
 
 #ifdef EXEC_DEBUG

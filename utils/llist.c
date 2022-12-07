@@ -43,6 +43,7 @@ void llist_free(struct llist *list, void (*free_func)(void *data))
         n_ptr = n_ptr->next;
     }
     kfree(list);
+    //kprintf("llist done\n");
 }
 
 //Return new list_node on success
@@ -64,7 +65,7 @@ struct llist_node *llist_prepend(struct llist *list, void *data)
         list->tail = new_node;
         list->head = new_node;
     } else {
-        list->head->next = new_node;
+        list->head->prev = new_node;
         new_node->next = list->head;
         list->head = new_node;
     }

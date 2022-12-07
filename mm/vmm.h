@@ -17,7 +17,6 @@ struct vmm_map {
     struct llist *vmm_areas[VMM_SECTION_CNT];
     uint64_t total_pages;
     struct pg_tbl pagetable;
-    
 };
 
 struct vmm_block {
@@ -32,6 +31,8 @@ struct vmm_block {
 struct vmm_map *vmm_map_new();
 //Add new VMM block
 bool vmm_init();
-struct vmm_block* vmm_add_new_mapping(struct vmm_map* map,enum vmm_block_type  block_type ,uint64_t *vaddr,uint64_t size, uint64_t page_ops,bool zero);
-
+struct vmm_block* vmm_add_new_mapping(struct vmm_map* map,enum vmm_block_type  block_type ,
+                                      uint64_t *vaddr,uint64_t size, uint64_t page_ops,bool zero);
+bool vmm_free(struct vmm_map* map);
+void vmm_map_free_block(void *data);
 #endif

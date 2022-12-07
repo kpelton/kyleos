@@ -51,6 +51,7 @@ int user_process_read_fd(struct ktask *t, int fd, void *buf, int count)
 
 void user_process_exit(struct ktask *t, int code)
 {
+    kprintf("Exit called");
     t->exit_code = code;
     sched_process_kill(t->pid,false);
     schedule();
@@ -61,7 +62,7 @@ void *user_process_sbrk(struct ktask *t, uint64_t increment)
     void *ret = NULL;
     uint64_t *newblock;
     uint64_t inc;
-    kprintf("Sbrk called with %x %x\n", increment,t->user_heap_loc);
+    //kprintf("Sbrk called with %x %x\n", increment,t->user_heap_loc);
 
     if (increment == 0){
         ret = t->user_heap_loc;
