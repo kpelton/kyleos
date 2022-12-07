@@ -117,22 +117,27 @@ void sched_save_context(uint64_t rip, uint64_t rsp)
     c->save_rsp = (uint64_t *)rsp;
 }
 
+int user_process_fork(){
+    panic("not supported");
+    return 0;
+}
+/*
 int user_process_fork()
 {
     // TODO:Change below to copy on write
     acquire_spinlock(&sched_spinlock);
     struct ktask *curr = get_current_process();
     struct ktask *t;
-    struct p_memblock *c_mem;
-    struct p_memblock *track = NULL;
-    struct p_memblock *head = NULL;
+
     t = &ktasks[find_free_task()];
     clear_fd_table(t);
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
-    t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
     t->mm = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
     t->mm->pml4 = (uint64_t *)KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
-    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
+
+    vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,USER_PAGE,true);
+    vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_STACK_SIZE,USER_PAGE,true);
+
     t->state = TASK_READY;
     t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
@@ -225,26 +230,20 @@ int user_process_fork()
     release_spinlock(&sched_spinlock);
     return -1;
 }
+*/
 
-int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct pg_tbl *tbl, struct p_memblock *head)
+int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm)
 {
 
     int c_pid = t->pid;
     int parent = t->parent;
-    struct p_memblock *new_head = kmalloc(sizeof(struct p_memblock));
+
     // save old pid and parent pid since kill will clear them
     sched_process_kill(t->pid,false);
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
-    t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
-    t->mm = tbl;
-    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
+    vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,USER_PAGE,true);
+    vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_HEAP_SIZE,USER_PAGE,true);
 
-    new_head->block = pmem_alloc_block(USER_HEAP_SIZE);
-    new_head->count = USER_HEAP_SIZE;
-    new_head->vaddr = USER_HEAP_VADDR;
-    new_head->pg_opts = USER_PAGE;
-    new_head->next = head;
-    paging_map_user_range(t->mm,(uint64_t)new_head->block, USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
     t->user_start_heap = (uint64_t *)USER_HEAP_VADDR;
     t->heap_size = USER_HEAP_SIZE;
     t->user_heap_loc = (uint64_t *)((uint64_t)t->user_start_heap+t->heap_size*PAGE_SIZE);
@@ -252,12 +251,11 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
     t->s_rbp = t->user_start_stack;
-    t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 16);
+    t->user_start_stack = (uint64_t *)((uint64_t)USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 16);
     t->pid = c_pid;
     t->parent = parent;
     t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
-    t->mem_list = new_head;
     kstrcpy(t->name, name);
     t->context_switches = 0;
     kprintf("All done!\n");
@@ -268,44 +266,36 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     return 0;
 }
 
-int user_process_add_exec(uint64_t startaddr, char *name, struct pg_tbl *tbl, struct p_memblock *head)
+int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm)
 {
     struct ktask *t;
     t = &ktasks[find_free_task()];
     int pid_ret;
-    struct p_memblock *new_head = kmalloc(sizeof(struct p_memblock));
     clear_fd_table(t);
 
-    // kprintf("Allocating Stack\n");
+     kprintf("Allocating Stack\n");
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
-    t->user_stack_alloc = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_block(USER_STACK_SIZE));
-    t->mm = tbl;
-    paging_map_user_range(t->mm, (uint64_t)KERN_VIRT_TO_PHYS(t->user_stack_alloc), USER_STACK_VADDR, USER_STACK_SIZE, USER_PAGE);
+    vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,USER_PAGE,true);
+    vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_HEAP_SIZE,USER_PAGE,true);
 
-    // heap
-    new_head->block = pmem_alloc_block(USER_HEAP_SIZE);
-    new_head->count = USER_HEAP_SIZE;
-    new_head->vaddr = USER_HEAP_VADDR;
-    new_head->pg_opts = USER_PAGE;
-    new_head->next = head;
-    paging_map_user_range(t->mm, (uint64_t) new_head->block, USER_HEAP_VADDR, USER_HEAP_SIZE, USER_PAGE);
     t->heap_size = USER_HEAP_SIZE;
     t->user_start_heap = (uint64_t *)USER_HEAP_VADDR;
     t->user_heap_loc = (uint64_t *)((uint64_t)t->user_start_heap+t->heap_size*PAGE_SIZE);
+    t->mm = mm;
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
     t->s_rbp = t->user_start_stack;
-    t->user_start_stack = (uint64_t *)(USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 16);
+    t->user_start_stack = (uint64_t *)((uint64_t)USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 16);
     t->pid = pid;
     t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
-    t->mem_list = new_head;
+    
     kstrcpy(t->name, name);
     t->context_switches = 0;
     pid_ret = pid;
     pid += 1;
-
+    kprintf("Add exec done");
     return pid_ret;
 }
 
@@ -332,7 +322,11 @@ static void free_memblock_list(struct p_memblock *head)
         kfree(curr);
     }
 }
+bool sched_process_kill(int pid, bool cleanup){
+    return false;
+}
 
+/*
 bool sched_process_kill(int pid, bool cleanup)
 {
     int i;
@@ -352,7 +346,7 @@ bool sched_process_kill(int pid, bool cleanup)
 
             if (t->type == USER_PROCESS)
             {
-                paging_free_pg_tbl(t->mm);
+                paging_free_pg_tbl(t->mm->);
                 kfree(t->mm);
                 t->mm = NULL;
                 for (j = 0; j < USER_STACK_SIZE; j++)
@@ -400,6 +394,7 @@ done:
 
     return true;
 }
+*/
 
 void sched_stats()
 {
@@ -535,7 +530,7 @@ void schedule()
         {
             ktasks[i].state = TASK_RUNNING;
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
-            user_switch_paging(ktasks[i].mm);
+            user_switch_paging(&(ktasks[i].mm->pagetable));
 
             // jump_usermode((uint64_t)ktasks[i].start_addr, ktasks[i].user_start_stack);
 
@@ -557,7 +552,7 @@ void schedule()
 
             if (ktasks[i].type == USER_PROCESS)
             {
-                user_switch_paging(ktasks[i].mm);
+                user_switch_paging(&(ktasks[i].mm->pagetable));
             }
             else
             {

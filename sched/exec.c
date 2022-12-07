@@ -6,6 +6,7 @@
 #include <mm/paging.h>
 #include <mm/mm.h>
 #include <mm/pmem.h>
+#include <mm/vmm.h>
 #include <sched/sched.h>
 #include <locks/spinlock.h>
 
@@ -24,19 +25,17 @@ int exec_from_inode(struct inode *ifile,bool replace)
     struct file *rfile = vfs_open_file(ifile,O_RDONLY);
     struct elfhdr hdr;
     struct proghdr phdr;
-    struct p_memblock *head = NULL;
-    struct p_memblock *track = NULL;
     vfs_read_file(rfile, &hdr, sizeof(struct elfhdr));
     int retval = -1;
     uint32_t size = 0;
     uint64_t vaddr;
-    void *block;
-    uint64_t *blockm;
+    struct vmm_block *block;
     uint32_t offset_delta = 0;
     struct pg_tbl *new_pg_tbl = NULL;
     uint64_t page_ops;
+    struct vmm_map *map = NULL;
     char name[VFS_MAX_FNAME];
-
+    bool zero;
     if (hdr.magic == ELF_MAGIC)
     {
 #ifdef EXEC_DEBUG
@@ -45,6 +44,7 @@ int exec_from_inode(struct inode *ifile,bool replace)
         kprintf("Elf ph size: 0x%x\n", hdr.phentsize);
         kprintf("Elf entry offset: 0x%x\n", hdr.entry);
 #endif
+    map = vmm_map_new();
         for (i = 0; i < hdr.phnum; i++)
         {
                 //acquire_spinlock(&exec_spinlock);
@@ -87,61 +87,37 @@ int exec_from_inode(struct inode *ifile,bool replace)
             size += phdr.memsz/PAGE_SIZE;
             if (phdr.memsz % PAGE_SIZE != 0)
                 size++;
-            //track pages allocated for program image in stack linked list
-            block = pmem_alloc_block(size);
-            track = kmalloc(sizeof(struct p_memblock));
-
-            //bss section zero pages
-            if (phdr.memsz != phdr.filesz) {
-                blockm = (uint64_t *) KERN_PHYS_TO_PVIRT(block);
-                for(uint32_t j = 0; j< (size*PAGE_SIZE)/sizeof(uint64_t); j++)
-                    blockm[j] = 0;
-            }
             
-            track->block = block;
-            track->count = size;
-            track->next = NULL;
-
-            if(head == NULL) {
-                head = track;
-            } else {
-                track->next = head;
-                head = track;
-            }
+            //track pages allocated for program image in stack linked list
             page_ops = USER_PAGE;
-            //if (phdr.vaddr != 0x40a000)
+            if ((phdr.flags  & ELF_PROG_FLAG_WRITE) == 0) {
+                //kprintf("Setting phdr.vaddr:%x %d  RO\n",phdr.vaddr,i);
+                page_ops = USER_PAGE_RO;
+            }
+            zero = phdr.memsz != phdr.filesz;
+            block = vmm_add_new_mapping(map,VMM_TEXT,vaddr,size,page_ops,zero);
+
 #ifdef EXEC_DEBUG
             kprintf("Reading to %x \n",vaddr+offset_delta);
 #endif
-            vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT((uint8_t*)block+offset_delta),phdr.filesz,phdr.off);
+            vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT((uint8_t*)block->paddr+offset_delta),phdr.filesz,phdr.off);
 #ifdef EXEC_DEBUG
             kprintf("%x\n", KERN_PHYS_TO_PVIRT(block));
             kprintf("%x\n", *(uint64_t *)KERN_PHYS_TO_PVIRT(block));
             kprintf("mapping %x\n",size);
 #endif
-            //if write is not set for this program section map section as RO
-            if ((phdr.flags  & ELF_PROG_FLAG_WRITE) == 0) {
-                //kprintf("Setting phdr.vaddr:%x %d  RO\n",phdr.vaddr,i);
-                page_ops = USER_PAGE_RO;
-            }
-            track->pg_opts = page_ops;
-            track->vaddr = vaddr;
-            paging_map_user_range(new_pg_tbl,(uint64_t) block,vaddr,size,page_ops);
-
-
-            //kprintf("  Read in %d\n", bytes);
 
         }
         if (new_pg_tbl != NULL){
 
             if (replace == false)
-                retval = user_process_add_exec(hdr.entry,ifile->i_name,new_pg_tbl,head);
+                retval = user_process_add_exec(hdr.entry,ifile->i_name,map);
             else{
                 struct ktask *t = get_current_process();
                 kstrcpy(name,ifile->i_name);
                 vfs_free_inode(ifile);
                 release_spinlock(&exec_spinlock);
-                retval = user_process_replace_exec(t,hdr.entry,name,new_pg_tbl,head);
+                retval = user_process_replace_exec(t,hdr.entry,name,map);
             }
         }
         release_spinlock(&exec_spinlock);

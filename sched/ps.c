@@ -81,25 +81,8 @@ void *user_process_sbrk(struct ktask *t, uint64_t increment)
         uint64_t end_heap = ((uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
         uint64_t pages = delta/PAGE_SIZE + 1;
 
-        struct p_memblock *track = (struct p_memblock *) kmalloc(sizeof(struct p_memblock));
-
-        if (pages == 1)
-            newblock = (uint64_t *)(pmem_alloc_page());
-        else
-            newblock = (uint64_t *)(pmem_alloc_block(pages));
-
-       // kprintf("we are short 0x%x bytes allocating: 0x%x pages at 0x%x\n",delta,pages,end_heap);
+        vmm_add_new_mapping(t->mm,VMM_DATA,(uint64_t *)end_heap,pages,USER_PAGE,false);
         t->heap_size += pages; 
-        //remap in page table
-        paging_map_user_range(t->mm, (uint64_t) newblock, (uint64_t)end_heap, pages, USER_PAGE);
-        //TODO add memtype for pagelist
-        track->count= pages;
-        track->next= t->mem_list;
-        track->pg_opts = USER_PAGE;
-        track->vaddr = end_heap;
-        track->block = newblock;
-        t->mem_list = track;
-
     }
     //kprintf("sbrk returning %x\n",ret);
     return ret;

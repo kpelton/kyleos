@@ -133,7 +133,7 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
     uint64_t phys_curr_addr = start;
     uint16_t offset;
     uint64_t *curr = pg->pml4;
-   // kprintf("call base pml4 %x\n",pg->pml4);
+    kprintf("call base pml4 %x\n",pg->pml4);
     while (phys_curr_addr < start + (len * PAGE_SIZE))
     {
         curr = pg->pml4;
@@ -236,8 +236,9 @@ bool paging_free_pg_tbl(struct pg_tbl *pg)
 
 void user_switch_paging(struct pg_tbl *pg)
 {
-
-   // kprintf("switching to pml4 0x%x\n",pg->pml4);
+    
+    kprintf("test\n");
+    kprintf("switching to pml4 0x%x\n",pg->pml4);
     //return;
     int i = 0;
     for (i=0; i<PHYS_MEM_MAP_START; i++) {

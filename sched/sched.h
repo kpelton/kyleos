@@ -3,15 +3,16 @@
 #include <timer/timer.h>
 #include <include/types.h>
 #include <mm/paging.h>
+#include <mm/vmm.h>
 #include <fs/vfs.h>
 #define MAX_TASK_OPEN_FILES 8
 #define SCHED_MAX_TASKS 1024
 #define SCHED_MAX_NAME 32
 #define KTHREAD_STACK_SIZE 4096*8
 
-#define USER_STACK_VADDR 0x600000000
+#define USER_STACK_VADDR (uint64_t *) 0x600000000
 #define USER_STACK_SIZE 32
-#define USER_HEAP_VADDR 0x700000000
+#define USER_HEAP_VADDR (uint64_t *) 0x700000000
 #define USER_HEAP_SIZE 1 // in pages
 #define IDLE_PID 0
 
@@ -34,8 +35,9 @@ struct ktask *sched_get_process(int pid);
 bool sched_process_kill(int pid,bool cleanup);
 int user_process_fork();
 void sched_save_context();
-int user_process_add_exec(uint64_t startaddr, char *name,struct pg_tbl *tbl,struct p_memblock *head);
-int user_process_replace_exec(struct ktask *t, uint64_t startaddr,char *name,struct pg_tbl *tbl, struct p_memblock *head);
+int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm);
+int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm);
+
 void sched_init();
 enum sched_states {
     TASK_RUNNING,
@@ -73,7 +75,7 @@ struct ktask{
     uint64_t *save_rsp;
     uint64_t *save_rip;
     uint64_t heap_size; //in pages
-    struct pg_tbl *mm;
+    struct vmm_map *mm;
     struct basic_timer timer;
     struct p_memblock *mem_list;
     struct file *open_fds[MAX_TASK_OPEN_FILES];
