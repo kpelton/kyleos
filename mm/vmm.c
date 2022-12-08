@@ -28,7 +28,6 @@ struct vmm_map* vmm_map_new() {
 
 bool vmm_free(struct vmm_map* map) {
      for(uint64_t i=0; i<VMM_SECTION_CNT; ++i){
-        kprintf("freeing list %x %d\n",map,i);
         llist_free(map->vmm_areas[i],vmm_map_free_block);
      }
     //TODO free pml4
@@ -57,15 +56,13 @@ void * vmm_copy_block(void *data,void *user_data){
     uint64_t *phys_ptr_old;
     uint64_t *phys_ptr_new;
 
-    kprintf("Adding %d, %x %d %x\n",block->type,block->vaddr,block->size,block->page_ops);
     new_block = vmm_add_new_mapping(map,block->type,block->vaddr,block->size,block->page_ops,false,false);
     if (!new_block)
         return NULL;
     phys_ptr_old = (uint64_t *) KERN_PHYS_TO_PVIRT(block->paddr);
-    phys_ptr_new= (uint64_t *) KERN_PHYS_TO_PVIRT(new_block->paddr);
+    phys_ptr_new = (uint64_t *) KERN_PHYS_TO_PVIRT(new_block->paddr);
     //copy data over to new block
-    for(uint32_t j=0; j<(block->size*PAGE_SIZE)/sizeof(uint64_t); j++)
-        phys_ptr_new[j] = phys_ptr_old[j];
+    memcpy64(phys_ptr_new,phys_ptr_old,(block->size*PAGE_SIZE));
     
     return new_block;
 }
@@ -75,7 +72,6 @@ bool vmm_copy_section(struct vmm_map* src,struct vmm_map* dst,enum vmm_block_typ
     llist_copy(src->vmm_areas[btype],dst->vmm_areas[btype],vmm_copy_block,dst);
     return true;
 }
-
 
 struct vmm_block* vmm_add_new_mapping(struct vmm_map* map,enum vmm_block_type  block_type , 
                                       uint64_t *vaddr,uint64_t size, uint64_t page_ops,bool zero,bool add_to_list) 
@@ -102,11 +98,9 @@ struct vmm_block* vmm_add_new_mapping(struct vmm_map* map,enum vmm_block_type  b
             return NULL;
 
         //bss section zero pages
-        if(zero)
-        {
+        if(zero) {
             phys_ptr = (uint64_t *) KERN_PHYS_TO_PVIRT(block->paddr);
-            for(uint32_t j=0; j<(size*PAGE_SIZE)/sizeof(uint64_t); j++)
-                phys_ptr[j] = 0;
+            memzero64(phys_ptr,size*PAGE_SIZE);
         }
     //kprintf("vmm returning 0x%x\n",block->paddr);
     map->total_pages += size;

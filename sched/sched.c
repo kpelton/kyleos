@@ -128,7 +128,6 @@ int user_process_fork()
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
     t->mm = vmm_map_new();
 
-    //broken here
     vmm_copy_section(curr->mm,t->mm,VMM_STACK);
     vmm_copy_section(curr->mm,t->mm,VMM_TEXT);
     vmm_copy_section(curr->mm,t->mm,VMM_DATA);
@@ -145,15 +144,7 @@ int user_process_fork()
     t->user_start_heap = (uint64_t *) USER_HEAP_VADDR;
     t->user_heap_loc = curr->user_heap_loc;
     t->heap_size = curr->heap_size;
-
     kstrcpy(t->name, curr->name);
-    // Copy over parent data using brute force;
-    // This will change if stack can be grown
-
-    memcpy8((uint8_t *)KERN_PHYS_TO_PVIRT(KERN_VIRT_TO_PHYS((uint64_t)t->user_stack_alloc)),
-            (uint8_t *)KERN_PHYS_TO_PVIRT(KERN_VIRT_TO_PHYS((uint64_t)curr->user_stack_alloc)),
-            USER_STACK_SIZE * PAGE_SIZE);
-
 
     t->s_rbp = (uint64_t *)curr->s_rbp;
     t->s_rsp = (uint64_t *)t->start_stack;
