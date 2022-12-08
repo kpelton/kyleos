@@ -23,6 +23,7 @@ struct llist {
 struct llist* llist_new();
 struct llist_node *llist_prepend(struct llist *list, void *data);
 void llist_free(struct llist *list, void (*free_func)(void *data));
+void llist_copy(struct llist *list_src, struct llist *list_dst, void*  (*copy_data_func)(void *data,void *user_data),void *user_data);
 struct llist_node *llist_append(struct llist *list, void *data);
 
 #endif

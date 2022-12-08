@@ -16,7 +16,7 @@ struct vmm_map* vmm_map_new() {
     new_map = kmalloc(sizeof(struct vmm_map));
     if (new_map == NULL)
         return NULL;
-    new_map->pagetable.pml4 = KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
+    new_map->pagetable.pml4 = (uint64_t *) KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
 
 
     for(i=0; i<VMM_SECTION_CNT; ++i)
@@ -27,8 +27,8 @@ struct vmm_map* vmm_map_new() {
 }
 
 bool vmm_free(struct vmm_map* map) {
-     for(int i=0; i<VMM_SECTION_CNT; ++i){
-        //kprintf("freeing list %d\n",i);
+     for(uint64_t i=0; i<VMM_SECTION_CNT; ++i){
+        kprintf("freeing list %x %d\n",map,i);
         llist_free(map->vmm_areas[i],vmm_map_free_block);
      }
     //TODO free pml4
@@ -38,16 +38,47 @@ bool vmm_free(struct vmm_map* map) {
     return false;
 }
 
+uint64_t vmm_get_page_count (struct vmm_map* map,enum vmm_block_type btype)
+{
+    return map->vmm_areas[btype]->count;
+}
+
 void vmm_map_free_block(void *data) {
     struct vmm_block *block = data;
-   // kprintf("vmm free block called 0x%x\n",block->paddr);
-    for(int i = 0; i< block->size; i++)
+    for(uint64_t i = 0; i< block->size; i++)
         pmem_free_block((uint64_t)block->paddr +(i * PAGE_SIZE));
     kfree(block);
 }
 
+void * vmm_copy_block(void *data,void *user_data){
+    struct vmm_block *block = (struct vmm_block *) data;
+    struct vmm_map *map = (struct vmm_map *)user_data;
+    struct vmm_block *new_block;
+    uint64_t *phys_ptr_old;
+    uint64_t *phys_ptr_new;
+
+    kprintf("Adding %d, %x %d %x\n",block->type,block->vaddr,block->size,block->page_ops);
+    new_block = vmm_add_new_mapping(map,block->type,block->vaddr,block->size,block->page_ops,false,false);
+    if (!new_block)
+        return NULL;
+    phys_ptr_old = (uint64_t *) KERN_PHYS_TO_PVIRT(block->paddr);
+    phys_ptr_new= (uint64_t *) KERN_PHYS_TO_PVIRT(new_block->paddr);
+    //copy data over to new block
+    for(uint32_t j=0; j<(block->size*PAGE_SIZE)/sizeof(uint64_t); j++)
+        phys_ptr_new[j] = phys_ptr_old[j];
+    
+    return new_block;
+}
+
+bool vmm_copy_section(struct vmm_map* src,struct vmm_map* dst,enum vmm_block_type btype)
+{
+    llist_copy(src->vmm_areas[btype],dst->vmm_areas[btype],vmm_copy_block,dst);
+    return true;
+}
+
+
 struct vmm_block* vmm_add_new_mapping(struct vmm_map* map,enum vmm_block_type  block_type , 
-                                      uint64_t *vaddr,uint64_t size, uint64_t page_ops,bool zero) 
+                                      uint64_t *vaddr,uint64_t size, uint64_t page_ops,bool zero,bool add_to_list) 
 {
     if (block_type > VMM_SECTION_CNT)
         panic("Error invalid section ");
@@ -57,14 +88,14 @@ struct vmm_block* vmm_add_new_mapping(struct vmm_map* map,enum vmm_block_type  b
     block->size = size;
     block->page_ops = page_ops;
     block->free = false;
-
+    block->type = block_type;
 
     if(size >1)
         block->paddr = pmem_alloc_block(size);
     else
         block->paddr = pmem_alloc_page();
-
-    llist_prepend(map->vmm_areas[block_type],block);
+    if (add_to_list)
+        llist_append(map->vmm_areas[block_type],block);
     //map it in the page table
     if ( ! paging_map_user_range(&(map->pagetable) ,(uint64_t) block->paddr,
                                 (uint64_t) block->vaddr,size,page_ops))

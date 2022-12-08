@@ -324,27 +324,7 @@ void waittest()
 
 void exectest()
 {
-    int pid = fork();
-    int ret;
-    printf("Fork returned %d\n", pid);
-    if (pid != 0)
-    {
-        printf("I'm the parent\n");
-        printf("waiting on child\n");
-        ret = wait(pid);
-        printf("child returned %d\n", ret);
-        exit(0);
-    }
-    else
-    {
-        printf("I'm the child\n");
-        ret = exec("/testfork2");
-        printf("child fakeexec returned %d\n", ret);
-
-        exec("/names_boy");
-        printf("Should never print\n");
-        exit(12345);
-    }
+            exec("/names_boy");
 }
 void printtest()
 {
@@ -360,7 +340,7 @@ void printtest()
     else
     {
         // printf("I'm the child\n");
-        sleep(10000);
+        sleep(1);
         exit(12345);
     }
 }
@@ -370,7 +350,7 @@ int _start()
     // 
     //      read_test();
     //       read_fullpath_test();
-       exectest();
+//       exectest();
     // testopendir();
     // printf("Test\n");
     //         waittest();

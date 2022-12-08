@@ -31,7 +31,6 @@ int exec_from_inode(struct inode *ifile,bool replace)
     uint64_t vaddr;
     struct vmm_block *block;
     uint32_t offset_delta = 0;
-    struct pg_tbl *new_pg_tbl = NULL;
     uint64_t page_ops;
     struct vmm_map *map = NULL;
     char name[VFS_MAX_FNAME];
@@ -70,12 +69,6 @@ int exec_from_inode(struct inode *ifile,bool replace)
             kprintf("  Elf phdr memsz: 0x%x\n", phdr.memsz);
             kprintf("  Elf phdr filesz: 0x%x\n", phdr.filesz);
 #endif
-
-            if(new_pg_tbl == NULL) {
-                new_pg_tbl = (struct pg_tbl *)kmalloc(sizeof(struct pg_tbl));
-                new_pg_tbl->pml4 = (uint64_t *)KERN_PHYS_TO_PVIRT(pmem_alloc_zero_page());
-            }
-
             if (((phdr.vaddr) & 0x0000000000000fff) != 0UL) {
                 vaddr = phdr.vaddr & 0xfffffffffffff000;
                 offset_delta += phdr.vaddr &0xfff;
@@ -96,7 +89,7 @@ int exec_from_inode(struct inode *ifile,bool replace)
             }
             zero = phdr.memsz != phdr.filesz;
             kprintf("Calling add map 0x%x, %d\n",vaddr,size);
-            block = vmm_add_new_mapping(map,VMM_TEXT,vaddr,size,page_ops,zero);
+            block = vmm_add_new_mapping(map,VMM_TEXT,(uint64_t *)vaddr,size,page_ops,zero,true);
 
 #ifdef EXEC_DEBUG
             kprintf("Reading to %x \n",vaddr+offset_delta);
@@ -109,10 +102,10 @@ int exec_from_inode(struct inode *ifile,bool replace)
 #endif
 
         }
-        if (new_pg_tbl != NULL){
+        if (map != NULL){
 
             if (replace == false)
-                retval = user_process_add_exec(hdr.entry,ifile->i_name,map);
+                retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true);
             else{
                 struct ktask *t = get_current_process();
                 kstrcpy(name,ifile->i_name);

@@ -60,7 +60,6 @@ void user_process_exit(struct ktask *t, int code)
 void *user_process_sbrk(struct ktask *t, uint64_t increment) 
 {
     void *ret = NULL;
-    uint64_t *newblock;
     uint64_t inc;
     //kprintf("Sbrk called with %x %x\n", increment,t->user_heap_loc);
 
@@ -82,7 +81,7 @@ void *user_process_sbrk(struct ktask *t, uint64_t increment)
         uint64_t end_heap = ((uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
         uint64_t pages = delta/PAGE_SIZE + 1;
 
-        vmm_add_new_mapping(t->mm,VMM_DATA,(uint64_t *)end_heap,pages,USER_PAGE,false);
+        vmm_add_new_mapping(t->mm,VMM_DATA,(uint64_t *)end_heap,pages,USER_PAGE,false,true);
         t->heap_size += pages; 
     }
     //kprintf("sbrk returning %x\n",ret);

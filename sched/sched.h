@@ -16,16 +16,6 @@
 #define USER_HEAP_SIZE 1 // in pages
 #define IDLE_PID 0
 
-struct p_memblock {
-    void *block;
-    uint32_t count;
-    struct p_memblock *next;
-    uint32_t pg_opts;
-    uint64_t vaddr;
-
-};
-
-
 void kthread_add(void (*fptr)(),char * name);
 void schedule();
 void sched_stats();
@@ -36,8 +26,7 @@ bool sched_process_kill(int pid,bool cleanup);
 int user_process_fork();
 void sched_save_context();
 int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm);
-int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm);
-
+int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid);
 void sched_init();
 enum sched_states {
     TASK_RUNNING,
@@ -77,7 +66,6 @@ struct ktask{
     uint64_t heap_size; //in pages
     struct vmm_map *mm;
     struct basic_timer timer;
-    struct p_memblock *mem_list;
     struct file *open_fds[MAX_TASK_OPEN_FILES];
 };
 
