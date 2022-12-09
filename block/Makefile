@@ -1,7 +1,7 @@
 all: ata.o
 
-ata.o:  ata.c
-	$(CC) $(CFLAGS) -o $@ -c ata.c
+ata.o:  ata.c ata.h
+	$(CC) $(CFLAGS) -o $@ -c $<
 
 clean:
 	rm -rfv *.o
