@@ -27,9 +27,15 @@ static void kernel(void)
 {
     kprintf("Kyle OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
-    kthread_add(&start_dshell,"D Shell");
-    //scheduler will kick off and enable interrupts
-    schedule();
+    kthread_add(start_dshell,"D Shell");
+
+    //Should never return after this point since scheduler will take over
+    asm("sti");
+
+    while(1) {
+        asm("sti");
+
+    }
 }
 
 static void kinit(void)
