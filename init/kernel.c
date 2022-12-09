@@ -16,22 +16,6 @@
 #include <sched/exec.h>
 #define STACK_PAGES 256
 
-static void print_vendor()
-{
-    unsigned int  b,c,d;
-    int * string = kmalloc(sizeof(int)*20);
-    string[12]='\0';
-    asm volatile( "cpuid;"
-            :"=b"(b), "=c"(c),"=d"(d));
-
-    string[0] = b;
-    string[1] = d;
-    string[2] = c;
-    kprintf("\nCPU:\n");
-    kprintf((char *)string);
-    kprintf("\n\n");
-}
-
 static void idle_loop()
 {
     for(;;) {
@@ -39,13 +23,6 @@ static void idle_loop()
     }
 }
 
-static bool setup_kernel_stack(){
-        kprintf("Allocating stack\n");
-        uint64_t kernel_stack = KERN_PHYS_TO_VIRT(pmem_alloc_block(16));
-        paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_stack),16);
-        asm volatile("movq %%rsp ,%0" : "=g"(kernel_stack));
-        return true;
-}
 static void kernel(void)
 {
     kprintf("Kyle OS has booted\n");
