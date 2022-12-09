@@ -184,7 +184,6 @@ int user_process_fork()
             t->open_fds[j]->refcount++;
     }
 
-
     pid += 1;
     // Return will not apply since eax will be popped off stack
     release_spinlock(&sched_spinlock);
