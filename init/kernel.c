@@ -68,6 +68,7 @@ static void kinit(void)
     timer_system_init();
     exec_init();
     sched_init();
+    fpu_init();
     kernel();
 }
 

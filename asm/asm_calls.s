@@ -15,6 +15,9 @@
 [global load_page_directory]
 [global setup_long_mode]
 [global get_flags_reg]
+[global fpu_init]
+[global fpu_save_context]
+[global fpu_restore_context]
 get_flags_reg:
     sub rsp,8
     pushfq
@@ -36,11 +39,33 @@ gdt_flush:
 flush2:
     ret
 
+fpu_init:
+    ; clear gp registers beforing jumping to userspace
+    ; now enable SSE and the like
+    mov rax, cr0
+    and ax, 0xFFFB		;clear coprocessor emulation CR0.EM
+    or ax, 0x2			;set coprocessor monitoring  CR0.MP
+    mov cr0, rax
+    mov rax, cr4
+    or ax, 3 << 9		;set CR4.OSFXSR and CR4.OSXMMEXCPT at the same time
+    mov cr4, rax
+    fninit
+    ret
+
+fpu_save_context:
+    fxsave [rdi] ; first argument passed in
+    ret
+
+fpu_restore_context:
+    fxrstor [rdi] ; first argument passed in
+    ret
+
 [global tss_flush]
 tss_flush:
     mov ax, 5*8 | 3
     ltr ax
     ret
+
 
 save_context_asm:
     mov rsi,rsp
@@ -193,7 +218,6 @@ jump_usermode:
     push 0x200 ;Enable interrupts in userspace
     push (3 * 8) | 3 ; code selector (ring 3 code with bottom 2 bits set for ring 3)
     push rdi ; instruction address to return to
-    ; clear gp registers beforing jumping to userspace
     mov rax,0
     mov rbx,0
     mov rcx,0
@@ -209,6 +233,7 @@ jump_usermode:
     mov r13,0
     mov r14,0
     mov r15,0
+
     iretq
 
 setup_long_mode:

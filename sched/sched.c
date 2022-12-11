@@ -5,6 +5,7 @@
 #include <mm/paging.h>
 #include <mm/mm.h>
 #include <mm/pmem.h>
+#include <asm/asm.h>
 #include <locks/mutex.h>
 #include <locks/spinlock.h>
 
@@ -114,6 +115,7 @@ void sched_save_context(uint64_t rip, uint64_t rsp)
     struct ktask *c = get_current_process();
     c->save_rip = (uint64_t *)rip;
     c->save_rsp = (uint64_t *)rsp;
+    fpu_save_context(c->fxsave_region);
 }
 
 int user_process_fork()
@@ -464,6 +466,7 @@ void schedule()
 
             if (ktasks[i].type == USER_PROCESS)
             {
+                fpu_restore_context(ktasks[i].fxsave_region);
                 user_switch_paging(&(ktasks[i].mm->pagetable));
             }
             else

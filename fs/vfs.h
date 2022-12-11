@@ -55,7 +55,6 @@ struct file {
     uint32_t flags;
 };
 
-
 struct vfs_ops {
     int (*read)(char* path,union fsinfo);
     struct dnode* (*read_root_dir)(struct vfs_device * dev);
