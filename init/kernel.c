@@ -30,12 +30,8 @@ static void kernel(void)
     kthread_add(start_dshell,"D Shell");
 
     //Should never return after this point since scheduler will take over
-    asm("sti");
-
-    while(1) {
-        asm("sti");
-
-    }
+    for(;;)
+        asm("sti;hlt");
 }
 
 static void kinit(void)
@@ -60,7 +56,6 @@ static void kinit(void)
     asm volatile("movq %0,%%rsp " : : "r"(kernel_stack+4096*STACK_PAGES));
     kprintf("MM init done\n");
     paging_enable_protected();
-
     PIC_init();
     kprintf("PIC init done\n");
     vfs_init();

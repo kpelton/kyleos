@@ -30,11 +30,11 @@ bool vmm_free(struct vmm_map* map) {
      for(uint64_t i=0; i<VMM_SECTION_CNT; ++i){
         llist_free(map->vmm_areas[i],vmm_map_free_block);
      }
-    //TODO free pml4
+    paging_free_pg_tbl(&map->pagetable);
     pmem_free_block(KERN_PVIRT_TO_PHYS(map->pagetable.pml4));
-    //kprintf("vmm free done\n");
+
     kfree(map);
-    return false;
+    return true;
 }
 
 uint64_t vmm_get_page_count (struct vmm_map* map,enum vmm_block_type btype)
