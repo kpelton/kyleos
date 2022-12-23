@@ -62,19 +62,18 @@ struct RegDump dump_regs( void ) {
     asm volatile("movq %%r13 ,%0" : "=g"(dump.r13));
     asm volatile("movq %%r14 ,%0" : "=g"(dump.r14));
     asm volatile("movq %%r15 ,%0" : "=g"(dump.r15));
-    asm volatile("movq %%cr0 ,%0" : "=g"(dump.cr0));
-    asm volatile("movq %%cr2 ,%0" : "=g"(dump.cr2));
-    asm volatile("movq %%cr3 ,%0" : "=g"(dump.cr3));
-    asm volatile("movq %%cr4 ,%0" : "=g"(dump.cr4));
-/*    asm volatile("cli;movq %%rsp, %%rbx; \
-                  pushfq; \
-				  movq (%%rsp),%%rax; \
-				  pop %%rbx; \
-                  sti \ 
-                  "
-				  :"=g" (dump.eflags)
-				  :
-				  :
-				  ); */
+
+ //   asm volatile("movq %%cr3 ,%0" : "=g"(dump.cr3));
+   // asm volatile("movq %%cr4 ,%0" : "=g"(dump.cr4));
+
+    asm volatile("movq %%cr0,%%rax\n\t"
+                "movq %%rax, %0" : "=g"(dump.cr0)::"rax");
+    asm volatile("movq %%cr2,%%rax\n\t"
+                "movq %%rax, %0" : "=g"(dump.cr2)::"rax");
+    asm volatile("movq %%cr3,%%rax\n\t"
+                "movq %%rax, %0" : "=g"(dump.cr3)::"rax");
+    asm volatile("movq %%cr4,%%rax\n\t"
+                "movq %%rax, %0" : "=g"(dump.cr4)::"rax");
+    dump.flags = get_flags_reg();
 return dump;
 }

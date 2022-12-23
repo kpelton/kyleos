@@ -11,4 +11,6 @@ typedef unsigned int uint32_t;
 typedef unsigned long uint64_t;
 typedef uint8_t bool;
 
+#define asmlinkage __attribute__((regparm(0))) 
+
 #endif

@@ -2,6 +2,7 @@
 #define ASM_H
 #include <include/types.h>
 //Structures
+#define INTERRUPT_ENABLE_FLAG 0x200
 struct RegDump{
   uint64_t rax;
   uint64_t rbx;
@@ -23,7 +24,7 @@ struct RegDump{
   uint64_t cr2;
   uint64_t cr3;
   uint64_t cr4;
-  uint64_t eflags;
+  uint64_t flags;
 };
 
 //Wrapped asm functions
@@ -36,6 +37,11 @@ struct RegDump dump_regs();
 uint32_t rdmsr(uint32_t msr_id);
 void tss_flush();
 void jump_usermode();
+void fpu_init();
+void fpu_save_context(uint64_t *ptr);
+void fpu_restore_context(uint64_t *ptr);
+
+uint64_t get_flags_reg();
 
 void wrmsr (uint32_t msr_id, uint32_t msr_value);
 #endif

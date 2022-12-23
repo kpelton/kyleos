@@ -1,6 +1,7 @@
 #include <timer/rtc.h>
 #include <irq/irq.h>
 #include <asm/asm.h>
+#include <locks/spinlock.h>
 #include <output/output.h>
 
 #define CMOS_ADDR 0x70
@@ -10,12 +11,21 @@
 #define REG_SEC 0x0
 #define REG_MIN 0x2
 #define REG_HOUR 0x4
+#define REG_DAY 0x7
+#define REG_MONTH 0x8
+#define REG_YEAR 0x9
+#define REG_CENTURY 0x32
 //Value to write to set the 1 second update register
 #define UIR 0x10
 #define UPDATE 0x40
 #define IE UIR | 0x10
+#define HR24 0x2
+
 static struct sys_time current_time;
-static void set_time(uint8_t hour, uint8_t min, uint8_t sec);
+static void set_time(uint8_t hour, uint8_t min, uint8_t sec,
+                uint8_t day,uint8_t month, uint16_t year);
+            
+static struct spinlock spinlock_rtc;
 
 //Enable rtc interrupt
 void rtc_init() {
@@ -23,11 +33,19 @@ void rtc_init() {
    outb(CMOS_DATA,IE);
    outb(CMOS_ADDR,REG_C);
    inb(CMOS_DATA);
+   outb(CMOS_ADDR,REG_B);
+   uint8_t reg = inb(CMOS_DATA);
+   outb(CMOS_DATA,reg|6);
+   init_spinlock(&spinlock_rtc);
 }
-static void set_time(uint8_t hour, uint8_t min, uint8_t sec) {
+static void set_time(uint8_t hour, uint8_t min, uint8_t sec,
+                uint8_t day,uint8_t month, uint16_t year) {
     current_time.hour = hour;
     current_time.min = min;
     current_time.sec = sec;
+    current_time.day = day;
+    current_time.year = year;
+    current_time.month = month;
 }
 
 struct sys_time get_time() {
@@ -35,19 +53,20 @@ struct sys_time get_time() {
 }
 
 void rtc_irq() {
+    acquire_spinlock(&spinlock_rtc);
     uint8_t sec;
     uint8_t hour;
     uint8_t min;
-    uint8_t registerB;
-    int i;
+    uint8_t month;
+    uint8_t day;
+    uint16_t year;
+  //  uint8_t registerB;
     PIC_sendEOI(8);
 
     //Clear interrupt RTC register
     outb(CMOS_ADDR, 0xc);
     inb(CMOS_DATA);
 
-    outb(CMOS_ADDR, 0xb);
-    registerB = inb(CMOS_DATA);
 
     outb(CMOS_ADDR, REG_SEC);
     sec = inb(CMOS_DATA);
@@ -55,17 +74,22 @@ void rtc_irq() {
     min = inb(CMOS_DATA);
     outb(CMOS_ADDR, REG_HOUR);
     hour = inb(CMOS_DATA);
+   // outb(CMOS_ADDR, REG_B);
+   // registerB = inb(CMOS_DATA);
+    outb(CMOS_ADDR, REG_MONTH);
+    month = inb(CMOS_DATA);
+    outb(CMOS_ADDR, REG_DAY);
+    day = inb(CMOS_DATA);
+    outb(CMOS_ADDR, REG_YEAR);
+    year = inb(CMOS_DATA);
+   //century hack
+   if (year <85) {
+       year = 2000 +year;
+   }
 
-    if (!(registerB & 0x02) && (hour & 0x80)) {
-        hour = ((hour & 0x7F) + 12) % 24;
-    }
-    for(i=8; i >=0; i--) {
+    set_time(hour,min,sec,day,month,year);
 
-        if (hour > 23)
-            hour = 23;
-        else
-            hour -= 1;
-    }
-    set_time(hour,min,sec);
+    release_spinlock(&spinlock_rtc);
+
 
 }

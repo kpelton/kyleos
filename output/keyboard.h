@@ -2,4 +2,5 @@
 #define keyboard_H
 void  keyboard_irq();
 void kbd_irq();
+void kbd_init();
 #endif

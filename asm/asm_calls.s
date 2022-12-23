@@ -7,11 +7,23 @@
 [extern ksleepm]
 [extern timer_irq]
 [extern rtc_irq]
+[extern NR_syscall]
+[extern syscall_tbl]
+[extern sched_save_context]
+[extern syscall]
 [global gdt_flush]
 [global load_page_directory]
 [global setup_long_mode]
-HelloString db 'hello',0xa, 0
-
+[global get_flags_reg]
+[global fpu_init]
+[global fpu_save_context]
+[global fpu_restore_context]
+get_flags_reg:
+    sub rsp,8
+    pushfq
+    pop rax
+    add rsp,8
+    ret
 
 gdt_flush:
  mov rax, strict qword gp
@@ -27,49 +39,167 @@ gdt_flush:
 flush2:
     ret
 
+fpu_init:
+    ; clear gp registers beforing jumping to userspace
+    ; now enable SSE and the like
+    mov rax, cr0
+    and ax, 0xFFFB		;clear coprocessor emulation CR0.EM
+    or ax, 0x2			;set coprocessor monitoring  CR0.MP
+    mov cr0, rax
+    mov rax, cr4
+    or ax, 3 << 9		;set CR4.OSFXSR and CR4.OSXMMEXCPT at the same time
+    mov cr4, rax
+    fninit
+    ret
+
+fpu_save_context:
+    fxsave [rdi] ; first argument passed in
+    ret
+
+fpu_restore_context:
+    fxrstor [rdi] ; first argument passed in
+    ret
+
 [global tss_flush]
 tss_flush:
     mov ax, 5*8 | 3
     ltr ax
     ret
 
-test_user_function2:
-    add eax,123
-    ;;int 0x80
-    ;;sti
-    ret
-[global test_user_function]
-test_user_function:
-    mov rax,123
-    ;;int 0x80
-    ;sti
-    call test_user_function2
-    jmp test_user_function
+
+save_context_asm:
+    mov rsi,rsp
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    pushfq
+    ;; copy over rsp/rip to argumet list
+    mov rdi, r14,
+    call sched_save_context
+    popfq
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
     ret
 
-[global test_user_function5]
-test_user_function5:
-    mov rax,1
-    int 0x80
-    ;sti
-    ;;call test_user_function2
-    jmp test_user_function5
-    ret
-
-
+fork_int:
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    pushfq
+    ;;load syscall addr and call it
+    mov r8, syscall_tbl
+    lea r8, [r8+rax*8]
+    ;save $rip
+    mov r14, .forkret
+    call save_context_asm
+    call [r8]
+.forkret:
+    mov bx, (4 * 8)
+    mov ds, bx
+    mov es, bx 
+    mov fs, bx 
+    popfq
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    sti
+    iretq
 
 [global usermode_int] ;
 usermode_int:
-    mov rdi,rax
-    call ksleepm
-    mov rdi,HelloString
-    ;call kprintf
-    ;jmp panic_handler
-    mov ax, (4 * 8)
-	mov ds, ax
-	mov es, ax 
-	mov fs, ax 
-    sti
+    ;;rax is return val from syscall
+    cmp rax,5
+    je fork_int
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    pushfq
+    ;;load syscall addr and call it
+    push rsi
+    mov r8, syscall_tbl
+    lea r8, [r8+rax*8]
+    ;save $rip
+    lea r14, [$+7]
+    call save_context_asm
+    pop rsi
+    call [r8]
+    mov bx, (4 * 8)
+    mov ds, bx
+    mov es, bx 
+    mov fs, bx 
+    popfq
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
     iretq
 
 [global jump_usermode]
@@ -77,19 +207,34 @@ usermode_int:
 ;rdi address to jump to
 ;rsi user stack
 jump_usermode:
-	mov ax, (4 * 8) | 3 ; ring 3 data with bottom 2 bits set for ring 3
-	mov ds, ax
-	mov es, ax 
-	mov fs, ax 
-	mov gs, ax ; SS is handled by iret
-	; set up the stack frame iret expects
-	push (4 * 8) | 3 ; data selector
-	push rsi ; current esp
-    pushf
-	push (3 * 8) | 3 ; code selector (ring 3 code with bottom 2 bits set for ring 3)
-	push rdi ; instruction address to return to
-    sti
-	iretq
+    mov ax, (4 * 8) | 3 ; ring 3 data with bottom 2 bits set for ring 3
+    mov ds, ax
+    mov es, ax 
+    mov fs, ax 
+    mov gs, ax ; SS is handled by iret
+    ; set up the stack frame iret expects
+    push (4 * 8) | 3 ; data selector
+    push rsi ; current esp
+    push 0x200 ;Enable interrupts in userspace
+    push (3 * 8) | 3 ; code selector (ring 3 code with bottom 2 bits set for ring 3)
+    push rdi ; instruction address to return to
+    mov rax,0
+    mov rbx,0
+    mov rcx,0
+    mov rdx,0
+    mov rsi,0
+    mov rdi,0
+    mov rbp,0
+    mov r8,0
+    mov r9,0
+    mov r10,0
+    mov r11,0
+    mov r12,0
+    mov r13,0
+    mov r14,0
+    mov r15,0
+
+    iretq
 
 setup_long_mode:
   ret 
@@ -97,11 +242,8 @@ setup_long_mode:
 idt_flush:
     mov rax, strict qword ip_t
     lidt [rax]
-	ret
+    ret
 
-[global std_handler] ; global int handler
-std_handler:
-    iretq
 [global kbd_handler] ; global int handler
 kbd_handler:
     push rax
@@ -120,10 +262,15 @@ kbd_handler:
     push r14
     push r15
     pushfq
+    push rsi
+    ;save $rip
+    lea r14, [$+7]
+    call save_context_asm
+    pop rsi
     mov ax, (2 * 8)
-	mov ds, ax
-	mov es, ax 
-	mov fs, ax 
+    mov ds, ax
+    mov es, ax 
+    mov fs, ax 
     call kbd_irq
     popfq
     pop r15
@@ -162,11 +309,16 @@ timer_handler:
     push r14
     push r15
     pushfq
+    push rsi
+    ;save $rip
+    lea r14, [$+7]
+    call save_context_asm
+    pop rsi
     mov ax, (2 * 8)
-	mov ds, ax
-	mov es, ax 
-	mov fs, ax 
-	mov gs, ax ; SS is handled by iret
+    mov ds, ax
+    mov es, ax 
+    mov fs, ax 
+    mov gs, ax ; SS is handled by iret
     call timer_irq
     popfq
     pop r15
@@ -204,10 +356,15 @@ serial_handler:
     push r14
     push r15
     pushfq
+    push rsi
+    ;save $rip
+    lea r14, [$+7]
+    call save_context_asm
+    pop rsi
     mov ax, (2 * 8)
-	mov ds, ax
-	mov es, ax 
-	mov fs, ax 
+    mov ds, ax
+    mov es, ax 
+    mov fs, ax 
     call serial_irq
     popfq
     pop r15
@@ -245,6 +402,11 @@ rtc_handler:
     push r14
     push r15
     pushfq
+    push rsi
+    ;save $rip
+    lea r14, [$+7]
+    call save_context_asm
+    pop rsi
     mov ax, (2 * 8)
     mov ds, ax
     mov es, ax
@@ -268,7 +430,7 @@ rtc_handler:
     pop rax
     iretq
 
-
+;; TODO: These two functions are broken as they don't save/restore state for kernel threads
 [global switch_to] ; global int handler
 switch_to:
     mov rsp,rdi

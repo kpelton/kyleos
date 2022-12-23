@@ -4,9 +4,12 @@
 #include <output/input.h>
 #include <asm/asm.h>
 #include <include/stdarg.h>
+#include <include/types.h>
+
 void output_init() {
     vga_clear();
     serial_init();
+    input_init();
 }
 
 int kpow(int base,int exp) {
@@ -60,6 +63,39 @@ char * kstrncpy(char *dest, const char *src,int bytes) {
     }
     return dest;
 }
+ inline uint8_t * memcpy8(uint8_t *dest, const uint8_t *src,uint64_t bytes) {
+    uint64_t i;
+    for (i=0; i <bytes; i++) {
+        dest[i] = src[i];
+    }
+    return dest;
+}
+
+
+ inline uint64_t * memcpy64(uint64_t *dest, const uint64_t *src,uint64_t bytes) {
+    uint64_t i;
+    uint64_t j;
+    for (i=0, j=0; j <bytes; j+=sizeof(uint64_t), i++)
+        dest[i] = src[i];
+    return dest;
+}
+
+ inline uint64_t * memzero64(uint64_t *dest,uint64_t bytes) {
+    uint64_t i;
+    uint64_t j;
+    for (i=0, j=0; j <bytes; j+=sizeof(uint64_t), i++) {
+        dest[i] = 0;
+    }
+    return dest;
+}
+
+uint8_t * memzero8(uint8_t *dest,uint64_t bytes) {
+    uint64_t i;
+    for (i=0; i <=bytes; i++) {
+        dest[i] = 0;
+    }
+    return dest;
+}
 
 int kstrcmp(char *dest, const char *src) {
     int i;
@@ -69,6 +105,37 @@ int kstrcmp(char *dest, const char *src) {
         }
     return 0;
 }
+
+int kstrstr(char *base, char *delim)
+{
+    char *baseptr = base;
+    int kstart = 0;
+    if (!base || !delim || !*base || !*delim)
+        return -1;
+    int val = 0;
+    while (*baseptr)
+    {
+        if (*baseptr && *delim && *baseptr == *delim)
+        {
+            val = kstart;
+        }
+        while (*baseptr && *delim && *baseptr == *delim)
+        {
+
+            baseptr++;
+            delim++;
+            if (!*delim)
+            {
+                return val;
+            }
+            val++;
+        }
+        baseptr++;
+        kstart++;
+    }
+    return -1;
+}
+
 
 char * itoa( unsigned long value, char * str, int base ) {
     char * rc;
@@ -150,7 +217,8 @@ void print_regs(unsigned long exception,unsigned long rip) {
     kprintf("\n");
     print_reg("cr4",dump.cr4);
     kprintf("\n");
-
+    print_reg("flags",dump.flags);
+    kprintf("\n");
 }
 
 static void puts( char *str) {
@@ -193,6 +261,8 @@ void kprintf(char *format, ...)
                     str_ptr = va_arg(arguments,char *);
                     puts(str_ptr);
                 break;
+                default:
+                panic("unable to handle kprintf type");
             }
         } else {
             putc(*ptr);
@@ -217,8 +287,11 @@ int kstrlen(char *str) {
 
 void panic(char *msg)
 {
+    uint64_t rip;
+    //Copy return address to rip variable
+    asm volatile("movq 8(%%rbp) ,%0" : "=g"(rip));
     kprintf(msg);
-    print_regs(0xdeadbeef,0xdeadbeef);
+    print_regs(0xdeadbeef,rip);
     asm("cli");
     asm("hlt");
 
