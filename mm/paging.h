@@ -25,6 +25,7 @@ bool paging_free_pg_tbl(struct pg_tbl *pg);
 void user_switch_paging(struct pg_tbl *pg);
 void kernel_switch_paging();
 void paging_enable_protected();
+void pagefault();
 
 #define KERN_PHYS_TO_VIRT(x) ((uint64_t)addr_start + (uint64_t)x)
 #define KERN_VIRT_TO_PHYS(x) ((uint64_t) x - (uint64_t)addr_start)

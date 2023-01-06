@@ -2,6 +2,7 @@
 #include <mm/pmem.h>
 #include <output/output.h>
 #include <include/types.h>
+#include <sched/sched.h>
 // 512 entries
 #define INITIAL_PAGE_TAB 511 //MAP 128mb TO KERNEL SPACE
 
@@ -172,8 +173,8 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
         offset = VIRT_TO_PAGE_TAB(virt_curr_addr);
       //  kprintf("page\n");
       //  kprintf("Writing to %x\n",curr+offset);
-        curr[offset] = phys_curr_addr | page_ops;
-
+       // curr[offset] = phys_curr_addr | (page_ops);
+        curr[offset] = phys_curr_addr | (page_ops );
         phys_curr_addr += PAGE_SIZE;
         virt_curr_addr += PAGE_SIZE;
     }
@@ -352,4 +353,65 @@ void paging_enable_protected()
     cr0 |= 1<<16;
     kprintf("cr0 %x\n",cr0);
     asm volatile("movq %0 ,%%cr0" :: "r"(cr0));
+}
+
+uint64_t walk(struct pg_tbl *pg, uint64_t va)
+{
+
+    uint64_t virt_curr_addr = va;
+    uint64_t *curr = pg->pml4;
+    uint64_t offset;
+
+    //printf("call base pml4 %x\n",pg->pml4);
+        curr = pg->pml4;
+        offset = VIRT_TO_PML4_ADDR(va);
+        if ((curr[offset] & PAGE_PRESENT) == 0)
+            goto error;
+        curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & PHYS_ADDR_MASK));
+        offset = VIRT_TO_PAGE_DIR_TAB_ADDR(virt_curr_addr);
+
+        if ((curr[offset] & PAGE_PRESENT) == 0)
+            goto error;
+        
+        curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & PHYS_ADDR_MASK));
+        offset = VIRT_TO_PAGE_DIR(virt_curr_addr);
+        if ((curr[offset] & PAGE_PRESENT) == 0) 
+            goto error;
+        
+        curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & PHYS_ADDR_MASK));
+        offset = VIRT_TO_PAGE_TAB(virt_curr_addr);
+    
+    //return pte;
+    return &curr[offset];
+
+    error:
+        return NULL;
+
+}
+
+
+
+void pagefault() {
+    uint64_t cr2;
+    struct ktask *proc = get_current_process();
+    asm volatile("movq %%cr2 ,%0" : "=g"(cr2));
+    cr2 &=0xfffffffffffff000;
+        if (cr2 == 0)
+    {
+        kprintf("Test123123\n");
+    }
+    kprintf("pagefault on 0x%x !\n",cr2);
+    uint64_t *pte =(uint64_t *)walk(&(proc->mm->pagetable),cr2);
+    kprintf("pte:%x\n",pte);
+
+    if (pte) {
+        *pte |= PAGE_PRESENT;
+    }
+    else{
+        sched_process_kill(proc->pid,true);
+        schedule();
+    }
+    kprintf("pte:%x\n",*pte);
+
+
 }

@@ -252,7 +252,7 @@ void phys_mem_init() {
     kprintf("initial alloc %x\n",initial_alloc_location);
     kprintf("alloc_location %x\n",alloc_location);
     alloc_size  = alloc_location - initial_alloc_location;
-    total_size =  ((uint64_t)&_kernel_end - 0xffffffff80000000)+alloc_size + 4096;
+    total_size =  ((uint64_t)&_kernel_end - addr_start)+alloc_size + 4096;
     phys_mem_reserve_inital_region((total_size/4096)+1);
     kprintf("Inital region is using %d B out of %d B\n",
                         get_used_page_count(phys_mem_zones[phys_first_region].len,phys_mem_zones[phys_first_region].bitmap)*4096,

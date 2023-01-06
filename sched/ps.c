@@ -81,7 +81,7 @@ void *user_process_sbrk(struct ktask *t, uint64_t increment)
         uint64_t end_heap = ((uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
         uint64_t pages = delta/PAGE_SIZE + 1;
 
-        vmm_add_new_mapping(t->mm,VMM_DATA,(uint64_t *)end_heap,pages,USER_PAGE,false,true);
+        vmm_add_new_mapping(t->mm,VMM_DATA,(uint64_t *)end_heap,pages,USER_PAGE & ~PAGE_PRESENT,false,true);
         t->heap_size += pages; 
     }
     //kprintf("sbrk returning %x\n",ret);
