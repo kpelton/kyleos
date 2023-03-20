@@ -11,7 +11,7 @@ static struct mutex uart_print_mutex;
 
 void serial_kprintf(char* str)
 {
-   acquire_mutex(&uart_print_mutex);
+   //cquire_mutex(&uart_print_mutex);
 
     char* strp = str;
     while (*strp != '\0')  {
@@ -21,7 +21,7 @@ void serial_kprintf(char* str)
         strp++;
         
     }
-       release_mutex(&uart_print_mutex);
+     //  release_mutex(&uart_print_mutex);
 
 }
 
@@ -44,14 +44,14 @@ void serial_init()
 
 void serial_irq()
 {
-    acquire_spinlock(&uart_spinlock);
+
     char in;
+    acquire_spinlock(&uart_spinlock);
     outb(PORT + 3, 0x00); //dlab = 0 
     in = inb(PORT);
     input_add_char(in);
     PIC_sendEOI(1);
     release_spinlock(&uart_spinlock);
- 
 }
 
 
