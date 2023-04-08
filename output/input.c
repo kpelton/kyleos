@@ -39,6 +39,6 @@ void input_add_char(char in)
 
     output[0] = in;
     output[1] = '\0';
-    kprintf(output);
+    kprintf("%s",output);
 
 }
