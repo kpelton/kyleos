@@ -241,6 +241,11 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count)
     uint32_t j = 0;
     uint32_t i = 0;
     uint64_t total_read = 0;
+
+    if(rfile->pos >= rfile->i_node.file_size)
+        return 0;
+
+    memzero8((uint8_t *) buf,count);
     // Need to cache which cluster we are on for next call
     while (cluster < FAT_END_OF_CHAIN && bytes_read < count)
     {
@@ -261,7 +266,7 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count)
             cluster = rfile->dev->finfo.fat->fat_ptr[cluster];
         }
 
-        while (j < sectors_per_cluster * ATA_SECTOR_SIZE && bytes_read < rfile->i_node.file_size && bytes_read < count)
+        while (j < sectors_per_cluster * ATA_SECTOR_SIZE && rfile->pos+bytes_read < rfile->i_node.file_size && bytes_read < count)
         {
             if (total_read >= rfile->pos)
             {
@@ -276,7 +281,7 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count)
     }
     rfile->pos += bytes_read;
     //kfree(cluster_dest);
-    // kprintf("read inode total bytes read %d\n",bytes_read);
+    kprintf("read inode total bytes read %d file->size %d file->pos %d\n",bytes_read,rfile->i_node.file_size,rfile->pos);
     return bytes_read;
 }
 
