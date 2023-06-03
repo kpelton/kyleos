@@ -215,8 +215,8 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
 
      kprintf("Allocating Stack\n");
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
-    vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,USER_PAGE,true,true);
-    vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_HEAP_SIZE,USER_PAGE,true,true);
+    vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,READ_WRITE | SUPERVISOR,true,true);
+    vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_HEAP_SIZE,READ_WRITE | SUPERVISOR,true,true);
 
     t->heap_size = USER_HEAP_SIZE;
     t->user_start_heap = (uint64_t *)USER_HEAP_VADDR;

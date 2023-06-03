@@ -11,6 +11,7 @@
 [extern syscall_tbl]
 [extern sched_save_context]
 [extern syscall]
+[extern pagefault]
 [global gdt_flush]
 [global load_page_directory]
 [global setup_long_mode]
@@ -521,8 +522,51 @@ panic_handler_13:
 
 [global panic_handler_14] ;
 panic_handler_14:
-    mov rax,14
-    jmp panic_handler
+    cli
+    add rsp,8 ;error code
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    pushfq
+    push rsi
+    ;save $rip
+    lea r14, [$+7]
+    call save_context_asm
+    pop rsi
+    mov ax, (2 * 8)
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    call pagefault
+    popfq
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    iretq
 [global panic_handler_15] ;
 panic_handler_15:
     mov rax,15

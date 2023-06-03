@@ -19,7 +19,7 @@ void exec_init(){
 //Add elf file to runqueue given an inode. Will return false if something bad happened. 
 int exec_from_inode(struct inode *ifile,bool replace)
 {
-            acquire_spinlock(&exec_spinlock);
+    acquire_spinlock(&exec_spinlock);
     //int bytes = 0;
     int i;
     struct file *rfile = vfs_open_file(ifile,O_RDONLY);
@@ -122,6 +122,8 @@ int exec_from_inode(struct inode *ifile,bool replace)
     else
     {
         kprintf("Not an ELF executable!\n");
+        release_spinlock(&exec_spinlock);
+
     }
     vfs_close_file(rfile);
 

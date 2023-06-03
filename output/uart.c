@@ -11,7 +11,7 @@ static struct mutex uart_print_mutex;
 
 void serial_kprintf(char* str)
 {
-   acquire_mutex(&uart_print_mutex);
+   //cquire_mutex(&uart_print_mutex);
 
     char* strp = str;
     while (*strp != '\0')  {
@@ -21,7 +21,7 @@ void serial_kprintf(char* str)
         strp++;
         
     }
-       release_mutex(&uart_print_mutex);
+     //  release_mutex(&uart_print_mutex);
 
 }
 
@@ -31,7 +31,7 @@ void serial_init()
    init_spinlock(&uart_spinlock);
    acquire_spinlock(&uart_spinlock);
    outb(PORT + 1, 0x00);    // Disable all interrupts
-   outb(PORT + 3, 0x80);    // Enable DLAB (set baud rate divisor)
+   outb(PORT + 3, 0x80);    // Enable DLAB (set baud rate divisor)mutulu
    outb(PORT + 0, 0x01);    // Set divisor to 3 (lo byte) 38400 baud
    outb(PORT + 1, 0x00);    //                  (hi byte)
    outb(PORT + 3, 0x03);    // 8 bits, no parity, one stop bit
@@ -44,14 +44,14 @@ void serial_init()
 
 void serial_irq()
 {
-    acquire_spinlock(&uart_spinlock);
+
     char in;
+    acquire_spinlock(&uart_spinlock);
     outb(PORT + 3, 0x00); //dlab = 0 
     in = inb(PORT);
     input_add_char(in);
     PIC_sendEOI(1);
     release_spinlock(&uart_spinlock);
- 
 }
 
 

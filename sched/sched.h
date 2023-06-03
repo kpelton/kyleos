@@ -10,9 +10,9 @@
 #define SCHED_MAX_NAME 32
 #define KTHREAD_STACK_SIZE 4096*8
 
-#define USER_STACK_VADDR (uint64_t *) 0x600000000
+#define USER_STACK_VADDR (uint64_t *) 0x700000000
 #define USER_STACK_SIZE 32
-#define USER_HEAP_VADDR (uint64_t *) 0x700000000
+#define USER_HEAP_VADDR (uint64_t *) 0x600000000
 #define USER_HEAP_SIZE 1 // in pages
 #define IDLE_PID 0
 

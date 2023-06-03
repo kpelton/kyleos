@@ -99,7 +99,7 @@ struct vmm_block *vmm_add_new_mapping(struct vmm_map *map, enum vmm_block_type b
         llist_append(map->vmm_areas[block_type], block);
     // map it in the page table
     if (!paging_map_user_range(&(map->pagetable), (uint64_t)block->paddr,
-                               (uint64_t)block->vaddr, size, page_ops))
+                               (uint64_t)block->vaddr, size, page_ops ))
         return NULL;
 
     // bss section zero pages
