@@ -138,7 +138,7 @@ int user_process_fork()
     t->state = TASK_READY;
     t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
-    t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
+    t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 8;
     t->user_start_stack = curr->user_start_stack;
     t->pid = pid;
     t->context_switches = 0;
@@ -224,9 +224,9 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     t->mm = mm;
     t->state = TASK_NEW;
     t->start_addr = (uint64_t *)startaddr;
-    t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 16;
+    t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 8;
     t->s_rbp = t->user_start_stack;
-    t->user_start_stack = (uint64_t *)((uint64_t)USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 16);
+    t->user_start_stack = (uint64_t *)((uint64_t)USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 8);
     t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
     
