@@ -55,39 +55,32 @@ static inline void print_loc(const int x, const int y,
 void vga_kprintf(char *str)
 {
 
+    acquire_spinlock(&vga_spinlock);
     for(;*str !='\0'; str++) {
 
         if (*str == '\n') {
             cursor_y++;
             cursor_x=0; 
             if (cursor_y >=25){
-                acquire_spinlock(&vga_spinlock);
                 vga_scroll();
-                release_spinlock(&vga_spinlock);
 
                 cursor_y=24;
             }
 
         } else {
-            acquire_spinlock(&vga_spinlock);
             print_loc(cursor_x,cursor_y,0, 3,*str,0);
-            release_spinlock(&vga_spinlock);
-
             cursor_x++;   
         }
         if(cursor_x >= 80){
             cursor_y++;
             cursor_x=0;
              if (cursor_y ==25){
-                acquire_spinlock(&vga_spinlock);
                 vga_scroll();
-                release_spinlock(&vga_spinlock);
                 cursor_y=24;
             }
         }
     }
-        update_cursor(cursor_y,cursor_x);
-
-
+    //update_cursor(cursor_y,cursor_x);
+    release_spinlock(&vga_spinlock);
 }
 

@@ -227,12 +227,12 @@ void start_dshell()
     char buffer[512];
     char *cptr = NULL;
     int pid;
-    //struct dnode *dptr;
-    //struct dnode *dptr1;
-//    dptr = vfs_read_root_dir("0:/"); 
-    //struct dnode *olddptr=dptr;
-    //struct inode *pwd = dptr->root_inode;
-    //struct inode *oldpwd=pwd;
+    struct dnode *dptr;
+    dptr = vfs_read_root_dir("/");
+    struct dnode *olddptr = dptr;
+    struct inode *pwd = dptr->root_inode;
+    struct inode *oldpwd = pwd;
+    struct inode *itmp;
     push_dir_stack("/");
     print_prompt();
     //kprintf("root %x\n",pwd->i_ino);
@@ -280,19 +280,148 @@ for(;;) {
             asm("hlt");
             continue;
         }
-        if (buffer[0] == 'k' && buffer[1] == 'i' 
-                && buffer[2] == 'l' && buffer[3] == 'l'
-                && buffer[4] == ' ' && buffer[5] != '\n') {
-                cptr = buffer+5;
-                while(*cptr != '\n' && *cptr != '\0') {           
-                    cptr++;
-                }
-                *cptr = '\0';
-                pid = atoi(buffer+5);
-                asm("cli");
-                if (sched_process_kill(pid,true) == false)
-                    kprintf("Kill failed\n");
-                asm("sti");
+        if (kstrcmp(buffer, "ls\n") == 0)
+        {
+
+            print_dir(pwd);
+            //kprintf("root %x\n",pwd->i_ino);
+
+        }
+        else if (buffer[0] == 'm' && buffer[1] == 'k' && buffer[2] == 'd' && buffer[3] == 'i'&& buffer[4] == 'r'  && buffer[5] == ' ' && buffer[6] != '\n')
+        {
+            //for(int j =0; j<500; j++){
+             mkdir(pwd,buffer+6);
+             //  mkdir(pwd,"a");
+
+           // }
+        }
+        else if (buffer[0] == 's' && buffer[1] == 'k' && buffer[2] == 'd' && buffer[3] == 'i'&& buffer[4] == 'r'  && buffer[5] == ' ' && buffer[6] != '\n')
+        {
+            for(int j =0; j<500; j++){
+             //mkdir(pwd,buffer+6);
+               mkdir(pwd,"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+            }
+        }
+
+        else if (buffer[0] == 'l'  && buffer[1] == 's'  && buffer[2] == ' ' && buffer[3] != '\n')
+        {
+            cptr = buffer + 3;
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+            }
+            *cptr = '\0';
+            dptr = vfs_read_inode_dir(pwd);
+            itmp = read_path(buffer + 3, dptr,I_DIR);
+            if(itmp != NULL) {
+                print_dir(itmp);
+
+                //vfs_free_dnode(dptr);
+            }else
+            {
+                kprintf("ls failed\n");
+            }
+        }
+        else if (buffer[0] == 'c' && buffer[1] == 'd' && buffer[2] == ' ' && buffer[3] != '\n')
+        {
+            dptr = vfs_read_inode_dir(pwd);
+            pwd = shell_cd(buffer, dptr);
+            //If failure
+            if (pwd == 0)
+            {
+                pwd = oldpwd;
+            }
+            else
+            {
+                vfs_free_dnode(olddptr);
+                if (buffer[3] == '.' && buffer[4] == '.' && kstrcmp(dptr->i_name, "/") != 0 && oldpwd != pwd)
+                    pop_dir_stack();
+                else if (oldpwd != pwd)
+                    push_dir_stack(pwd->i_name);
+                olddptr = dptr;
+                oldpwd = pwd;
+            }
+        }
+        else if (buffer[0] == 'k' && buffer[1] == 'i' && buffer[2] == 'l' && buffer[3] == 'l' && buffer[4] == ' ' && buffer[5] != '\n')
+        {
+            cptr = buffer + 5;
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+            }
+            *cptr = '\0';
+            pid = atoi(buffer + 5);
+            if (sched_process_kill(pid,true) == false)
+                kprintf("Kill failed\n");
+        }
+
+        else if (buffer[0] == 'c' && buffer[1] == 'a' && buffer[2] == 't' && buffer[3] == ' ' && buffer[4] != '\n')
+        {
+            struct file *rfile;
+            uint8_t *rbuffer;
+            uint32_t bytes;
+            cptr = buffer + 4;
+            kprintf("test\n");
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+            }
+            *cptr = '\0';
+            dptr = vfs_read_inode_dir(pwd);
+            itmp = read_path(buffer + 4, dptr,I_FILE);
+            if(itmp != NULL) {
+                //vfs_cat_inode_file(itmp);
+                rfile = vfs_open_file(itmp,O_RDONLY);
+                rbuffer = kmalloc(itmp->file_size+1);
+                bytes = vfs_read_file(rfile,rbuffer,itmp->file_size);
+                rbuffer[itmp->file_size] = '\0';
+                kprintf("Read %d\n",bytes);
+                kprintf("%s",rbuffer);
+                kfree(rbuffer);
+                vfs_close_file(rfile);
+            }else
+            {
+                kprintf("cat failed\n");
+            }
+        }
+        else if (buffer[0] == 'e' && buffer[1] == 'x' && buffer[2] == 'e' && buffer[3] == 'c' && buffer[4] ==  ' ' && buffer[5] != '\n')
+        {
+            cptr = buffer + 5;
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+            }
+            *cptr = '\0';
+            dptr = vfs_read_inode_dir(pwd);
+            itmp = read_path(buffer + 5, dptr,I_FILE);
+            if(itmp != NULL) {
+                int pid = exec_from_inode(itmp,false);
+                kprintf("new pid: %d",pid);
+            }else
+            {
+                kprintf("cat failed\n");
+            }
+        }
+        else if (buffer[0] == 'e' && buffer[1] == 'x' && buffer[2] == 'e' && buffer[3] == 'w' && buffer[4] ==  ' ' && buffer[5] != '\n')
+        {
+            cptr = buffer + 5;
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+            }
+            *cptr = '\0';
+            dptr = vfs_read_inode_dir(pwd);
+            itmp = read_path(buffer + 5, dptr,I_FILE);
+            if(itmp != NULL) {
+                int pid = exec_from_inode(itmp,false);
+                if(pid >= 0)
+                    process_wait(pid);
+
+            }else
+            {
+                kprintf("cat failed\n");
+            }
         }
 
         else if (kstrcmp(buffer, "mem\n") == 0)

@@ -412,7 +412,6 @@ void pagefault() {
         kprintf("Test123123\n");
     }
     kprintf("pagefault on 0x%x !\n",cr2);
-    asm("cli; hlt");
     uint64_t *pte =(uint64_t *)walk(&(proc->mm->pagetable),cr2);
     kprintf("pte:%x\n",pte);
 
