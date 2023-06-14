@@ -34,7 +34,7 @@ struct idt_ptr
 	uint64_t base;
 } __attribute__((packed));
 
-struct gdt_entry gdt[7];
+struct gdt_entry gdt[8192];
 struct gdt_ptr gp;
 
 //Interrupt descriptor list
@@ -185,22 +185,24 @@ void gdt_set_gate(int num, uint64_t base, uint64_t limit, uint8_t access, uint8_
 
 void gdt_tss_set_gate(int num, uint64_t base) {
 	gdt[num].limit_low = (uint16_t) ((base &  0x0000FFFF00000000)>>32);
-	gdt[num].base_low = (uint16_t) ((base & 0xFFFF000000000000)>>48);
+	gdt[num].base_low = (uint16_t) ((base &  0xFFFF000000000000)>>48);
+
+	gdt[num].access = 0;
 }
  
 // Sets our 3 gates and installs the real GDT through the assembler function
 void gdt_install() {
-	gp.limit = (sizeof(struct gdt_entry) * 7) - 1;
+	gp.limit = (sizeof(struct gdt_entry) * 8192) - 1;
 	gp.base = (uint64_t)&gdt;
 
     uint64_t base = (uint64_t) &tss_entry;
 	uint32_t limit = sizeof tss_entry;
 
 	gdt_set_gate(0, 0, 0, 0, 0);
-	gdt_set_gate(1, 0, 0xFFFFFFFFffffffff, 0x9A, 0x20);
-	gdt_set_gate(2, 0, 0xFFFFFFFFffffffff, 0x92, 0x0);
-	gdt_set_gate(3, 0, 0xFFFFFFFFffffffff, 0xfa, 0x20);
-    gdt_set_gate(4, 0, 0xFFFFFFFFffffffff, 0xf2, 0x0);
+	gdt_set_gate(1, 0, 0xFFFFFFFFffffffff, 0x9B, 0xa0);
+	gdt_set_gate(2, 0, 0xFFFFFFFFffffffff, 0x93, 0xb0);
+	gdt_set_gate(3, 0, 0xFFFFFFFFffffffff, 0xfa, 0xa0);
+    gdt_set_gate(4, 0, 0xFFFFFFFFffffffff, 0xf2, 0xb0);
 
     //Note GDT tss gate is two entries wide. use special function to set upper 32-64 bits of base addr
     gdt_set_gate(5, base, limit, 0xe9, 0x00);
@@ -214,7 +216,7 @@ void gdt_install() {
 	gdt_flush();
 }
 void gdt64_install() {
-    gp.limit = (sizeof(struct gdt_entry) * 5) - 1;
+    gp.limit = (sizeof(struct gdt_entry) * 4) - 1;
     gp.base = (uint64_t)&gdt;
 
     gdt_set_gate(0, 0, 0, 0, 0);

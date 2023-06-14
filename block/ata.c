@@ -16,7 +16,14 @@
 #define DRIVE_HEAD_REG 6
 #define COMMAND_REG 7
 #define STATUS_REG 7
+//pink
 #define PRIMARY 0x6eb0
+//silver
+//#define PRIMARY 0x30c8
+//qemu
+//#define PRIMARY 0x1f0
+
+
 
 #define CMD_IDENTIFY 0xec
 #define CMD_READ_SECTORS 0x20

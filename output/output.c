@@ -178,8 +178,12 @@ static void print_reg(char * name,unsigned long val)
 }
 void print_regs(unsigned long exception,unsigned long rip) {
     struct RegDump dump;
+    uint64_t rsp;
+    asm volatile("movq %%rbp ,%0"
+    : "=g"(rsp));
+
     char buffer[50];
-    kprintf("\n\nUnhandled Exception\nREGISTER DUMP\n=============\n");
+    kprintf("\n\nREGISTER DUMP\n=============\n");
     kprintf("EXCEPTION:");
     itoa(exception,buffer,16);
     kprintf("0x");
@@ -209,17 +213,19 @@ void print_regs(unsigned long exception,unsigned long rip) {
     print_reg("r14",dump.r14);
     print_reg("r15",dump.r15);
     kprintf("\n=============\n");
-    print_reg("cr0",dump.cr0);
+    kprintf("cr0:0x%x cr2:0x%x cr3:0x%x cr4:0x%x flags:0x%x\n" ,dump.cr0, dump.cr2,dump.cr3,dump.cr4,dump.flags);
+    kprintf("rbp: ");
+    for(int i=0; i<13; i++) 
+    	kprintf("%x ",*((uint64_t*)(rsp+8*i)));
     kprintf("\n");
-    print_reg("cr2",dump.cr2);
-    kprintf("\n");
-    print_reg("cr3",dump.cr3);
-    kprintf("\n");
-    print_reg("cr4",dump.cr4);
-    kprintf("\n");
-    print_reg("flags",dump.flags);
+	asm volatile("movq %%rsp ,%0"
+    : "=g"(rsp));
+    kprintf("rsp: ");
+    for(int i=0; i<13; i++) 
+    	kprintf("%x ",*((uint64_t*)(rsp+8*i)));
     kprintf("\n");
 }
+
 
 static void puts( char *str) {
     vga_kprintf(str);
