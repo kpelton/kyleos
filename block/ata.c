@@ -16,7 +16,14 @@
 #define DRIVE_HEAD_REG 6
 #define COMMAND_REG 7
 #define STATUS_REG 7
-#define PRIMARY 0x1f0
+//pink
+#define PRIMARY 0x6eb0
+//silver
+//#define PRIMARY 0x30c8
+//qemu
+//#define PRIMARY 0x1f0
+
+
 
 #define CMD_IDENTIFY 0xec
 #define CMD_READ_SECTORS 0x20
@@ -25,6 +32,7 @@
 #define STAT_DRIVE_BUSY 0x80
 #define STAT_PIO_READY 0x8
 //#define ATA_DEBUG
+
 
 struct mbr_info fs1;
 static struct mutex ata_mutex;
@@ -115,7 +123,7 @@ int read_sec(uint32_t sec, void *buffer)
     {
         status = read_status();
 #ifdef ATA_DEBUG
-        print_drive_status();
+                print_drive_status();
 #endif
     }
 
@@ -124,7 +132,12 @@ int read_sec(uint32_t sec, void *buffer)
     {
         while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY) != 0)
             status = read_status();
-        data[i] = inw(PRIMARY);
+            data[i] = 0;
+            data[i] = inw(PRIMARY);
+
+#ifdef ATA_DEBUG
+	    kprintf("%x ",data[i]);
+#endif
     }
     status = read_status();
     release_mutex(&ata_mutex);
@@ -148,6 +161,7 @@ void ata_init(void)
     part_type = mbr[0x1c2];
     init_mutex(&ata_mutex);
 
+    kprintf("mbr:0x%x\n",valid_mbr);
     // Look for valid MBR 0x55aa
     if (valid_mbr == 0xaa55)
     {

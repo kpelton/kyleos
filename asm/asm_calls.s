@@ -30,11 +30,12 @@ gdt_flush:
  mov rax, strict qword gp
  lgdt [rax]
   mov ax, 0x10
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
+  mov ss, ax
+  mov ax, 0x0
+  mov fs, ax
+  mov gs, ax
+  mov es, ax
+ 
     jmp flush2
 
 flush2:
@@ -130,10 +131,6 @@ fork_int:
     call save_context_asm
     call [r8]
 .forkret:
-    mov bx, (4 * 8)
-    mov ds, bx
-    mov es, bx 
-    mov fs, bx 
     popfq
     pop r15
     pop r14
@@ -150,12 +147,12 @@ fork_int:
     pop rcx
     pop rbx
     pop rax
-    sti
     iretq
 
 [global usermode_int] ;
 usermode_int:
     ;;rax is return val from syscall
+    cli
     cmp rax,5
     je fork_int
     push rbx
@@ -182,10 +179,6 @@ usermode_int:
     call save_context_asm
     pop rsi
     call [r8]
-    mov bx, (4 * 8)
-    mov ds, bx
-    mov es, bx 
-    mov fs, bx 
     popfq
     pop r15
     pop r14
@@ -204,15 +197,7 @@ usermode_int:
     iretq
 
 [global jump_usermode]
-
-;rdi address to jump to
-;rsi user stack
 jump_usermode:
-    mov ax, (4 * 8) | 3 ; ring 3 data with bottom 2 bits set for ring 3
-    mov ds, ax
-    mov es, ax 
-    mov fs, ax 
-    mov gs, ax ; SS is handled by iret
     ; set up the stack frame iret expects
     push (4 * 8) | 3 ; data selector
     push rsi ; current esp
@@ -268,10 +253,6 @@ kbd_handler:
     lea r14, [$+7]
     call save_context_asm
     pop rsi
-    mov ax, (2 * 8)
-    mov ds, ax
-    mov es, ax 
-    mov fs, ax 
     call kbd_irq
     popfq
     pop r15
@@ -310,16 +291,6 @@ timer_handler:
     push r14
     push r15
     pushfq
-    push rsi
-    ;save $rip
-    lea r14, [$+7]
-    call save_context_asm
-    pop rsi
-    mov ax, (2 * 8)
-    mov ds, ax
-    mov es, ax 
-    mov fs, ax 
-    mov gs, ax ; SS is handled by iret
     call timer_irq
     popfq
     pop r15
@@ -362,10 +333,6 @@ serial_handler:
     lea r14, [$+7]
     call save_context_asm
     pop rsi
-    mov ax, (2 * 8)
-    mov ds, ax
-    mov es, ax 
-    mov fs, ax 
     call serial_irq
     popfq
     pop r15
@@ -408,10 +375,6 @@ rtc_handler:
     lea r14, [$+7]
     call save_context_asm
     pop rsi
-    mov ax, (2 * 8)
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
     call rtc_irq
     popfq
     pop r15
@@ -436,7 +399,6 @@ rtc_handler:
 switch_to:
     mov rsp,rdi
     mov rax,rsi
-    sti
     jmp rax
     jmp $
 
@@ -445,7 +407,6 @@ resume_p:
     mov rsp,rdi
     mov rbp,rsi
     sub rsp ,8
-    sti
     ret
 
 [global panic_handler] ; global int handler
@@ -545,10 +506,6 @@ panic_handler_14:
     lea r14, [$+7]
     call save_context_asm
     pop rsi
-    mov ax, (2 * 8)
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
     call pagefault
     popfq
     pop r15

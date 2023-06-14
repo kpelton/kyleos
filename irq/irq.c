@@ -105,8 +105,8 @@ void PIC_init(void)
   PIC_sendEOI(1);
   IRQ_clear_mask(1); // kbd
   IRQ_clear_mask(0); // timer
-  IRQ_clear_mask(4); // uart
-  IRQ_clear_mask(8); // rtc
-  IRQ_clear_mask(2); // slave PIC
+  //IRQ_clear_mask(4); // uart
+  //IRQ_clear_mask(8); // rtc
+  //IRQ_clear_mask(2); // slave PIC
   // enable time update interrupt
 }

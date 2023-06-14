@@ -25,11 +25,13 @@ uint64_t initial_page_dir_tab[512] __attribute__((aligned(0x20))); // must be al
 uint64_t initial_page_dir[512] __attribute__((aligned(0x1000)));   // must be aligned to page boundary
 uint64_t initial_page_tab[INITIAL_PAGE_TAB][512] __attribute__((aligned(0x1000)));
 uint64_t initial_iden_page_dir_tab[512] __attribute__((aligned(0x1000)));
+uint64_t initial_iden_page_dir[512] __attribute__((aligned(0x1000)));
 
 
 uint64_t *kernel_pml4;
 uint64_t *kernel_page_dir_tab;
 uint64_t *kernel_iden_page_dir_tab;
+uint64_t *kernel_iden_page_dir;
 uint64_t *kernel_page_dir;
 uint64_t **page_tbl;
 uint64_t *pkernel_pml4;
@@ -52,7 +54,12 @@ void early_setup_paging()
     uint64_t i = 0;
     uint64_t j = 0;
     uint64_t address = 0;
+    
 
+    for(i=0; i<512; i++){
+        initial_pml4[i] = 0;
+        initial_iden_page_dir_tab[i] = 0;
+    }
     initial_pml4[511] = ((uint64_t)&initial_page_dir_tab - addr_start) | KERNEL_PAGE;     // set the page directory into the PDPT and mark it present
     initial_page_dir_tab[510] = ((uint64_t)&initial_page_dir - addr_start) | KERNEL_PAGE; // set the page directory into the PDPT and mark it present
 
@@ -66,10 +73,11 @@ void early_setup_paging()
     //Setup initial 1-1 virt-to phys-mem mapping
     //Map first 512GB
     initial_pml4[PHYS_MEM_MAP_START] = KERN_VIRT_TO_PHYS(&initial_iden_page_dir_tab) | KERNEL_PAGE;
+    initial_iden_page_dir_tab[0] = KERN_VIRT_TO_PHYS(&initial_iden_page_dir) | KERNEL_PAGE;
     address = 0;
     for(i=0; i<512; i++) {
-        initial_iden_page_dir_tab[i] = address | 131;
-        address+=0x40000000;
+        initial_iden_page_dir[i] = address | 131;
+        address+=0x200000;
     }
 
 
@@ -281,23 +289,27 @@ bool setup_paging()
     uint64_t virt_curr_addr = addr_start;
     int j, i = 0;
 
-    kernel_pml4 = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_page());
+    kernel_pml4 = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_zero_page());
     kprintf("0xpml4:%x\n", kernel_pml4);
-    kprintf("0xpml4:%x\n", KERN_VIRT_TO_PHYS(kernel_pml4));
+    kprintf("kyle test 0xpml4:%x\n", *(uint64_t *)kernel_pml4);
     kernel_page_dir_tab = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_zero_page());
     kprintf("page_dir_tab  %x\n", kernel_page_dir_tab);
     kprintf("page_dir_tab %x\n", KERN_VIRT_TO_PHYS(kernel_page_dir_tab));
 
     kernel_page_dir = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_zero_page());
     kernel_iden_page_dir_tab = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_zero_page());
+    kernel_iden_page_dir = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_zero_page());
 
     kernel_pml4[VIRT_TO_PML4_ADDR(virt_curr_addr)] = KERN_VIRT_TO_PHYS(kernel_page_dir_tab) | KERNEL_PAGE;
     kernel_pml4[PHYS_MEM_MAP_START] = KERN_VIRT_TO_PHYS(kernel_iden_page_dir_tab) | KERNEL_PAGE;
+    //TODO need check to only map physical memory that is present 
+    //Use 2MB pages to map the first 1GB
+    kernel_iden_page_dir_tab[0] = KERN_VIRT_TO_PHYS(kernel_iden_page_dir) | KERNEL_PAGE;
     address = 0;
-    kprintf("%x\n",kernel_iden_page_dir_tab);
+    kprintf("%x\n",kernel_iden_page_dir);
     for(i=0; i<512; i++) {
-        kernel_iden_page_dir_tab[i] = address | 131;
-        address+=0x40000000;
+        kernel_iden_page_dir[i] = address | 131;
+        address+=0x200000;
     }
 
     kernel_page_dir_tab[VIRT_TO_PAGE_DIR_TAB_ADDR(virt_curr_addr)] = KERN_VIRT_TO_PHYS(kernel_page_dir) | KERNEL_PAGE;
@@ -341,7 +353,6 @@ bool setup_paging()
                  :
                  : "r"(address));
     pkernel_pml4 = (uint64_t *) KERN_PHYS_TO_PVIRT(KERN_VIRT_TO_PHYS(kernel_pml4));
-
     return true;
 }
 

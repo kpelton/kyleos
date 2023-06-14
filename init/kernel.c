@@ -58,7 +58,6 @@ static void kinit(void)
     paging_enable_protected();
     PIC_init();
     kprintf("PIC init done\n");
-    vfs_init();
     ata_init();
     timer_system_init();
     exec_init();
