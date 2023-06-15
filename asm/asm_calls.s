@@ -163,7 +163,6 @@ fork_int:
 [global usermode_int] ;
 usermode_int:
     ;;rax is return val from syscall
-    cli
     cmp rax,5
     je fork_int
     push rbx
@@ -318,7 +317,6 @@ rtc_handler:
     pop rax
     iretq
 
-;; TODO: These two functions are broken as they don't save/restore state for kernel threads
 [global switch_to] ; global int handler
 switch_to:
     mov rsp,rdi
@@ -331,6 +329,7 @@ resume_p:
     mov rsp,rdi
     mov rbp,rsi
     sub rsp ,8
+    sti
     ret
 
 [global panic_handler] ; global int handler

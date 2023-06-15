@@ -36,11 +36,12 @@ int update_timer(struct basic_timer* t)
 
 struct basic_timer new_timer(uint32_t ms) 
 {
-
+    //Tick must be less than 1000HZ
+    uint32_t ms_tick_delta = 1000/TICK_HZ;
     struct basic_timer t;
     //init_spinlock(&t.timer_lock);
     t.start_time = read_jiffies();
-    t.end_time = t.start_time + ms ;
+    t.end_time = t.start_time + (ms  / ms_tick_delta);
     t.state = TIMER_RUNNING;
     return t;
 }
