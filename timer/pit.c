@@ -39,7 +39,7 @@ void timer_irq()
 
    jiffies++;
    release_spinlock(&spinlock_time);
-
+   PIC_sendEOI(0);
    if (jiffies % (TICK_HZ/HZ) == 0)
         schedule();
 

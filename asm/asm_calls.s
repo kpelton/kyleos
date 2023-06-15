@@ -19,6 +19,17 @@
 [global fpu_init]
 [global fpu_save_context]
 [global fpu_restore_context]
+
+;all irq handlers
+
+TIMER_HANDLER equ 0
+KBD_HANDLER equ 1
+SERIAL_HANDLER equ 2
+RTC_HANDLER equ 3
+
+;C lang handlers 
+IRQ_HANDLERS dq timer_irq, kbd_irq, serial_irq, rtc_irq
+
 get_flags_reg:
     sub rsp,8
     pushfq
@@ -230,9 +241,8 @@ idt_flush:
     lidt [rax]
     ret
 
-[global kbd_handler] ; global int handler
-kbd_handler:
-    push rax
+
+irq_handler:
     push rbx
     push rcx
     push rdx
@@ -249,11 +259,15 @@ kbd_handler:
     push r15
     pushfq
     push rsi
+    push rax
     ;save $rip
-    lea r14, [$+7]
-    call save_context_asm
+    ;lea r14, [$+7]
+    ;call save_context_asm
+    pop rax
     pop rsi
-    call kbd_irq
+    ;call into c function
+    mov r14,[IRQ_HANDLERS+rax*8]
+    call r14
     popfq
     pop r15
     pop r14
@@ -269,128 +283,38 @@ kbd_handler:
     pop rdx
     pop rcx
     pop rbx
+    ret
+
+
+[global kbd_handler] ; global int handler
+kbd_handler:
+    push rax
+    mov rax, KBD_HANDLER
+    call irq_handler
     pop rax
     iretq
 
 [global timer_handler] ; global int handler
 timer_handler:
-    
     push rax
-    push rbx
-    push rcx
-    push rdx
-    push rsi
-    push rdi
-    push rbp
-    push r8
-    push r9
-    push r10
-    push r11
-    push r12
-    push r13
-    push r14
-    push r15
-    pushfq
-    call timer_irq
-    popfq
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    pop rbp
-    pop rdi
-    pop rsi
-    pop rdx
-    pop rcx
-    pop rbx
+    mov rax, TIMER_HANDLER
+    call irq_handler
     pop rax
     iretq
 
 [global serial_handler] ; global int handler
 serial_handler:
     push rax
-    push rbx
-    push rcx
-    push rdx
-    push rsi
-    push rdi
-    push rbp
-    push r8
-    push r9
-    push r10
-    push r11
-    push r12
-    push r13
-    push r14
-    push r15
-    pushfq
-    push rsi
-    ;save $rip
-    lea r14, [$+7]
-    call save_context_asm
-    pop rsi
-    call serial_irq
-    popfq
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    pop rbp
-    pop rdi
-    pop rsi
-    pop rdx
-    pop rcx
-    pop rbx
+    mov rax, SERIAL_HANDLER
+    call irq_handler
     pop rax
     iretq
 
 [global rtc_handler] ; global int handler
 rtc_handler:
     push rax
-    push rbx
-    push rcx
-    push rdx
-    push rsi
-    push rdi
-    push rbp
-    push r8
-    push r9
-    push r10
-    push r11
-    push r12
-    push r13
-    push r14
-    push r15
-    pushfq
-    push rsi
-    ;save $rip
-    lea r14, [$+7]
-    call save_context_asm
-    pop rsi
-    call rtc_irq
-    popfq
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    pop rbp
-    pop rdi
-    pop rsi
-    pop rdx
-    pop rcx
-    pop rbx
+    mov rax, RTC_HANDLER
+    call irq_handler
     pop rax
     iretq
 
