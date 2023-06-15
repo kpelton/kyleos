@@ -1,4 +1,3 @@
-// crappy pio ATA driver
 #include <asm/asm.h>
 #include <output/output.h>
 #include <mm/mm.h>
@@ -17,13 +16,14 @@
 #define COMMAND_REG 7
 #define STATUS_REG 7
 //pink
-#define PRIMARY 0x6eb0
+#define PINK_PRIMARY 0x6eb0
 //silver
-//#define PRIMARY 0x30c8
+#define SILVER_PRIMARY 0x30c8
 //qemu
-//#define PRIMARY 0x1f0
-
-
+#define QEMU_PRIMARY 0x1f0
+uint16_t ATA_PORTS[] = {PINK_PRIMARY,SILVER_PRIMARY,QEMU_PRIMARY};
+//Global to control hdd
+static int PRIMARY = 0;
 
 #define CMD_IDENTIFY 0xec
 #define CMD_READ_SECTORS 0x20
@@ -36,6 +36,7 @@
 
 struct mbr_info fs1;
 static struct mutex ata_mutex;
+static bool ata_init_port();
 
 uint8_t read_status(void)
 {
@@ -54,7 +55,6 @@ int write_sec(uint32_t sec, void *buffer)
     uint8_t status;
     int i;
     data = buffer;
-
 #ifdef ATA_DEBUG
     print_drive_status();
 #endif
@@ -144,14 +144,27 @@ int read_sec(uint32_t sec, void *buffer)
 
     return 0;
 }
+void ata_init(void) {
+    bool passed = false;
 
-void ata_init(void)
+    for(uint64_t i=0; i<sizeof(ATA_PORTS); i++) {
+        PRIMARY = ATA_PORTS[i];
+        if(ata_init_port() == true) {
+            passed = true;
+            break;
+        }
+    }
+    if (passed == false)
+        panic("PANIC:ATA init failed.. could not find MBR");
+}
+
+static bool ata_init_port()
 {
     uint32_t part_start;
     uint32_t part_size;
     uint16_t valid_mbr;
     uint16_t part_type;
-
+    bool passed = false;
     char mbr[512];
     kprintf("ATA init\n");
     read_sec(0, mbr);
@@ -161,6 +174,7 @@ void ata_init(void)
     part_type = mbr[0x1c2];
     init_mutex(&ata_mutex);
 
+    kprintf("Trying port 0x%x\n",PRIMARY);
     kprintf("mbr:0x%x\n",valid_mbr);
     // Look for valid MBR 0x55aa
     if (valid_mbr == 0xaa55)
@@ -175,10 +189,7 @@ void ata_init(void)
         kprintf("part_type: 0x%x\n", fs1.part_type);
 
         fat_init(fs1);
+        passed = true;
     }
-    else
-    {
-        kprintf("PANIC:ATA init failed.. could not find MBR");
-        asm("cli; hlt");
-    }
+    return passed;
 }
