@@ -51,5 +51,7 @@ void kbd_irq()
 
 void kbd_init() 
 {
+    PIC_sendEOI(1);
+    keyboard_callback();
     init_spinlock(&kbd_spinlock);
 }

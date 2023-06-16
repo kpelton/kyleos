@@ -439,6 +439,7 @@ void schedule()
         prev_task = i;
         if (ktasks[i].state == TASK_NEW && ktasks[i].type == KERNEL_PROCESS)
         {
+            set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
             ktasks[i].state = TASK_RUNNING;
             switch_to(ktasks[i].start_stack, ktasks[i].start_addr);
             success = true;
@@ -450,9 +451,6 @@ void schedule()
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
             user_switch_paging(&(ktasks[i].mm->pagetable));
 
-            // jump_usermode((uint64_t)ktasks[i].start_addr, ktasks[i].user_start_stack);
-
-            /// Need to call fucntion with inline asm due to issues with -O2
             asm volatile("movq %0,%%rdi\n\t"
                          "movq %1,%%rsi\n\t"
                          "movq %2, %%rax\n\t"

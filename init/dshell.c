@@ -5,10 +5,10 @@
 #include <block/ata.h>
 #include <irq/irq.h>
 #include <mm/mm.h>
-#include <timer/pit.h>
 #include <fs/vfs.h>
 #include <sched/sched.h>
 #include <timer/rtc.h>
+#include <timer/pit.h>
 #include <mm/pmem.h>
 #include <fs/elf.h>
 #include <sched/exec.h>
@@ -20,7 +20,7 @@ static const char OS_PROMPT[] = "Kyle OS |";
 
 static char *dir_stack[100][256];
 static int top_dir_stack = -1;
-
+extern uint64_t TICK_HZ;
 static void push_dir_stack(char *dir)
 {
     if (top_dir_stack == -1)
@@ -464,6 +464,17 @@ for(;;) {
         {
             kthread_add(kthread_test, "kthread");
         }
+        else if (kstrcmp(buffer, "addtick50\n") == 0)
+        {
+            TICK_HZ+=50;
+            pit_init();
+        }
+         else if (kstrcmp(buffer, "addtick500\n") == 0)
+        {
+            TICK_HZ+=500;
+            pit_init();
+        }
+ 
         else
         {
             kprintf("Unknown command:");
