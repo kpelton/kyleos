@@ -317,19 +317,26 @@ rtc_handler:
     pop rax
     iretq
 
-[global switch_to] ; global int handler
+[global switch_to]
 switch_to:
     mov rsp,rdi
     mov rax,rsi
+    sti
     jmp rax
-    jmp $
+    ud
 
-[global resume_p] ; global int handler
+[global resume_p];
 resume_p:
     mov rsp,rdi
-    mov rbp,rsi
     sub rsp ,8
     sti
+    ret
+
+[global resume_p_userspace] 
+resume_p_userspace:
+    mov rsp,rdi
+    sub rsp ,8
+    ; let the iretq later on re-enable interrupts if required
     ret
 
 [global panic_handler] ; global int handler

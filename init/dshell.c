@@ -239,7 +239,6 @@ void start_dshell()
     //write_sec(0,buffer2);
     // asm("test: jmp test");
     //debug
-    asm("sti");
     /*
 for(;;) {
 

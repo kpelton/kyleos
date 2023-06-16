@@ -17,8 +17,11 @@ static int pid = 0;
 static struct mutex sched_mutex;
 static struct spinlock sched_spinlock;
 
+
 void switch_to(uint64_t *rsp, uint64_t *addr);
 extern void resume_p(uint64_t *rsp, uint64_t *rbp);
+extern void resume_p_userspace(uint64_t *rsp, uint64_t *rbp);
+
 static const char process_types_str[PROCESS_TYPES_LEN][20] = {"Kernel", "User"};
 const char task_type_str[TASK_STATE_NUM][20] = {"RUNNING", "READY", "NEW", "BLOCKED", "DONE"};
 //#define SCHED_DEBUG
@@ -388,6 +391,7 @@ void schedule()
     // kprintf("schedule\n");
     bool success = false;
     bool skip_idle = false;
+    uint64_t resume_func;
 
     if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_NEW && ktasks[prev_task].state != TASK_DONE)
     {
@@ -468,10 +472,12 @@ void schedule()
             {
                 fpu_restore_context(ktasks[i].fxsave_region);
                 user_switch_paging(&(ktasks[i].mm->pagetable));
+                resume_func = (uint64_t) resume_p_userspace;
             }
             else
             {
                 kernel_switch_paging();
+                resume_func = (uint64_t) resume_p;
             }
             // resume_p(ktasks[i].s_rsp, ktasks[i].s_rbp);
             /// Need to call fucntion with inline asm  due to issues with -O2
@@ -480,7 +486,7 @@ void schedule()
                          "movq %1,%%rsi\n\t"
                          "movq %2, %%rax\n\t"
                          "callq *%%rax" ::"g"(ktasks[i].s_rsp),
-                         "g"(ktasks[i].s_rbp), "g"(&resume_p)
+                         "g"(ktasks[i].s_rbp), "g"(resume_func)
                          : "rdi", "rsi", "rax");
 
             success = true;
