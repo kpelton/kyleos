@@ -28,7 +28,7 @@ uint64_t initial_iden_page_dir_tab[512] __attribute__((aligned(0x1000)));
 uint64_t initial_iden_page_dir[512] __attribute__((aligned(0x1000)));
 
 
-uint64_t *kernel_pml4;
+uint64_t *kernel_pml4 = NULL;
 uint64_t *kernel_page_dir_tab;
 uint64_t *kernel_iden_page_dir_tab;
 uint64_t *kernel_iden_page_dir;
@@ -142,7 +142,7 @@ bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_star
     uint64_t phys_curr_addr = start;
     uint16_t offset;
     uint64_t *curr = pg->pml4;
-    //printf("call base pml4 %x\n",pg->pml4);
+    kprintf("call base pml4 %x\n",pg->pml4);
     while (phys_curr_addr < start + (len * PAGE_SIZE))
     {
         curr = pg->pml4;

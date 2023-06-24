@@ -3,7 +3,7 @@ all: mm.o paging.o
 mm.o:  mm.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-paging.o:  paging.c paging.h
+paging.o:  paging.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 pmem.o:  pmem.c pmem.h

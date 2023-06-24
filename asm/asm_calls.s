@@ -46,9 +46,6 @@ gdt_flush:
   mov fs, ax
   mov gs, ax
   mov es, ax
- 
-    jmp flush2
-
 flush2:
     ret
 
@@ -257,13 +254,13 @@ irq_handler:
     push r14
     push r15
     pushfq
-    push rsi
-    push rax
+    ;push rsi
+    ;push rax
     ;save $rip
     ;lea r14, [$+7]
     ;call save_context_asm
-    pop rax
-    pop rsi
+    ;pop rax
+    ;pop rsi
     ;call into c function
     mov r14,[IRQ_HANDLERS+rax*8]
     call r14

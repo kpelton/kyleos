@@ -6,12 +6,13 @@
 #include <mm/paging.h>
 #include <locks/spinlock.h>
 static struct spinlock kmem_spinlock;
-
+extern uint64_t *kernel_pml4;
 char *kernel_heap;
 #define FREE 1
 #define USED 0
 // heap size in pages
-#define HEAP_SIZE 4096
+#define HEAP_SIZE 8192
+#define KERNEL_HEAP_ADDR 0xfffffc0000000000
 // TODO: Align this on cacheline boundry
 
 static struct mm_block *head = 0;
@@ -33,7 +34,7 @@ void *kmalloc(unsigned int p_size)
 
         if (size == lptr->size && lptr->free == FREE)
         {
-            if ((unsigned long)lptr->addr < 0xffffffff80000000)
+            if ((unsigned long)lptr->addr < KERNEL_HEAP_ADDR)
             {
                 kprintf("old alloc %x\n", (unsigned long)&lptr->addr);
                 kprintf("old alloc %x\n", (unsigned long)&lptr->addr);
@@ -135,11 +136,16 @@ void mm_print_stats()
 
 void mm_init()
 {
+
+
+    struct pg_tbl pg;
+    pg.pml4 = KERN_PHYS_TO_PVIRT(0x5b7000);
     init_spinlock(&kmem_spinlock);
     setup_paging();
     char *heap_loc = pmem_alloc_block(HEAP_SIZE);
     kprintf("Heap Loc:0x%x\n", heap_loc);
-    kernel_heap = (char *)KERN_PHYS_TO_VIRT(heap_loc);
-    paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_heap), HEAP_SIZE);
+    kernel_heap = KERNEL_HEAP_ADDR;
+    paging_map_user_range(&pg,(uint64_t)heap_loc,KERNEL_HEAP_ADDR,HEAP_SIZE,KERNEL_PAGE);
+    kernel_switch_paging();
     vmm_init();
 }
