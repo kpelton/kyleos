@@ -464,17 +464,27 @@ for(;;) {
         {
             kthread_add(kthread_test, "kthread");
         }
-        else if (kstrcmp(buffer, "addtick50\n") == 0)
+        else if (kstrcmp(buffer, "addhz50\n") == 0)
         {
             TICK_HZ+=50;
             pit_init();
         }
-         else if (kstrcmp(buffer, "addtick500\n") == 0)
+         else if (kstrcmp(buffer, "addhz500\n") == 0)
         {
             TICK_HZ+=500;
             pit_init();
         }
  
+         else if (kstrcmp(buffer, "addtickhz50\n") == 0)
+        {
+            HZ+=50;
+            pit_init();
+        }
+         else if (kstrcmp(buffer, "addtickhz500\n") == 0)
+        {
+            HZ+=500;
+            pit_init();
+        }
         else
         {
             kprintf("Unknown command:");
