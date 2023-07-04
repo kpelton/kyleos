@@ -28,7 +28,7 @@ uint64_t initial_iden_page_dir_tab[512] __attribute__((aligned(0x1000)));
 uint64_t initial_iden_page_dir[512] __attribute__((aligned(0x1000)));
 
 
-uint64_t *kernel_pml4 = NULL;
+uint64_t *kernel_pml4;
 uint64_t *kernel_page_dir_tab;
 uint64_t *kernel_iden_page_dir_tab;
 uint64_t *kernel_iden_page_dir;
@@ -134,7 +134,7 @@ bool paging_map_kernel_range(uint64_t start, uint64_t len)
     return true;
 }
 
-bool paging_map_user_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_start,
+bool paging_map_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_start,
                            uint64_t len, uint64_t page_ops)
 {
 
@@ -290,8 +290,6 @@ bool setup_paging()
     int j, i = 0;
 
     kernel_pml4 = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_zero_page());
-    kprintf("0xpml4:%x\n", kernel_pml4);
-    kprintf("kyle test 0xpml4:%x\n", *(uint64_t *)kernel_pml4);
     kernel_page_dir_tab = (uint64_t *)KERN_PHYS_TO_VIRT(pmem_alloc_zero_page());
     kprintf("page_dir_tab  %x\n", kernel_page_dir_tab);
     kprintf("page_dir_tab %x\n", KERN_VIRT_TO_PHYS(kernel_page_dir_tab));

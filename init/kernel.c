@@ -48,6 +48,7 @@ static void kinit(void)
     kprintf("Early page init done\n");
     phys_mem_init();
     kprintf("Phys mem init done\n");
+    paging_enable_protected();
     mm_init();
     kprintf("Allocating stack\n");
     uint64_t kernel_stack = KERN_PHYS_TO_VIRT(pmem_alloc_block(STACK_PAGES));
@@ -55,7 +56,7 @@ static void kinit(void)
     kprintf("Stack start %x Stack %x\n",kernel_stack,kernel_stack+4096*STACK_PAGES);
     asm volatile("movq %0,%%rsp " : : "r"(kernel_stack+4096*STACK_PAGES));
     kprintf("MM init done\n");
-    paging_enable_protected();
+
     PIC_init();
     kprintf("PIC init done\n");
     ata_init();
