@@ -395,7 +395,7 @@ for(;;) {
             dptr = vfs_read_inode_dir(pwd);
             itmp = read_path(buffer + 5, dptr,I_FILE);
             if(itmp != NULL) {
-                int pid = exec_from_inode(itmp,false);
+                int pid = exec_from_inode(itmp,false,NULL);
                 kprintf("new pid: %d",pid);
             }else
             {
@@ -409,11 +409,14 @@ for(;;) {
             {
                 cptr++;
             }
+
+            char *strings[] = {"Hello", "World", "How", "Are", "You",0};
+
             *cptr = '\0';
             dptr = vfs_read_inode_dir(pwd);
             itmp = read_path(buffer + 5, dptr,I_FILE);
             if(itmp != NULL) {
-                int pid = exec_from_inode(itmp,false);
+                int pid = exec_from_inode(itmp,false,&strings);
                 if(pid >= 0)
                     process_wait(pid);
 

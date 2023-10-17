@@ -22,7 +22,7 @@ void pit_init(void) {
     kprintf("PIT init\n");
     kprintf("PIT divider:%d\n",PIT_DIVIDER_VAL);
     kprintf("Sched Tick interval:%d HZ\n",HZ);
-    kprintf("Timer interrtupt interval:%d HZ\n",TICK_HZ);
+    kprintf("Timer interrupt interval:%d HZ\n",TICK_HZ);
     outb(PIT_CMD_REG,PIT_RATE_LO_HI_ACCESS);
     outb(PIT_DATA_PORT_0,PIT_DIVIDER_VAL &0xff);
     outb(PIT_DATA_PORT_0,PIT_DIVIDER_VAL>>8);

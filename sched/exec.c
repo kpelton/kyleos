@@ -17,7 +17,7 @@ void exec_init(){
     init_spinlock(&exec_spinlock);
 }
 //Add elf file to runqueue given an inode. Will return false if something bad happened. 
-int exec_from_inode(struct inode *ifile,bool replace)
+int exec_from_inode(struct inode *ifile,bool replace,char **argv)
 {
     acquire_spinlock(&exec_spinlock);
     //int bytes = 0;
@@ -105,18 +105,16 @@ int exec_from_inode(struct inode *ifile,bool replace)
         if (map != NULL){
 
             if (replace == false)
-                retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true);
+                retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true,argv);
             else{
                 struct ktask *t = get_current_process();
                 kstrcpy(name,ifile->i_name);
                 vfs_free_inode(ifile);
                 release_spinlock(&exec_spinlock);
-                retval = user_process_replace_exec(t,hdr.entry,name,map);
+                retval = user_process_replace_exec(t,hdr.entry,name,map,argv);
             }
         }
         release_spinlock(&exec_spinlock);
-
-
     }
             
     else

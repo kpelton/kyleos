@@ -86,7 +86,39 @@ static void debug_read_input(char *dst)
 {
     read_input(dst);
 }
+/*
+  +----------------------+
+  |                    |  
+  |                    |
+  |  Command-Line      |
+  |  Arguments (argv)  |
+  |                    |
+  |  [0] ------------> |   argv[0] (Program Name)
+  |  [1] ------------> |   argv[1] (First Argument)
+  |  [2] ------------> |   argv[2] (Second Argument)
+  |        ...         |
+  |  [argc] ----------> |   argv[argc] (Last Argument)
+  |                    |
+  +----------------------+
+  |                    |
+  |  argc              |
+  |  (Argument Count)  |
+  |                    |
+  +----------------------+
+  |  Local Variables   |
+  |  and Stack Data    |
+  |                    |
+  +----------------------+
+  |  Return Address    |
+  |                    |
+  |                    |
+  +----------------------+
+  |  Previous Stack    |
+  |  Frames (if any)   |
+  |                    |
+  +----------------------+
 
+*/
 //TODO add support for arguments
 static int exec(char *path)
 {
@@ -95,7 +127,20 @@ static int exec(char *path)
     struct inode *iptr = vfs_walk_path(path, dptr, I_FILE);
     if (iptr != NULL)
     {
-        retval = exec_from_inode(iptr,true);
+        retval = exec_from_inode(iptr,true,NULL);
+    }
+    return retval;
+}
+
+
+static int exec_args(char *path, char *argv[])
+{
+    int retval = -1;
+    struct dnode *dptr = vfs_read_root_dir("/");
+    struct inode *iptr = vfs_walk_path(path, dptr, I_FILE);
+    if (iptr != NULL)
+    {
+        retval = exec_from_inode(iptr,true,NULL);
     }
     return retval;
 }
@@ -112,6 +157,7 @@ void *syscall_tbl[] = {
     (void *)&exec,       //8
     (void *)&sbrk,       //9
     (void *)&debug_read_input,       //10
+    (void *)&exec_args,       //11
 };
 
 const int NR_syscall = sizeof(syscall_tbl);
