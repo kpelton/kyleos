@@ -251,16 +251,16 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     if( argv) {
 
         //Copy name of prog in argv[0]
+        /*
         int len = kstrlen(name);
         sp = (uint64_t)(((char*)sp) - len) & 0xffffffffffffff00;
         ustack[argc] = sp;
         kstrncpy(sp,name,len);
-
-        for(argc = 1; argv[argc]; argc++) 
+*/
+        for(argc = 0; argv[argc] && argc < MAX_ARGS; argc++) 
         {
-            kprintf("%s\n",argv[argc]);
-
-            len = kstrlen(argv[argc]);
+            kprintf(" %d %s\n",argc, argv[argc]);
+            int len = kstrlen(argv[argc]);
             sp = (uint64_t)(((char*)sp) - len) & 0xffffffffffffff00;
             // track where argument is placed for later use
             ustack[argc] = sp;
@@ -268,17 +268,20 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
             kprintf("ustack %x %x\n", argc,sp);
         }
     }
-    t->user_start_stack = (uint64_t *)((uint64_t)USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 4096);
-    for(int i=0; i<=argc; i++)
-        t->user_start_stack[3+i]= ustack[i];
+    
+    //Fix up stack for arguments
+    sp-=argc+8;
 
-    *(t->user_start_stack+2) = t->user_start_stack+3 ;
-    *(t->user_start_stack+1) = argc;
-    *(t->user_start_stack) = 0xdeadbeefdeadbeef;
+    for(int i=0; i<=argc; i++)
+        sp[i+3] =(uint64_t) ustack[i];
+
+    sp[2] = sp+3;  
+    sp[1] = argc;
+    sp[0] = 0xdeadbeefdeadbeef;
+    t->user_start_stack = sp;
 
     kprintf("Fin stack 0x%x\n",sp);
-
-    //kernel_switch_paging();
+    kernel_switch_paging();
     kprintf("Add exec done");
     return pid_ret;
 }

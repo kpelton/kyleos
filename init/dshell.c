@@ -410,7 +410,7 @@ for(;;) {
                 cptr++;
             }
 
-            char *strings[] = {"Hello", "World", "How", "Are", "You",0};
+            char *strings[] = {"aaa","HELLO CHANNO TEST ARGV","aaaaaaaaaaaaaa","aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",0};
 
             *cptr = '\0';
             dptr = vfs_read_inode_dir(pwd);
