@@ -199,32 +199,52 @@ int user_process_fork()
 
 int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm,char *argv[])
 {
-
+    asm("cli");
     int c_pid = t->pid;
+    kprintf("%d\n",c_pid);
     // save old pid and parent pid since kill will clear them
     sched_process_kill(t->pid,false);
-    user_process_add_exec(startaddr,name,mm,false,argv);
+    user_process_add_exec(startaddr,name,mm,true,argv,t);
     t->pid = c_pid;
+    int i=0;
+    //Free kernel allocated argv passed in from userspace
+    for(i=0; i<MAX_ARGS && argv[i]; i++);
+
+    if (i > 0) {
+            for (int j=0; j<i; j++){
+                kfree(argv[j]);
+            }
+            kfree(argv);
+    }
     schedule();
     // will never return
     return 0;
 }
 
-int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[])
+int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[],struct ktask *ta)
 {
-    struct ktask *t;
-    t = &ktasks[find_free_task()];
+
     int pid_ret = -1;
     int argc = 0;
     struct vmm_block *stack_block = NULL;
     uint64_t *sp = NULL; 
     uint64_t *ustack[MAX_ARGS];
-    clear_fd_table(t);
     kprintf("Allocating Stack\n");
+    struct ktask *t;
+
+    
+    if (ta == NULL)
+        t = &ktasks[find_free_task()];
+    else
+        t= ta;
+
+        clear_fd_table(t);
+
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
     stack_block = vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,READ_WRITE | SUPERVISOR | PAGE_PRESENT,true,true);
     vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_HEAP_SIZE,READ_WRITE | SUPERVISOR,true,true);
     user_switch_paging(&(mm->pagetable));
+
 
     t->heap_size = USER_HEAP_SIZE;
     t->user_start_heap = (uint64_t *)USER_HEAP_VADDR;
@@ -244,7 +264,7 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
         pid_ret = pid;
         pid += 1;
     }
-    //TODO: ADd more checks on arguments
+    //TODO: Add more checks on arguments
     // max argument length and total size
     // Switch to new page able in order to copy in arguments into stack pages
     sp = (uint64_t *)((uint64_t)USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 8);
@@ -259,13 +279,13 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
 */
         for(argc = 0; argv[argc] && argc < MAX_ARGS; argc++) 
         {
-            kprintf(" %d %s\n",argc, argv[argc]);
+            //kprintf(" %d %s\n",argc, argv[argc]);
             int len = kstrlen(argv[argc]);
             sp = (uint64_t)(((char*)sp) - len) & 0xffffffffffffff00;
             // track where argument is placed for later use
             ustack[argc] = sp;
             kstrncpy(sp,argv[argc],len);
-            kprintf("ustack %x %x\n", argc,sp);
+            //kprintf("ustack %x %x\n", argc,sp);
         }
     }
     
@@ -273,16 +293,16 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     sp-=argc+8;
 
     for(int i=0; i<=argc; i++)
-        sp[i+3] =(uint64_t) ustack[i];
+        sp[i+3] = (uint64_t) ustack[i];
 
     sp[2] = sp+3;  
     sp[1] = argc;
     sp[0] = 0xdeadbeefdeadbeef;
     t->user_start_stack = sp;
 
-    kprintf("Fin stack 0x%x\n",sp);
-    kernel_switch_paging();
-    kprintf("Add exec done");
+    //kprintf("Fin stack 0x%x\n",sp);
+    //kernel_switch_paging();
+    //kprintf("Add exec done");
     return pid_ret;
 }
 

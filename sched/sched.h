@@ -25,7 +25,7 @@ bool sched_process_kill(int pid,bool cleanup);
 int user_process_fork();
 void sched_save_context();
 int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm, char *argv[]);
-int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[]);
+int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[],struct ktask *t);
 void sched_init();
 #define FXSAVE_SIZE 512
 enum sched_states {

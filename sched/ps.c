@@ -51,7 +51,7 @@ int user_process_read_fd(struct ktask *t, int fd, void *buf, int count)
 
 void user_process_exit(struct ktask *t, int code)
 {
-    kprintf("Exit called");
+    //kprintf("Exit called");
     t->exit_code = code;
     sched_process_kill(t->pid,false);
     schedule();

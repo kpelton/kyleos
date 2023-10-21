@@ -142,7 +142,7 @@ bool paging_map_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_start,
     uint64_t phys_curr_addr = start;
     uint16_t offset;
     uint64_t *curr = pg->pml4;
-    kprintf("call base pml4 %x %x\n",pg->pml4,virt_start);
+    //kprintf("call base pml4 %x %x\n",pg->pml4,virt_start);
     while (phys_curr_addr < start + (len * PAGE_SIZE))
     {
         curr = pg->pml4;

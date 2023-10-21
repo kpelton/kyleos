@@ -136,11 +136,37 @@ static int exec(char *path)
 static int exec_args(char *path, char *argv[])
 {
     int retval = -1;
+    if (!path)
+        return -1;
     struct dnode *dptr = vfs_read_root_dir("/");
     struct inode *iptr = vfs_walk_path(path, dptr, I_FILE);
+    char **user_argv = NULL;
+    int count;
+    int i;
+    int j;
     if (iptr != NULL)
     {
-        retval = exec_from_inode(iptr,true,NULL);
+        for(i=0; i<MAX_ARGS && argv[i]; i++);
+
+        //Too many arguments
+        if(i == MAX_ARGS)
+            return -1;
+
+        if (i > 0) {
+            user_argv = kmalloc(sizeof(uint64_t *) * i + 1);
+            for (j=0; j<i; j++){
+                user_argv[j] = kmalloc(kstrlen(argv[j])+1);
+                kstrcpy(user_argv[j],argv[j]);
+            }
+            user_argv[j] = NULL;
+        }
+        retval = exec_from_inode(iptr,true,user_argv);
+        if (i > 0) {
+            for (j=0; j<=i; j++){
+                kfree(user_argv[j]);
+            }
+            kfree(user_argv);
+        }
     }
     return retval;
 }

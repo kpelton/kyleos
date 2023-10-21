@@ -88,7 +88,7 @@ int exec_from_inode(struct inode *ifile,bool replace,char **argv)
                 page_ops = USER_PAGE_RO;
             }
             zero = phdr.memsz != phdr.filesz;
-            kprintf("Calling add map 0x%x, %d\n",vaddr,size);
+            //kprintf("Calling add map 0x%x, %d\n",vaddr,size);
             block = vmm_add_new_mapping(map,VMM_TEXT,(uint64_t *)vaddr,size,page_ops,zero,true);
 
 #ifdef EXEC_DEBUG
@@ -104,9 +104,9 @@ int exec_from_inode(struct inode *ifile,bool replace,char **argv)
         }
         if (map != NULL){
 
-            if (replace == false)
-                retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true,argv);
-            else{
+            if (replace == false){
+                retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true,argv,NULL);
+            }else{
                 struct ktask *t = get_current_process();
                 kstrcpy(name,ifile->i_name);
                 vfs_free_inode(ifile);
