@@ -161,12 +161,6 @@ static int exec_args(char *path, char *argv[])
             user_argv[j] = NULL;
         }
         retval = exec_from_inode(iptr,true,user_argv);
-        if (i > 0) {
-            for (j=0; j<=i; j++){
-                kfree(user_argv[j]);
-            }
-            kfree(user_argv);
-        }
     }
     return retval;
 }
