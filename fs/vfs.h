@@ -3,6 +3,7 @@
 #define VFS_H
 #include <fs/fat.h>
 #include <include/types.h>
+#include <locks/spinlock.h>
 #define VFS_MAX_DEVICES 10
 #define FAT_FS 0
 #define VFS_MAX_FNAME 257
@@ -46,6 +47,7 @@ struct dnode {
 #define O_WRONLY 0x1
 #define O_RDWR   0x2
 #define MAX_FILE_FLAGS (O_RDONLY | O_WRONLY | O_RDWR)
+#define VFS_MAX_OPEN 1024
 
 struct file {
     uint32_t refcount;
@@ -53,6 +55,11 @@ struct file {
     struct vfs_device* dev;
     uint64_t pos;
     uint32_t flags;
+};
+
+struct file_table {
+    struct spinlock lock;    
+    struct file open_files[VFS_MAX_OPEN];
 };
 
 struct vfs_ops {

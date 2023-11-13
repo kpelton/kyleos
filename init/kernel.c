@@ -28,7 +28,15 @@ static void kernel(void)
     kprintf("Kyle OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
     kthread_add(start_dshell,"D Shell");
-
+    /*
+    int retval = -1;
+    struct dnode *dptr = vfs_read_root_dir("/");
+    struct inode *iptr = vfs_walk_path("shell", dptr, I_FILE);
+    if (iptr != NULL)
+    {
+        retval = exec_from_inode(iptr,false,NULL);
+    }
+    */
     //Should never return after this point since scheduler will take over
     for(;;)
         asm("sti;hlt");
@@ -38,7 +46,7 @@ static void kinit(void)
 {
     kprintf("Booting.......\n");
     kprintf("Kyle OS.......\n");
-    kprintf("Copyright:Kyle Pelton 2020-2022 all rights reserved\n");
+    kprintf("Copyright:Kyle Pelton 2020-2023 all rights reserved\n");
     kprintf("Install GDT\n");
     gdt_install();
     tss_flush();
@@ -56,7 +64,6 @@ static void kinit(void)
     kprintf("Stack start %x Stack %x\n",kernel_stack,kernel_stack+4096*STACK_PAGES);
     asm volatile("movq %0,%%rsp " : : "r"(kernel_stack+4096*STACK_PAGES));
     kprintf("MM init done\n");
-
     PIC_init();
     kprintf("PIC init done\n");
     ata_init();

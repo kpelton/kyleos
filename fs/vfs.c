@@ -1,21 +1,25 @@
 #include <fs/vfs.h>
 #include <output/output.h>
 #include <mm/mm.h>
-#define VFS_MAX_OPEN 1024
 struct vfs_device vfs_devices[VFS_MAX_DEVICES];
 
 static int current_device = 0;
-static struct file open_files[VFS_MAX_OPEN];
+static struct file_table ftable ;
 
 void vfs_init()
 {
+    init_spinlock(&ftable.lock);
     int i;
+    acquire_spinlock(&ftable.lock);
     for (i = 0; i < VFS_MAX_OPEN; i++)
     {
-        open_files[i].refcount = 0;
-        open_files[i].dev = NULL;
-        open_files[i].flags = 0;
+        ftable.open_files[i].refcount = 0;
+        ftable.open_files[i].dev = NULL;
+        ftable.open_files[i].flags = 0; 
     }
+
+
+    release_spinlock(&ftable.lock);
 }
 
 int vfs_register_device(struct vfs_device newdev)
@@ -108,16 +112,19 @@ static struct file *vfs_get_open_file(struct inode *i_node)
     int i = 0;
 
     //  look for slot and open file
+    acquire_spinlock(&ftable.lock);
+    //Lock must be released in calling function
     for (i = 0; i < VFS_MAX_OPEN; i++)
     {
-        if (open_files[i].refcount == 0)
+        if (ftable.open_files[i].refcount == 0)
         {
-            open_files[i].dev = i_node->dev;
-            vfs_copy_inode(i_node, &open_files[i].i_node);
-            open_files[i].refcount++;
-            return &(open_files[i]);
+            ftable.open_files[i].dev = i_node->dev;
+            vfs_copy_inode(i_node, &ftable.open_files[i].i_node);
+            ftable.open_files[i].refcount++;
+            return &(ftable.open_files[i]);
         }
     }
+    release_spinlock(&ftable.lock);
     panic("File table full");
     return NULL;
 }
@@ -136,6 +143,9 @@ struct file *vfs_open_file(struct inode *i_node, uint32_t flags)
         retfile = vfs_get_open_file(i_node);
         retfile->pos = 0;
         retfile->flags = flags;
+        //Release lock aquired in get open_file
+        release_spinlock(&ftable.lock);
+
     }
 done:
     return retfile;
