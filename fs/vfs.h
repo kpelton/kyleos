@@ -7,6 +7,7 @@
 #define VFS_MAX_DEVICES 10
 #define FAT_FS 0
 #define VFS_MAX_FNAME 257
+#define VFS_MAX_MOUNT_POINT 1024
 enum inode_type {
     I_DIR,
     I_FILE,
@@ -21,6 +22,9 @@ struct vfs_device {
     struct  vfs_ops* ops;
     int fstype;
     union fsinfo finfo;
+    bool rootfs;
+    char mountpoint[VFS_MAX_MOUNT_POINT];
+    struct inode *mnt_node;
 };
 
 struct inode {

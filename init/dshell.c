@@ -107,16 +107,7 @@ struct inode *shell_cd(char cmd[], struct dnode *dptr)
         nptr++;
     *nptr = '\0';
 
-    ptr = dptr->head;
-    while (ptr != 0)
-    {
-        if (ptr->current->i_type == I_DIR)
-        {
-            if (kstrcmp(cmdptr, ptr->current->i_name) == 0)
-                return ptr->current;
-        }
-        ptr = ptr->next;
-    }
+    return vfs_walk_path(cmdptr,dptr,I_DIR);
     kprintf("bad directoy\n");
     return 0;
 }
@@ -333,7 +324,6 @@ for(;;) {
             }
             else
             {
-                vfs_free_dnode(olddptr);
                 if (buffer[3] == '.' && buffer[4] == '.' && kstrcmp(dptr->i_name, "/") != 0 && oldpwd != pwd)
                     pop_dir_stack();
                 else if (oldpwd != pwd)

@@ -6,6 +6,8 @@ struct vfs_device vfs_devices[VFS_MAX_DEVICES];
 static int current_device = 0;
 static struct file_table ftable ;
 
+static struct inode * fs_is_mount_point(struct inode *ptr);
+
 void vfs_init()
 {
     init_spinlock(&ftable.lock);
@@ -17,7 +19,6 @@ void vfs_init()
         ftable.open_files[i].dev = NULL;
         ftable.open_files[i].flags = 0; 
     }
-
 
     release_spinlock(&ftable.lock);
 }
@@ -34,7 +35,15 @@ int vfs_register_device(struct vfs_device newdev)
     dev = &vfs_devices[current_device];
     *dev = newdev;
     dev->devicenum = current_device;
-    kprintf("VFS Device registered %d\n", dev->devicenum);
+    kstrcpy(dev->mountpoint,newdev.mountpoint);
+    if(dev->rootfs == false) {
+        struct dnode *root =vfs_devices[0].ops->read_root_dir(&vfs_devices[0]);
+        dev->mnt_node =vfs_walk_path(dev->mountpoint,root,I_DIR);
+        vfs_free_dnode(root);
+        if(!dev->mnt_node)
+            panic("failed to mount non rootfs");
+    }
+    kprintf("VFS Device registered %d at %s\n", dev->devicenum,dev->mountpoint);
     current_device += 1;
     return 0;
 }
@@ -44,6 +53,7 @@ struct dnode *vfs_read_inode_dir(struct inode *i_node)
 
     int idev;
     idev = i_node->dev->devicenum;
+
     return vfs_devices[idev].ops->read_inode_dir(i_node);
 }
 
@@ -88,25 +98,24 @@ struct dnode *vfs_read_root_dir(char *path)
     int i = 0;
     int idev;
     struct vfs_device *vdevice;
+    
+    if (current_device == 0)
+        goto error;
 
-    dev[i] = '0';
-    if (*ptr != '/')
-    {
-        kprintf("Incorrect path name");
-        goto error;
+    for (i=0; i<current_device; i++){
+        if (kstrcmp(vfs_devices[i].mountpoint,path) == 0)
+            break;
     }
-    idev = atoi(dev);
-    if (idev > VFS_MAX_DEVICES || idev > current_device - 1)
-    {
-        kprintf("Invalid device %d\n", idev);
+    if (i == current_device)
         goto error;
-    }
+
     vdevice = &vfs_devices[idev];
     return vdevice->ops->read_root_dir(vdevice);
 error:
-
     return 0;
 }
+
+//aquires ftable.lock which must be released in calling function
 static struct file *vfs_get_open_file(struct inode *i_node)
 {
     int i = 0;
@@ -145,7 +154,6 @@ struct file *vfs_open_file(struct inode *i_node, uint32_t flags)
         retfile->flags = flags;
         //Release lock aquired in get open_file
         release_spinlock(&ftable.lock);
-
     }
 done:
     return retfile;
@@ -164,7 +172,6 @@ void vfs_close_file(struct file *ofile)
         }
     }
 }
-
 //walk path and find inode given absolute path
 //TODO redo this monster
 struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
@@ -175,6 +182,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
     struct inode_list *ptr;
     struct inode *iptr;
     struct dnode *dptr = pwd;
+    struct dnode *old_dptr = pwd;
     bool found = false;
     // if (*blah == '/')
     //     return;
@@ -194,12 +202,21 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
         found = false;
         while (ptr)
         {
-            // kprintf("%s %s\n",ptr->current->i_name,buffer);
+             //kprintf("%s %s\n",ptr->current->i_name,buffer);
 
             if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
             {
                 vfs_free_dnode(dptr);
-                dptr = vfs_read_inode_dir(ptr->current);
+                struct inode *mnt = fs_is_mount_point(ptr->current);
+                if (mnt){
+                    dptr = mnt->dev->ops->read_root_dir(mnt->dev);
+                    kprintf("mount point");
+                    kprintf("aaaaaaaaa\n");
+
+                }
+                else
+                    dptr = vfs_read_inode_dir(ptr->current);
+                
                 //Current entry on path was found
                 found = true;
                 break;
@@ -212,6 +229,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
                 vfs_free_dnode(dptr);
             return NULL;
         }
+        kprintf("next\n");
     }
 
     ptr = dptr->head;
@@ -221,8 +239,15 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
         if (kstrcmp(ptr->current->i_name, blah) == 0 && ptr->current->i_type == (int)type)
         {
             iptr = kmalloc(sizeof(struct inode));
-            vfs_copy_inode(ptr->current,iptr);
-            vfs_free_dnode(dptr);
+            struct inode *mnt = fs_is_mount_point(ptr->current);
+            if(mnt) {
+                kprintf("Mount point\n");
+                vfs_copy_inode(mnt,iptr);
+            }else{
+                vfs_copy_inode(ptr->current,iptr);
+
+            }
+            //vfs_free_dnode(dptr);
             dptr = NULL;
             return iptr;
         }
@@ -240,6 +265,27 @@ void vfs_copy_inode(struct inode *src, struct inode *dst)
     dst->i_ino = src->i_ino;
     dst->dev = src->dev;
     dst->i_type = src->i_type;
+}
+
+static bool vfs_compare_inode(struct inode *src, struct inode *dst)
+{
+    if(dst->i_ino != src->i_ino || dst->dev != src->dev || src->i_type != dst->i_type)
+        return false;
+    return true;
+}
+
+static struct inode * fs_is_mount_point(struct inode *ptr) {
+    int i;
+
+    for (i=0; i<current_device; i++){
+        if (! vfs_devices[i].rootfs && vfs_compare_inode(ptr,vfs_devices[i].mnt_node)) {
+            struct dnode *dnode = vfs_devices[i].ops->read_root_dir(&vfs_devices[i]);
+            struct inode *retval = dnode->root_inode;
+            vfs_free_dnode(dnode);
+            return(retval);
+        }
+    }
+    return NULL;
 }
 
 int vfs_read_file(struct file *rfile, void *buf, int count)

@@ -98,6 +98,15 @@ int fat_init(struct mbr_info mbr_entry)
     vfs_ops->create_dir = &fat_create_dir;
     vfs_dev.ops = vfs_ops;
     vfs_dev.finfo.fat = fs;
+    vfs_dev.rootfs = true;
+    kstrcpy(vfs_dev.mountpoint,"/");
+    vfs_register_device(vfs_dev);
+    vfs_dev.rootfs = false;
+    kstrcpy(vfs_dev.mountpoint,"/games");
+    vfs_register_device(vfs_dev);
+
+    vfs_dev.rootfs = false;
+    kstrcpy(vfs_dev.mountpoint,"/cs/cs300");
     vfs_register_device(vfs_dev);
     return 0;
 }
