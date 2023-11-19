@@ -400,6 +400,7 @@ void pagefault() {
         if (cr2 == 0)
     {
         kprintf("Test123123\n");
+        panic("fail");
     }
     kprintf("pagefault on 0x%x !\n",cr2);
     uint64_t *pte =(uint64_t *)walk(&(proc->mm->pagetable),cr2);

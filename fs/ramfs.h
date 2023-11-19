@@ -20,6 +20,7 @@ struct ramfs_inode {
 
     uint64_t children[1024];
     int last_child;
+    int parent;
 };
 
 #endif

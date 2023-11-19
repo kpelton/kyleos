@@ -71,6 +71,7 @@ static void kinit(void)
     exec_init();
     sched_init();
     fpu_init();
+    ramfs_init();
     kernel();
 }
 

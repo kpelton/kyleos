@@ -25,7 +25,7 @@ asm: asm/asm.o asm/asm_calls.o
 block: block/ata.o 
 	$(MAKE) -C block
 
-fs: fs/fat.o fs/vfs.o
+fs: fs/fat.o fs/vfs.o fs/ramfs.o
 	$(MAKE) -C block
 
 init: init/kernel.o init/loader.o init/tables.o init/dshell.o init/syscall.o

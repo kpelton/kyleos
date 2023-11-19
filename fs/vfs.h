@@ -2,10 +2,12 @@
 #ifndef VFS_H
 #define VFS_H
 #include <fs/fat.h>
+#include <fs/ramfs.h>
 #include <include/types.h>
 #include <locks/spinlock.h>
 #define VFS_MAX_DEVICES 10
 #define FAT_FS 0
+#define RAM_FS 1
 #define VFS_MAX_FNAME 257
 #define VFS_MAX_MOUNT_POINT 1024
 enum inode_type {
@@ -15,6 +17,7 @@ enum inode_type {
 
 union fsinfo {
     struct fatFS* fat;
+    struct ramFS *ramfs;
 };
 
 struct vfs_device {   
@@ -24,7 +27,11 @@ struct vfs_device {
     union fsinfo finfo;
     bool rootfs;
     char mountpoint[VFS_MAX_MOUNT_POINT];
+    char mountpoint_root[VFS_MAX_MOUNT_POINT];
+    char mountpoint_parent[VFS_MAX_MOUNT_POINT];
+
     struct inode *mnt_node;
+    struct inode *mnt_node_parent;
 };
 
 struct inode {
@@ -45,6 +52,7 @@ struct dnode {
     struct inode* root_inode;
     //children files and folders
     struct inode_list* head;
+    struct dnode *parent;
 };
 //File open flags
 #define O_RDONLY 0x0
@@ -69,21 +77,23 @@ struct file_table {
 struct vfs_ops {
     int (*read)(char* path,union fsinfo);
     struct dnode* (*read_root_dir)(struct vfs_device * dev);
-    struct dnode* (*read_inode_dir)(struct inode* i_node);
+    struct dnode* (*read_inode_dir)(struct dnode *parent,struct inode* i_node);
     void (*cat_inode_file)(struct inode* i_node);
     int (*read_file)(struct file * rfile,void *buf,uint32_t count);
+    int (*write_file)(struct file * rfile,void *buf,uint32_t count);
     int (*create_dir)(struct inode* parent, char *name);
 };
 
 void vfs_init();
 struct dnode* vfs_read_root_dir(char * path);
-struct dnode* vfs_read_inode_dir(struct inode * i_node);
+struct dnode* vfs_read_inode_dir(struct dnode *parent,struct inode * i_node);
 void vfs_read_inode_file(struct inode * i_node);
 int vfs_register_device(struct vfs_device newdev);
 void vfs_free_inode(struct inode * i_node); 
 void vfs_free_inode_list(struct inode_list * list); 
 void vfs_free_dnode(struct dnode * dn);
 void vfs_copy_inode(struct inode *src,struct inode *dst);
+struct vfs_device *vfs_get_device(int num);
 int vfs_read_file(struct file * rfile,void *buf,int count);
 int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset);
 int vfs_create_dir(struct inode* parent, char *name);

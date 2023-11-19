@@ -23,6 +23,11 @@ void vfs_init()
     release_spinlock(&ftable.lock);
 }
 
+struct vfs_device *vfs_get_device(int num)
+{
+    return &vfs_devices[num];
+}
+
 int vfs_register_device(struct vfs_device newdev)
 {
 
@@ -39,22 +44,26 @@ int vfs_register_device(struct vfs_device newdev)
     if(dev->rootfs == false) {
         struct dnode *root =vfs_devices[0].ops->read_root_dir(&vfs_devices[0]);
         dev->mnt_node =vfs_walk_path(dev->mountpoint,root,I_DIR);
-        vfs_free_dnode(root);
         if(!dev->mnt_node)
             panic("failed to mount non rootfs");
+        
+        root =vfs_devices[0].ops->read_root_dir(&vfs_devices[0]);
+        dev->mnt_node_parent =vfs_walk_path(dev->mountpoint_parent,root,I_DIR);
+            if(!dev->mnt_node)
+                panic("failed to mount non rootfs");
     }
     kprintf("VFS Device registered %d at %s\n", dev->devicenum,dev->mountpoint);
     current_device += 1;
-    return 0;
+    return dev->devicenum;
 }
 
-struct dnode *vfs_read_inode_dir(struct inode *i_node)
+struct dnode *vfs_read_inode_dir(struct dnode *parent,struct inode *i_node)
 {
 
     int idev;
     idev = i_node->dev->devicenum;
 
-    return vfs_devices[idev].ops->read_inode_dir(i_node);
+    return vfs_devices[idev].ops->read_inode_dir(parent,i_node);
 }
 
 void vfs_cat_inode_file(struct inode *i_node)
@@ -186,6 +195,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
     bool found = false;
     // if (*blah == '/')
     //     return;
+    kprintf("%s\n",path);
 
     while (end != -1)
     {
@@ -202,22 +212,24 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
         found = false;
         while (ptr)
         {
-             //kprintf("%s %s\n",ptr->current->i_name,buffer);
+             
+             kprintf("%s %s\n",ptr->current->i_name,buffer);
 
             if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
             {
                 vfs_free_dnode(dptr);
                 struct inode *mnt = fs_is_mount_point(ptr->current);
                 if (mnt){
+                    kprintf("p1\n");
+
                     dptr = mnt->dev->ops->read_root_dir(mnt->dev);
                     kprintf("mount point");
-                    kprintf("aaaaaaaaa\n");
-
                 }
                 else
-                    dptr = vfs_read_inode_dir(ptr->current);
+                    kprintf("p2\n");
+                    dptr = vfs_read_inode_dir(dptr,ptr->current);
                 
-                //Current entry on path was found
+                //Current entry on p ath was found
                 found = true;
                 break;
             }
@@ -229,7 +241,6 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
                 vfs_free_dnode(dptr);
             return NULL;
         }
-        kprintf("next\n");
     }
 
     ptr = dptr->head;

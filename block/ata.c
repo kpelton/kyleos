@@ -189,6 +189,8 @@ static bool ata_init_port()
         kprintf("part_type: 0x%x\n", fs1.part_type);
 
         fat_init(fs1);
+
+
         passed = true;
     }
     return passed;

@@ -52,12 +52,12 @@ static char *pop_dir_stack()
     return val;
 }
 
-static void print_dir(struct inode *pwd)
+static void print_dir(struct dnode *parent,struct inode *pwd)
 {
     struct inode_list *ptr;
     struct dnode *dptr;
 
-    dptr = vfs_read_inode_dir(pwd);
+    dptr = vfs_read_inode_dir(parent,pwd);
     if (dptr == 0)
         goto error;
     ptr = dptr->head;
@@ -106,9 +106,15 @@ struct inode *shell_cd(char cmd[], struct dnode *dptr)
     while (*nptr != '\n')
         nptr++;
     *nptr = '\0';
-
-    return vfs_walk_path(cmdptr,dptr,I_DIR);
+    kprintf("Cding to %s\n",cmdptr);
+    struct inode * data = vfs_walk_path(cmdptr,dptr,I_DIR);
+    if (data){
+        if (data->i_ino == dptr->root_inode->i_ino && data->dev->devicenum == dptr->root_inode->dev->devicenum)
+            return 0;
+    }
+    kprintf("returned  %x\n",data);
     kprintf("bad directoy\n");
+    return data;
     return 0;
 }
 
@@ -126,31 +132,7 @@ void print_prompt()
     }
 }
 
-void fs_test()
-{
-    struct dnode *dptr;
-    struct dnode *dptr1;
-    dptr = vfs_read_root_dir("/");
-    for (;;)
-    {
-        asm("sti");
-        struct dnode *dptr2;
 
-        dptr1 = vfs_read_inode_dir(dptr->head->next->next->next->current);
-
-        print_dir(dptr1->root_inode);
-        dptr2 = vfs_read_inode_dir(dptr->head->next->next->next->next->current);
-        print_dir(dptr2->root_inode);
-
-        vfs_free_dnode(dptr1);
-        vfs_free_dnode(dptr2);
-
-        mm_print_stats();
-        ksleepm(10);
-        //ksleepm(1000);
-    }
-    return;
-}
 void print_time()
 {
     struct sys_time current_time = get_time();
@@ -190,7 +172,7 @@ struct inode * read_path(char *path, struct dnode *pwd,enum inode_type type)
             {
                 if (dptr != pwd)
                     vfs_free_dnode(dptr);
-                dptr = vfs_read_inode_dir(ptr->current);
+                dptr = vfs_read_inode_dir(ptr,ptr->current);
                 break;
             }
             ptr = ptr->next;
@@ -273,7 +255,7 @@ for(;;) {
         if (kstrcmp(buffer, "ls\n") == 0)
         {
 
-            print_dir(pwd);
+            print_dir(dptr,pwd);
             //kprintf("root %x\n",pwd->i_ino);
 
         }
@@ -302,10 +284,10 @@ for(;;) {
                 cptr++;
             }
             *cptr = '\0';
-            dptr = vfs_read_inode_dir(pwd);
+            dptr = vfs_read_inode_dir(dptr,pwd);
             itmp = read_path(buffer + 3, dptr,I_DIR);
             if(itmp != NULL) {
-                print_dir(itmp);
+                print_dir(dptr,itmp);
 
                 //vfs_free_dnode(dptr);
             }else
@@ -315,11 +297,13 @@ for(;;) {
         }
         else if (buffer[0] == 'c' && buffer[1] == 'd' && buffer[2] == ' ' && buffer[3] != '\n')
         {
-            dptr = vfs_read_inode_dir(pwd);
+            olddptr=dptr;
+            dptr = vfs_read_inode_dir(dptr,pwd);
             pwd = shell_cd(buffer, dptr);
             //If failure
             if (pwd == 0)
             {
+                dptr = olddptr;
                 pwd = oldpwd;
             }
             else
@@ -357,7 +341,7 @@ for(;;) {
                 cptr++;
             }
             *cptr = '\0';
-            dptr = vfs_read_inode_dir(pwd);
+            dptr = vfs_read_inode_dir(dptr,pwd);
             itmp = read_path(buffer + 4, dptr,I_FILE);
             if(itmp != NULL) {
                 //vfs_cat_inode_file(itmp);
@@ -382,7 +366,7 @@ for(;;) {
                 cptr++;
             }
             *cptr = '\0';
-            dptr = vfs_read_inode_dir(pwd);
+            dptr = vfs_read_inode_dir(dptr,pwd);
             itmp = read_path(buffer + 5, dptr,I_FILE);
             if(itmp != NULL) {
                 int pid = exec_from_inode(itmp,false,NULL);
@@ -403,7 +387,7 @@ for(;;) {
             char *strings[] = {"aaa","HELLO CHANNO TEST ARGV","aaaaaaaaaaaaaa","aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",0};
 
             *cptr = '\0';
-            dptr = vfs_read_inode_dir(pwd);
+            dptr = vfs_read_inode_dir(dptr,pwd);
             itmp = read_path(buffer + 5, dptr,I_FILE);
             if(itmp != NULL) {
                 int pid = exec_from_inode(itmp,false,&strings);
