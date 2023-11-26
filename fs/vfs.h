@@ -82,6 +82,7 @@ struct vfs_ops {
     int (*read_file)(struct file * rfile,void *buf,uint32_t count);
     int (*write_file)(struct file * rfile,void *buf,uint32_t count);
     int (*create_dir)(struct inode* parent, char *name);
+    int (*create_file)(struct inode* parent, char *name);
 };
 
 void vfs_init();
@@ -97,6 +98,7 @@ struct vfs_device *vfs_get_device(int num);
 int vfs_read_file(struct file * rfile,void *buf,int count);
 int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset);
 int vfs_create_dir(struct inode* parent, char *name);
+int vfs_create_file(struct inode* parent, char *name,uint32_t flags);
 struct file* vfs_open_file(struct inode * i_node,uint32_t flags);
 void vfs_close_file(struct file *ofile);
 struct inode * vfs_walk_path(char *path, struct dnode *pwd,enum inode_type type);

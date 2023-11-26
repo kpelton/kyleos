@@ -102,13 +102,7 @@ int fat_init(struct mbr_info mbr_entry)
     vfs_dev.rootfs = true;
     kstrcpy(vfs_dev.mountpoint,"/");
     kstrcpy(vfs_dev.mountpoint_root,"/");
-    vfs_register_device(vfs_dev);
-    vfs_dev.rootfs = false;
-    kstrcpy(vfs_dev.mountpoint,"/games");
-    vfs_register_device(vfs_dev);
-
-    vfs_dev.rootfs = false;
-    kstrcpy(vfs_dev.mountpoint,"/cs/cs300");
+    kstrcpy(vfs_dev.mountpoint_parent,"");
     vfs_register_device(vfs_dev);
     return 0;
 }

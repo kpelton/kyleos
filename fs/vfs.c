@@ -42,15 +42,20 @@ int vfs_register_device(struct vfs_device newdev)
     dev->devicenum = current_device;
     kstrcpy(dev->mountpoint,newdev.mountpoint);
     if(dev->rootfs == false) {
-        struct dnode *root =vfs_devices[0].ops->read_root_dir(&vfs_devices[0]);
-        dev->mnt_node =vfs_walk_path(dev->mountpoint,root,I_DIR);
+        struct dnode *root = vfs_devices[0].ops->read_root_dir(&vfs_devices[0]);
+        dev->mnt_node = vfs_walk_path(dev->mountpoint,root,I_DIR);
         if(!dev->mnt_node)
             panic("failed to mount non rootfs");
         
         root =vfs_devices[0].ops->read_root_dir(&vfs_devices[0]);
-        dev->mnt_node_parent =vfs_walk_path(dev->mountpoint_parent,root,I_DIR);
+        if (kstrcmp(dev->mountpoint_parent,"/") == 0)
+            dev->mnt_node_parent = root->root_inode;
+        else {
+        dev->mnt_node_parent = vfs_walk_path(dev->mountpoint_parent,root,I_DIR);
             if(!dev->mnt_node)
                 panic("failed to mount non rootfs");
+        }
+    //memory leak likely here
     }
     kprintf("VFS Device registered %d at %s\n", dev->devicenum,dev->mountpoint);
     current_device += 1;
@@ -313,6 +318,12 @@ int vfs_read_file(struct file *rfile, void *buf, int count)
 error:
     kprintf("Read error %d\n", rfile->flags);
     return -1;
+}
+
+
+int vfs_create_file(struct inode* parent, char *name, uint32_t flags)
+{
+    return vfs_devices[parent->dev->devicenum].ops->create_file(parent, name);
 }
 
 int vfs_read_file_offset(struct file *rfile, void *buf, int count, uint32_t offset)

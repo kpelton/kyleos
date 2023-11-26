@@ -4,7 +4,9 @@
 #include <include/types.h>
 #include <fs/ramfs.h>
 #include <fs/vfs.h>
+#define RAMFS_MAX_DIRECTORY 1024
 int ramfs_init(void);
+
 struct ramFS
 {
     uint64_t allocated_blocks;
@@ -17,10 +19,11 @@ struct ramfs_inode {
     struct vfs_device* dev;
     uint64_t  i_ino;
     uint64_t file_size;
-
-    uint64_t children[1024];
+    int children[RAMFS_MAX_DIRECTORY];
     int last_child;
     int parent;
+    uint64_t *block;
+    uint64_t used_space;
 };
 
 #endif

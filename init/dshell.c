@@ -91,7 +91,22 @@ static void mkdir(struct inode *pwd,char *dir_name)
     }
     //kprintf("vfs-create-dir %x\n",pwd->i_ino);
     vfs_create_dir(pwd,dir);
+    
 }
+
+static void touch(struct inode *pwd,char *dir_name)
+{
+    char dir[256] = {0};
+
+    for(int i=0; i<256; i++) {
+        if(dir_name[i] == '\n')
+            break;
+        dir[i] = dir_name[i];
+    }
+    //kprintf("vfs-create-dir %x\n",pwd->i_ino);
+    vfs_create_file(pwd,dir,0);
+}
+
 struct inode *shell_cd(char cmd[], struct dnode *dptr)
 {
     struct inode_list *ptr;
@@ -113,7 +128,6 @@ struct inode *shell_cd(char cmd[], struct dnode *dptr)
             return 0;
     }
     kprintf("returned  %x\n",data);
-    kprintf("bad directoy\n");
     return data;
     return 0;
 }
@@ -267,6 +281,15 @@ for(;;) {
 
            // }
         }
+        else if (buffer[0] == 't' && buffer[1] == 'o' && buffer[2] == 'u' && buffer[3] == 'c'&& buffer[4] == 'h'  && buffer[5] == ' ' && buffer[6] != '\n')
+        {
+            //for(int j =0; j<500; j++){
+             touch(pwd,buffer+6);
+             //  mkdir(pwd,"a");
+
+           // }
+        }
+
         else if (buffer[0] == 's' && buffer[1] == 'k' && buffer[2] == 'd' && buffer[3] == 'i'&& buffer[4] == 'r'  && buffer[5] == ' ' && buffer[6] != '\n')
         {
             for(int j =0; j<500; j++){
