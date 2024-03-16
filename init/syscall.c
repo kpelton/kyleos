@@ -141,7 +141,6 @@ static int exec_args(char *path, char *argv[])
     struct dnode *dptr = vfs_read_root_dir("/");
     struct inode *iptr = vfs_walk_path(path, dptr, I_FILE);
     char **user_argv = NULL;
-    int count;
     int i;
     int j;
     if (iptr != NULL)

@@ -383,7 +383,7 @@ uint64_t walk(struct pg_tbl *pg, uint64_t va)
         offset = VIRT_TO_PAGE_TAB(virt_curr_addr);
     
     //return pte;
-    return &curr[offset];
+    return (uint64_t) &curr[offset];
 
     error:
         return NULL;

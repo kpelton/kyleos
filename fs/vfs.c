@@ -107,10 +107,7 @@ void vfs_free_dnode(struct dnode *dn)
 
 struct dnode *vfs_read_root_dir(char *path)
 {
-    char *ptr = path;
-    char dev[4] = {0};
     int i = 0;
-    int idev;
     struct vfs_device *vdevice;
     
     if (current_device == 0)
@@ -196,7 +193,6 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
     struct inode_list *ptr;
     struct inode *iptr;
     struct dnode *dptr = pwd;
-    struct dnode *old_dptr = pwd;
     bool found = false;
     // if (*blah == '/')
     //     return;
@@ -230,8 +226,9 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
                     dptr = mnt->dev->ops->read_root_dir(mnt->dev);
                     kprintf("mount point");
                 }
-                else
+                else{
                     kprintf("p2\n");
+                }
                     dptr = vfs_read_inode_dir(dptr,ptr->current);
                 
                 //Current entry on p ath was found
@@ -323,6 +320,7 @@ error:
 
 int vfs_create_file(struct inode* parent, char *name, uint32_t flags)
 {
+    kprintf("FLAGS %x\n",flags);
     return vfs_devices[parent->dev->devicenum].ops->create_file(parent, name);
 }
 

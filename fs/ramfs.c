@@ -2,6 +2,7 @@
 #include <mm/mm.h>
 #include <fs/vfs.h>
 #include <locks/spinlock.h>
+#include <output/output.h>
 #define MAX_RAMFS 512
 
 struct dnode *ramfs_read_root_dir(struct vfs_device *dev);
@@ -156,11 +157,13 @@ struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *i_node)
 
 struct dnode *ramfs_read_root_dir(struct vfs_device *dev)
 {
+
     struct dnode *dir;
+    kprintf("dev %x\n",dev);
     acquire_spinlock(&ramfs_lock);
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
-    vfs_copy_inode(&ramfs_inodes[0],dir->root_inode);
+    vfs_copy_inode((struct inode *)&ramfs_inodes[0],dir->root_inode);
     release_spinlock(&ramfs_lock);
 
     return dir;

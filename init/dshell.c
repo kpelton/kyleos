@@ -109,7 +109,6 @@ static void touch(struct inode *pwd,char *dir_name)
 
 struct inode *shell_cd(char cmd[], struct dnode *dptr)
 {
-    struct inode_list *ptr;
     char *cmdptr = cmd;
     char *nptr = cmd;
     //Find directory
@@ -186,7 +185,7 @@ struct inode * read_path(char *path, struct dnode *pwd,enum inode_type type)
             {
                 if (dptr != pwd)
                     vfs_free_dnode(dptr);
-                dptr = vfs_read_inode_dir(ptr,ptr->current);
+                dptr = vfs_read_inode_dir((struct dnode *)ptr,ptr->current);
                 break;
             }
             ptr = ptr->next;
@@ -248,16 +247,7 @@ for(;;) {
 }
     return;
 */
-    void kthread_test()
-    {
-        for (;;)
-        {
-           // kprintf("test frok kthread!\n");
-           // ksleepm(1000);
-        }
-    }
-
-    //
+        //
     while (1)
     {
         read_input(buffer);
@@ -413,7 +403,7 @@ for(;;) {
             dptr = vfs_read_inode_dir(dptr,pwd);
             itmp = read_path(buffer + 5, dptr,I_FILE);
             if(itmp != NULL) {
-                int pid = exec_from_inode(itmp,false,&strings);
+                int pid = exec_from_inode(itmp,false,(char **) &strings);
                 if(pid >= 0)
                     process_wait(pid);
 
@@ -459,10 +449,6 @@ for(;;) {
         else if (kstrcmp(buffer, "sleep 1\n") == 0)
         {
             ksleepm(1000);
-        }
-        else if (kstrcmp(buffer, "addkproc\n") == 0)
-        {
-            kthread_add(kthread_test, "kthread");
         }
         else if (kstrcmp(buffer, "addhz50\n") == 0)
         {

@@ -143,7 +143,7 @@ void mm_init()
     init_spinlock(&kmem_spinlock);
     char *heap_loc = pmem_alloc_block(HEAP_SIZE);
     kprintf("Heap Loc:0x%x\n", heap_loc);
-    kernel_heap = KERNEL_HEAP_ADDR;
+    kernel_heap = (char *) KERNEL_HEAP_ADDR;
     paging_map_range(&pg,(uint64_t)heap_loc,KERNEL_HEAP_ADDR,HEAP_SIZE,KERNEL_PAGE);
     kernel_switch_paging();
     vmm_init();
