@@ -500,11 +500,13 @@ void schedule()
         prev_task = i;
         if (ktasks[i].state == TASK_NEW && ktasks[i].type == KERNEL_PROCESS)
         {
+
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
             ktasks[i].state = TASK_RUNNING;
+            kernel_switch_paging();
             switch_to(ktasks[i].start_stack, ktasks[i].start_addr);
             success = true;
-            kernel_switch_paging();
+
         }
         else if (ktasks[i].state == TASK_NEW && ktasks[i].type == USER_PROCESS)
         {
@@ -529,6 +531,7 @@ void schedule()
 
             if (ktasks[i].type == USER_PROCESS)
             {
+
                 fpu_restore_context(ktasks[i].fxsave_region);
                 user_switch_paging(&(ktasks[i].mm->pagetable));
                 resume_func = (uint64_t) resume_p_userspace;
@@ -542,11 +545,10 @@ void schedule()
             /// Need to call fucntion with inline asm  due to issues with -O2
 
             asm volatile("movq %0,%%rdi\n\t"
-                         "movq %1,%%rsi\n\t"
-                         "movq %2, %%rax\n\t"
+                         "movq %1, %%rax\n\t"
                          "callq *%%rax" ::"g"(ktasks[i].s_rsp),
-                         "g"(ktasks[i].s_rbp), "g"(resume_func)
-                         : "rdi", "rsi", "rax");
+                         "g"(resume_func)
+                         : "rdi", "rax");
 
             success = true;
         }
