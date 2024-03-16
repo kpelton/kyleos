@@ -285,7 +285,7 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
             sp = (uint64_t *) ((uint64_t) (((char*)sp) - len) & 0xffffffffffffff00);
             // track where argument is placed for later use
             ustack[argc] = sp;
-            kstrncpy(sp,argv[argc],len);
+            kstrncpy((char *)sp,argv[argc],len);
             //kprintf("ustack %x %x\n", argc,sp);
         }
     }
