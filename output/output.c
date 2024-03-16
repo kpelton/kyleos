@@ -179,12 +179,13 @@ char * itoa( unsigned long value, char * str, int base ) {
     return rc;
 }
 
-__attribute__((optimize("O0"))) static void print_reg(char * name,unsigned long val)
+static void print_reg(char * name,unsigned long val)
 {
     char buffer[50];
     itoa(val,buffer,16);
     kprintf("%s:0x%x ",name,val);
 }
+
 void print_regs(unsigned long exception,unsigned long rip) {
     struct RegDump dump;
     uint64_t rsp;
