@@ -233,10 +233,11 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     struct ktask *t;
 
     
-    if (ta == NULL)
+    if (ta == NULL) {
         t = &ktasks[find_free_task()];
-    else
+    } else {
         t= ta;
+    }
 
         clear_fd_table(t);
 
