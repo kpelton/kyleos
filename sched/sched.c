@@ -282,7 +282,7 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
         {
             //kprintf(" %d %s\n",argc, argv[argc]);
             int len = kstrlen(argv[argc]);
-            sp = (uint64_t)(((char*)sp) - len) & 0xffffffffffffff00;
+            sp = (uint64_t *) ((uint64_t) (((char*)sp) - len) & 0xffffffffffffff00);
             // track where argument is placed for later use
             ustack[argc] = sp;
             kstrncpy(sp,argv[argc],len);
