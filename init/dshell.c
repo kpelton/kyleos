@@ -82,7 +82,9 @@ error:
 
 static void mkdir(struct inode *pwd,char *dir_name)
 {
-    char dir[256] = {0};
+    char dir[256];
+    for(int i=0; i<256; i++)
+        dir[i] = 0 ;
 
     for(int i=0; i<256; i++) {
         if(dir_name[i] == '\n')
@@ -96,7 +98,9 @@ static void mkdir(struct inode *pwd,char *dir_name)
 
 static void touch(struct inode *pwd,char *dir_name)
 {
-    char dir[256] = {0};
+    char dir[256];
+     for(int i=0; i<256; i++)
+        dir[i] = 0 ;
 
     for(int i=0; i<256; i++) {
         if(dir_name[i] == '\n')

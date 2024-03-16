@@ -71,6 +71,15 @@ char * kstrncpy(char *dest, const char *src,int bytes) {
     return dest;
 }
 
+void *memcpy(void *dest, const void *src, int n) {
+    unsigned char *d = (unsigned char *)dest;
+    const unsigned char *s = (const unsigned char *)src;
+    while (n--) {
+        *d++ = *s++;
+    }
+    return dest;
+}
+
 
  inline uint64_t * memcpy64(uint64_t *dest, const uint64_t *src,uint64_t bytes) {
     uint64_t i;
@@ -170,7 +179,7 @@ char * itoa( unsigned long value, char * str, int base ) {
     return rc;
 }
 
-static void print_reg(char * name,unsigned long val)
+__attribute__((optimize("O0"))) static void print_reg(char * name,unsigned long val)
 {
     char buffer[50];
     itoa(val,buffer,16);
@@ -295,7 +304,7 @@ void panic(char *msg)
 {
     uint64_t rip;
     //Copy return address to rip variable
-    asm volatile("movq 8(%%rbp) ,%0" : "=g"(rip));
+    asm volatile("movq 8(%%rbp) ,%0" : "=r"(rip));
     kprintf(msg);
     print_regs(0xdeadbeef,rip);
     asm("cli");

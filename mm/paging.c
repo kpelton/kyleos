@@ -350,7 +350,7 @@ void paging_enable_protected()
 {
 
     uint64_t cr0;
-    asm volatile("movq %%cr0 ,%0" : "=g"(cr0));
+    asm volatile("movq %%cr0 ,%0" : "=r"(cr0));
     cr0 |= 1<<16;
     kprintf("cr0 %x\n",cr0);
     asm volatile("movq %0 ,%%cr0" :: "r"(cr0));
@@ -395,7 +395,7 @@ uint64_t walk(struct pg_tbl *pg, uint64_t va)
 void pagefault() {
     uint64_t cr2;
     struct ktask *proc = get_current_process();
-    asm volatile("movq %%cr2 ,%0" : "=g"(cr2));
+    asm volatile("movq %%cr2 ,%0" : "=r"(cr2));
     cr2 &=0xfffffffffffff000;
         if (cr2 == 0)
     {
