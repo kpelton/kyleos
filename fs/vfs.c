@@ -123,7 +123,7 @@ struct dnode *vfs_read_root_dir(char *path)
     if (i == current_device)
         goto error;
 
-    vdevice = &vfs_devices[idev];
+    vdevice = &vfs_devices[i];
     return vdevice->ops->read_root_dir(vdevice);
 error:
     return 0;
