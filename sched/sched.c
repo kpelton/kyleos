@@ -226,7 +226,6 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
 
     int pid_ret = -1;
     int argc = 0;
-    struct vmm_block *stack_block = NULL;
     uint64_t *sp = NULL; 
     uint64_t *ustack[MAX_ARGS];
     kprintf("Allocating Stack\n");
@@ -242,7 +241,7 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
         clear_fd_table(t);
 
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
-    stack_block = vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,READ_WRITE | SUPERVISOR | PAGE_PRESENT,true,true);
+    vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,READ_WRITE | SUPERVISOR | PAGE_PRESENT,true,true);
     vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_HEAP_SIZE,READ_WRITE | SUPERVISOR,true,true);
     user_switch_paging(&(mm->pagetable));
 
@@ -296,7 +295,7 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     for(int i=0; i<=argc; i++)
         sp[i+3] = (uint64_t) ustack[i];
 
-    sp[2] = sp+3;  
+    sp[2] = (uint64_t) (sp+3);  
     sp[1] = argc;
     sp[0] = 0xdeadbeefdeadbeef;
     t->user_start_stack = sp;
