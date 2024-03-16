@@ -1,4 +1,4 @@
-CC	= gcc
+CC	?= gcc
 AS = nasm
 ASFLAGS = -f elf64
 KERNEL_ROOT=$(shell pwd)
