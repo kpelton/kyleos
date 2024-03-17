@@ -84,4 +84,5 @@ iso: kernel.bin
 	grub-mkrescue -o bootable.iso iso
 iso-test: bootable.iso
 	qemu-system-x86_64 -m 60M -cdrom bootable.iso  -serial stdio
-
+test-suite:kernel.bin
+	bash test.sh 2>/dev/null
