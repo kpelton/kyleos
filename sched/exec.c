@@ -22,10 +22,8 @@ int exec_from_inode(struct inode *ifile,bool replace,char **argv)
     acquire_spinlock(&exec_spinlock);
     //int bytes = 0;
     int i;
-    struct file *rfile = vfs_open_file(ifile,O_RDONLY);
     struct elfhdr hdr;
     struct proghdr phdr;
-    vfs_read_file(rfile, &hdr, sizeof(struct elfhdr));
     int retval = -1;
     uint32_t size = 0;
     uint64_t vaddr;
@@ -35,7 +33,12 @@ int exec_from_inode(struct inode *ifile,bool replace,char **argv)
     struct vmm_map *map = NULL;
     char name[VFS_MAX_FNAME];
     bool zero;
-    if (hdr.magic == ELF_MAGIC)
+    struct file *rfile = NULL;
+
+    rfile = vfs_open_file(ifile,O_RDONLY);
+    vfs_read_file(rfile, &hdr, sizeof(struct elfhdr));
+
+if (hdr.magic == ELF_MAGIC)
     {
 #ifdef EXEC_DEBUG
         kprintf("Elf ph offset: 0x%x\n", hdr.phoff);
