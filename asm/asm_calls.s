@@ -413,6 +413,8 @@ panic_handler_14:
     cli
     add rsp,8 ;error code
     push rax
+    ;; copy over failing rip to rax
+    mov rax,[rsp+8]
     push rbx
     push rcx
     push rdx
@@ -429,10 +431,14 @@ panic_handler_14:
     push r15
     pushfq
     push rsi
+    push rax
     ;save $rip
     lea r14, [$+7]
     call save_context_asm
+    pop rax
     pop rsi
+    ;; first argument to page fault handler
+    mov rdi,rax
     call pagefault
     popfq
     pop r15

@@ -392,17 +392,19 @@ uint64_t walk(struct pg_tbl *pg, uint64_t va)
 
 
 
-void pagefault() {
+void pagefault(uint64_t *addr) {
     uint64_t cr2;
     struct ktask *proc = get_current_process();
     asm volatile("movq %%cr2 ,%0" : "=r"(cr2));
+
+    
     cr2 &=0xfffffffffffff000;
         if (cr2 == 0)
     {
         kprintf("Test123123\n");
         panic("fail");
     }
-    kprintf("pagefault on 0x%x !\n",cr2);
+    kprintf("pagefault on 0x%x from 0x%x !\n",cr2,addr);
     uint64_t *pte =(uint64_t *)walk(&(proc->mm->pagetable),cr2);
     kprintf("pte:%x\n",pte);
 
