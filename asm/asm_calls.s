@@ -492,6 +492,7 @@ panic_handler_20:
 panic_handler_21:
     mov rax,21
     jmp panic_handler
+    
 [global panic_handler_22] ;
 panic_handler_22:
     mov rax,22
@@ -520,6 +521,7 @@ panic_handler_26:
 panic_handler_27:
     mov rax,27
     jmp panic_handler
+    
 [global panic_handler_28] ;
 panic_handler_28:
     mov rax,28
@@ -529,6 +531,7 @@ panic_handler_28:
 panic_handler_29:
     mov rax,29
     jmp panic_handler
+    
 [global panic_handler_30] ;
 panic_handler_30:
     mov rax,30
