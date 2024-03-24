@@ -345,7 +345,29 @@ for(;;) {
             if (sched_process_kill(pid,true) == false)
                 kprintf("Kill failed\n");
         }
-
+        else if (buffer[0] == 'w' && buffer[1] == 'r' && buffer[2] == 't' && buffer[3] == ' ' && buffer[4] != '\n') {
+            struct file *rfile;
+            uint32_t bytes;
+            cptr = buffer + 4;
+            char cbuffer[4096] = {'a'};
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+            }
+            *cptr = '\0';
+            dptr = vfs_read_inode_dir(dptr,pwd);
+            itmp = read_path(buffer + 4, dptr,I_FILE);
+            if(itmp != NULL) {
+                //vfs_cat_inode_file(itmp);
+                rfile = vfs_open_file(itmp,O_WRONLY);
+                bytes = vfs_write_file(rfile,"test 123123asdfasdfasdf",kstrlen("test 123123asdfasdfasdf"));
+                bytes = vfs_write_file(rfile,cbuffer,4095);
+                vfs_close_file(rfile);
+            }else
+            {
+                kprintf("cat failed\n");
+            }        
+        }
         else if (buffer[0] == 'c' && buffer[1] == 'a' && buffer[2] == 't' && buffer[3] == ' ' && buffer[4] != '\n')
         {
             struct file *rfile;

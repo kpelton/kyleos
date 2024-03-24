@@ -152,8 +152,7 @@ static struct file *vfs_get_open_file(struct inode *i_node)
 struct file *vfs_open_file(struct inode *i_node, uint32_t flags)
 {
     struct file *retfile = NULL;
-    //Only O_RDONLY flag is supported cucrrently
-    if (flags > MAX_FILE_FLAGS || (flags > O_RDONLY ))
+    if (flags > MAX_FILE_FLAGS  )
     {
         kprintf("fail");
         goto done;
@@ -214,7 +213,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
         while (ptr)
         {
              
-             kprintf("%s %s\n",ptr->current->i_name,buffer);
+             //kprintf("%s %s\n",ptr->current->i_name,buffer);
 
             if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
             {
@@ -310,12 +309,33 @@ int vfs_read_file(struct file *rfile, void *buf, int count)
         goto error;
     }
 
-    return vfs_devices[idev].ops->read_file(rfile, buf, count);
+    int rcount = vfs_devices[idev].ops->read_file(rfile, buf, count);
+    rfile->pos += rcount;
+    return count;
 
 error:
     kprintf("Read error %d\n", rfile->flags);
     return -1;
 }
+
+int vfs_write_file(struct file *rfile, void *buf, int count)
+{
+    int idev;
+    idev = rfile->dev->devicenum;
+    if (rfile->flags != O_WRONLY && rfile->flags != O_RDWR)
+    {
+        goto error;
+    }
+
+    int rcount = vfs_devices[idev].ops->write_file(rfile, buf, count);
+    rfile->pos += rcount;
+    return count;
+
+error:
+    kprintf("Read error %d\n", rfile->flags);
+    return -1;
+}
+
 
 
 int vfs_create_file(struct inode* parent, char *name, uint32_t flags)

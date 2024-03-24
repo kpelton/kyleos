@@ -96,6 +96,7 @@ void vfs_free_dnode(struct dnode * dn);
 void vfs_copy_inode(struct inode *src,struct inode *dst);
 struct vfs_device *vfs_get_device(int num);
 int vfs_read_file(struct file * rfile,void *buf,int count);
+int vfs_write_file(struct file * rfile,void *buf,int count);
 int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset);
 int vfs_create_dir(struct inode* parent, char *name);
 int vfs_create_file(struct inode* parent, char *name,uint32_t flags);
