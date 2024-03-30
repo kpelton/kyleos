@@ -224,8 +224,8 @@ void start_dshell()
     struct inode *oldpwd = pwd;
     struct inode *itmp;
             struct file *write_file=NULL;
-    char test_str[] = "abcdefghijklmnopqrstuvwxyz";   
-    push_dir_stack("/");
+    char test_str[]="ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ";
+   push_dir_stack("/");
     print_prompt();
     //kprintf("root %x\n",pwd->i_ino);
     //write_sec(0,buffer2);
@@ -363,7 +363,7 @@ for(;;) {
                 //vfs_cat_inode_file(itmp);
                 if (! write_file)
                     write_file = vfs_open_file(itmp,O_WRONLY);
-                for(int i=0; i<500; i++)
+                for(int i=0; i<1000; i++)
                 bytes = vfs_write_file(write_file,test_str,kstrlen(test_str));
                 //bytes = vfs_write_file(rfile,cbuffer,4095);
                 //vfs_close_file(write_file);

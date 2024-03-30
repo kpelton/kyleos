@@ -64,32 +64,29 @@ int ramfs_read_file (struct file * rfile,void *buf,uint64_t count) {
     int copy = 0;
     uint64_t offset=0;
     kprintf("rfile pos %d\n",rfile->pos);
-
-    while(total_count > 0 && r_block){
-        memcpy8(((char *)buf)+offset,r_block->block,r_block->size);
-        offset+=r_block->size;
-        total_count-=r_block->size;
-        r_block = r_block->next;
-    }
-
+    memcpy(((char *)buf),((uint8_t *)r_block->block)+rfile->pos,count);
+    
     return count;
 }
 
 int ramfs_write_file (struct file * rfile,void *buf,uint64_t count) {
 
     struct ramfs_block *r_block = ramfs_inodes[rfile->i_node.i_ino].blocks;
+    uint64_t file_size = ramfs_inodes[rfile->i_node.i_ino].file_size;
 
-    while(r_block->next != NULL)
-        r_block = r_block->next;
+    kprintf("Writing %d at %d\n",count,rfile->pos);
+    //we are appending to the block allocate new block
+    if (rfile->pos + count > file_size) {
+        kprintf("Allocating %d \n",rfile->pos + count);
+        uint64_t block = kmalloc(rfile->pos + count);
+        memcpy(block,r_block->block,file_size);
+        kfree(r_block->block);
+        r_block->block = block;
+        ramfs_inodes[rfile->i_node.i_ino].file_size= file_size + ( (rfile->pos + count) - file_size);
+    } 
 
-    r_block->next = kmalloc(sizeof(struct ramfs_block));
-    r_block = r_block->next;
-    r_block->next = NULL;
-    r_block-> block= kmalloc(count);
-    r_block->size = count;
-    memcpy8(r_block->block,buf,count);
+    memcpy(((uint8_t *)r_block->block)+rfile->pos,buf,count);
 
-    ramfs_inodes[rfile->i_node.i_ino].file_size+=count;
     return count ;
 }
 
