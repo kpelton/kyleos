@@ -58,6 +58,7 @@ int ramfs_init(void) {
 }
 int ramfs_read_file (struct file * rfile,void *buf,uint64_t count) { 
 
+        acquire_spinlock(&ramfs_lock);
     struct ramfs_block *r_block = ramfs_inodes[rfile->i_node.i_ino].blocks;
     int check_count = 0;
     int total_count = count;
@@ -65,19 +66,26 @@ int ramfs_read_file (struct file * rfile,void *buf,uint64_t count) {
     uint64_t offset=0;
     kprintf("rfile pos %d\n",rfile->pos);
     memcpy(((char *)buf),((uint8_t *)r_block->block)+rfile->pos,count);
-    
+        release_spinlock(&ramfs_lock);
+
     return count;
 }
 
 int ramfs_write_file (struct file * rfile,void *buf,uint64_t count) {
 
+        acquire_spinlock(&ramfs_lock);
     struct ramfs_block *r_block = ramfs_inodes[rfile->i_node.i_ino].blocks;
     uint64_t file_size = ramfs_inodes[rfile->i_node.i_ino].file_size;
 
-    kprintf("Writing %d at %d\n",count,rfile->pos);
+    //kprintf("Writing %d at %d\n",count,rfile->pos);
+    if (file_size == 0) {
+        uint64_t block = kmalloc(count);
+        r_block->block = block;
+        ramfs_inodes[rfile->i_node.i_ino].file_size=count;
+    }
     //we are appending to the block allocate new block
-    if (rfile->pos + count > file_size) {
-        kprintf("Allocating %d \n",rfile->pos + count);
+    else if (rfile->pos + count > file_size) {
+        //kprintf("Allocating %d \n",rfile->pos + count);
         uint64_t block = kmalloc(rfile->pos + count);
         memcpy(block,r_block->block,file_size);
         kfree(r_block->block);
@@ -86,6 +94,7 @@ int ramfs_write_file (struct file * rfile,void *buf,uint64_t count) {
     } 
 
     memcpy(((uint8_t *)r_block->block)+rfile->pos,buf,count);
+    release_spinlock(&ramfs_lock);
 
     return count ;
 }
@@ -104,8 +113,8 @@ int ramfs_create_file(struct inode *parent, char *name)
     ramfs_inodes[i_no].blocks = kmalloc(sizeof(struct ramfs_block));
     ramfs_inodes[i_no].blocks->block = kmalloc(kstrlen("asdfasdf"+1));
     kstrcpy(ramfs_inodes[i_no].blocks->block,"asdfasdf");
-    ramfs_inodes[i_no].file_size = kstrlen(ramfs_inodes[i_no].blocks->block);
-    ramfs_inodes[i_no].blocks->size = kstrlen(ramfs_inodes[i_no].blocks->block);
+    ramfs_inodes[i_no].file_size = 0;
+    ramfs_inodes[i_no].blocks->size = 0;
     ramfs_inodes[i_no].blocks->next = NULL;
     ramfs_inodes[i_no].parent =  parent->i_ino;
 

@@ -47,6 +47,21 @@ static int read(int fd, void *buf, int count)
     return countr;
 }
 
+static int write(int fd, void *buf, int count)
+{
+    int countr = 0;
+    if (count < 0 || fd < 0)
+        return -1;
+    if (buf >= (void *)KERN_SPACE_BOUNDRY)
+    {
+        return -1;
+    }
+
+    struct ktask *pid = get_current_process();
+    countr = user_process_write_fd(pid, fd, buf, count);
+    return countr;
+}
+
 static int fork()
 {
     return user_process_fork();
@@ -177,6 +192,7 @@ void *syscall_tbl[] = {
     (void *)&sbrk,       //9
     (void *)&debug_read_input,       //10
     (void *)&exec_args,       //11
+    (void *)&write,       // 12
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

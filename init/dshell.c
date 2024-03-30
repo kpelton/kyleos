@@ -352,21 +352,33 @@ for(;;) {
             uint32_t bytes;
             cptr = buffer + 4;
             char cbuffer[4096] = {'a'};
-            while (*cptr != '\n' && *cptr != '\0')
+            char *arg=0;
+            int wrlen=0;
+            cptr = buffer + 4;
+            while (*cptr != ' ' && *cptr != '\0')
             {
                 cptr++;
             }
             *cptr = '\0';
+            cptr++;
+            arg=cptr;
+            while (*cptr != '\n' && *cptr != '\0')
+            {
+                cptr++;
+                wrlen++;
+            }
+            *cptr = '\0';
+            cptr++;
             dptr = vfs_read_inode_dir(dptr,pwd);
             itmp = read_path(buffer + 4, dptr,I_FILE);
             if(itmp != NULL) {
                 //vfs_cat_inode_file(itmp);
                 if (! write_file)
                     write_file = vfs_open_file(itmp,O_WRONLY);
-                for(int i=0; i<1000; i++)
-                bytes = vfs_write_file(write_file,test_str,kstrlen(test_str));
+                    bytes = vfs_write_file(write_file,arg,wrlen);
                 //bytes = vfs_write_file(rfile,cbuffer,4095);
-                //vfs_close_file(write_file);
+                vfs_close_file(write_file);
+                write_file = NULL;
             }else
             {
                 kprintf("cat failed\n");
