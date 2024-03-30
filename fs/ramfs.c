@@ -9,8 +9,8 @@ struct dnode *ramfs_read_root_dir(struct vfs_device *dev);
 struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *inode);
 int ramfs_create_dir(struct inode *parent, char *name);
 int ramfs_create_file(struct inode *parent, char *name);
-int ramfs_read_file (struct file * rfile,void *buf,uint32_t count);
-int ramfs_write_file (struct file * rfile,void *buf,uint32_t count);
+int ramfs_read_file (struct file * rfile,void *buf,uint64_t count);
+int ramfs_write_file (struct file * rfile,void *buf,uint64_t count);
 
 static uint64_t i_no = 0;
 static int device_num;
@@ -56,71 +56,41 @@ int ramfs_init(void) {
 
     return 0;
 }
-int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) { 
+int ramfs_read_file (struct file * rfile,void *buf,uint64_t count) { 
 
     struct ramfs_block *r_block = ramfs_inodes[rfile->i_node.i_ino].blocks;
     int check_count = 0;
+    int total_count = count;
+    int copy = 0;
+    uint64_t offset=0;
+    kprintf("rfile pos %d\n",rfile->pos);
 
-    while(rfile->pos > check_count || r_block->block == NULL) {
-        check_count += RAMFS_BLOCK_SIZE;
+    while(total_count > 0 && r_block){
+        memcpy8(((char *)buf)+offset,r_block->block,r_block->size);
+        offset+=r_block->size;
+        total_count-=r_block->size;
         r_block = r_block->next;
     }
 
-    memcpy8(buf,r_block->block,count);
-    return rfile->i_node.file_size;
+    return count;
 }
 
-int ramfs_write_file (struct file * rfile,void *buf,uint32_t count) {
+int ramfs_write_file (struct file * rfile,void *buf,uint64_t count) {
 
     struct ramfs_block *r_block = ramfs_inodes[rfile->i_node.i_ino].blocks;
-    int check_count = 0;
-    int offset = 0;
-    uint32_t total_count =count;
-    uint8_t *buffer = buf;
 
-
-    uint32_t copy_count = 0;
-    
-
-
-    int rel_pos = 0;
-    if (rfile->pos > RAMFS_BLOCK_SIZE)
-        rel_pos = rfile->pos / RAMFS_BLOCK_SIZE;
-    else
-        rel_pos = rfile->pos;
-
-
-    if (count+rel_pos > RAMFS_BLOCK_SIZE)
-        copy_count = RAMFS_BLOCK_SIZE;
-    else
-        copy_count = count;
-
-    kprintf("ramfs pos %x\n",rfile->pos);
-    
-    for(int i=0; i<rfile->pos/RAMFS_BLOCK_SIZE; i+=RAMFS_BLOCK_SIZE) {
+    while(r_block->next != NULL)
         r_block = r_block->next;
-    }
 
-    while(total_count != 0 ) {
-        memcpy8(((uint8_t *)r_block->block)+rel_pos,buffer,copy_count);
-        total_count -= copy_count;
-        rel_pos=0;
-        if (total_count != 0) {
-            r_block->next = kmalloc(sizeof(struct ramfs_block));
-            r_block = r_block->next;
-            r_block->next = NULL;
-            r_block->block = kmalloc(RAMFS_BLOCK_SIZE);
-        }
-        if (total_count > RAMFS_BLOCK_SIZE)
-            copy_count = RAMFS_BLOCK_SIZE;
-        else
-            copy_count = total_count;
-        buffer += copy_count;
+    r_block->next = kmalloc(sizeof(struct ramfs_block));
+    r_block = r_block->next;
+    r_block->next = NULL;
+    r_block-> block= kmalloc(count);
+    r_block->size = count;
+    memcpy8(r_block->block,buf,count);
 
-    }
-
-    ramfs_inodes[rfile->i_node.i_ino].file_size= rfile->pos + count;
-    return count;
+    ramfs_inodes[rfile->i_node.i_ino].file_size+=count;
+    return count ;
 }
 
 int ramfs_create_file(struct inode *parent, char *name) 
@@ -135,9 +105,10 @@ int ramfs_create_file(struct inode *parent, char *name)
     ramfs_inodes[i_no].i_ino = i_no;
     ramfs_inodes[i_no].last_child = 0;
     ramfs_inodes[i_no].blocks = kmalloc(sizeof(struct ramfs_block));
-    ramfs_inodes[i_no].blocks->block = kmalloc(RAMFS_BLOCK_SIZE);
+    ramfs_inodes[i_no].blocks->block = kmalloc(kstrlen("asdfasdf"+1));
     kstrcpy(ramfs_inodes[i_no].blocks->block,"asdfasdf");
-    ramfs_inodes[i_no].file_size = kstrlen(ramfs_inodes[i_no].blocks->block)+1;
+    ramfs_inodes[i_no].file_size = kstrlen(ramfs_inodes[i_no].blocks->block);
+    ramfs_inodes[i_no].blocks->size = kstrlen(ramfs_inodes[i_no].blocks->block);
     ramfs_inodes[i_no].blocks->next = NULL;
     ramfs_inodes[i_no].parent =  parent->i_ino;
 

@@ -5,7 +5,6 @@
 #include <fs/ramfs.h>
 #include <fs/vfs.h>
 #define RAMFS_MAX_DIRECTORY 1024
-#define RAMFS_BLOCK_SIZE 4096
 int ramfs_init(void);
 
 struct ramFS
@@ -17,6 +16,7 @@ struct ramFS
 struct ramfs_block {
     uint64_t *block;
     struct ramfs_block *next;
+    uint64_t size;
 };
 
 struct ramfs_inode {

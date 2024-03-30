@@ -223,6 +223,8 @@ void start_dshell()
     struct inode *pwd = dptr->root_inode;
     struct inode *oldpwd = pwd;
     struct inode *itmp;
+            struct file *write_file=NULL;
+    char test_str[] = "abcdefghijklmnopqrstuvwxyz";   
     push_dir_stack("/");
     print_prompt();
     //kprintf("root %x\n",pwd->i_ino);
@@ -346,7 +348,7 @@ for(;;) {
                 kprintf("Kill failed\n");
         }
         else if (buffer[0] == 'w' && buffer[1] == 'r' && buffer[2] == 't' && buffer[3] == ' ' && buffer[4] != '\n') {
-            struct file *rfile;
+
             uint32_t bytes;
             cptr = buffer + 4;
             char cbuffer[4096] = {'a'};
@@ -359,10 +361,12 @@ for(;;) {
             itmp = read_path(buffer + 4, dptr,I_FILE);
             if(itmp != NULL) {
                 //vfs_cat_inode_file(itmp);
-                rfile = vfs_open_file(itmp,O_WRONLY);
-                bytes = vfs_write_file(rfile,"test 123123asdfasdfasdf",kstrlen("test 123123asdfasdfasdf"));
-                bytes = vfs_write_file(rfile,cbuffer,4095);
-                vfs_close_file(rfile);
+                if (! write_file)
+                    write_file = vfs_open_file(itmp,O_WRONLY);
+                for(int i=0; i<500; i++)
+                bytes = vfs_write_file(write_file,test_str,kstrlen(test_str));
+                //bytes = vfs_write_file(rfile,cbuffer,4095);
+                //vfs_close_file(write_file);
             }else
             {
                 kprintf("cat failed\n");
