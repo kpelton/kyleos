@@ -315,6 +315,8 @@ rtc_handler:
 [global switch_to]
 switch_to:
     mov rsp,rdi
+    mov ax,0
+    mov fs,ax
     mov rax,rsi
     sti
     jmp rax

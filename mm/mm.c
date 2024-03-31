@@ -21,16 +21,28 @@ static uint64_t total_used = 0;
 
 void *kmalloc(unsigned int p_size)
 {
+    acquire_spinlock(&kmem_spinlock);
+
     uint64_t *ret;
     struct mm_block *lptr = head;
     unsigned int size = p_size;
+    uint32_t running_size = 0;
+    struct mm_block *running_block = NULL;
     if (size < MM_MIN_SIZE)
         size = MM_MIN_SIZE;
-    acquire_spinlock(&kmem_spinlock);
 
     while (lptr != 0)
     {
         //kprintf("MM  Trying to use 0x%x %x %x\n", lptr->addr, lptr->size,lptr->free);
+
+        if (running_size >= size) {
+            running_block->next = lptr;
+            running_block->free = USED;
+            running_block->size = running_size;
+            //kprintf("Running block %x",running_block->addr);
+            release_spinlock(&kmem_spinlock);
+            return running_block->addr;
+        }
 
         if (size == lptr->size && lptr->free == FREE)
         {
@@ -50,6 +62,15 @@ void *kmalloc(unsigned int p_size)
             //kprintf("MM reuse Alloc 0x%x %x\n", lptr->addr, size);
 
             return lptr->addr;
+        }
+        if (lptr->free == FREE)
+        {
+            if(running_size == 0)
+                running_block = lptr;
+            running_size += lptr->size;
+        }else{
+            running_block = NULL;
+            running_size = 0;
         }
         lptr = lptr->next;
     }

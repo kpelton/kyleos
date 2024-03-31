@@ -152,11 +152,6 @@ static struct file *vfs_get_open_file(struct inode *i_node)
 struct file *vfs_open_file(struct inode *i_node, uint32_t flags)
 {
     struct file *retfile = NULL;
-    if (flags > MAX_FILE_FLAGS  )
-    {
-        kprintf("fail");
-        goto done;
-    }
     if (i_node)
     {
         retfile = vfs_get_open_file(i_node);
@@ -213,7 +208,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
         while (ptr)
         {
              
-             //kprintf("%s %s\n",ptr->current->i_name,buffer);
+             kprintf("%s %s\n",ptr->current->i_name,buffer);
 
             if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
             {
@@ -223,7 +218,10 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
                     kprintf("p1\n");
 
                     dptr = mnt->dev->ops->read_root_dir(mnt->dev);
-                    kprintf("mount point");
+                    dptr = vfs_read_inode_dir(dptr,mnt);
+                    ptr = dptr->head;
+                    found = true;
+                    break;
                 }
                 else{
                     kprintf("p2\n");
@@ -247,7 +245,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
     ptr = dptr->head;
     while (ptr)
     {
-        // kprintf("%s\n",ptr->current->i_name);
+         kprintf("%s\n",ptr->current->i_name);
         if (kstrcmp(ptr->current->i_name, blah) == 0 && ptr->current->i_type == (int)type)
         {
             iptr = kmalloc(sizeof(struct inode));
@@ -291,9 +289,10 @@ static struct inode * fs_is_mount_point(struct inode *ptr) {
 
     for (i=0; i<current_device; i++){
         if (! vfs_devices[i].rootfs && vfs_compare_inode(ptr,vfs_devices[i].mnt_node)) {
+            kprintf("reading dev %d\n",i);
             struct dnode *dnode = vfs_devices[i].ops->read_root_dir(&vfs_devices[i]);
             struct inode *retval = dnode->root_inode;
-            vfs_free_dnode(dnode);
+            //vfs_free_dnode(dnode);
             return(retval);
         }
     }
@@ -322,11 +321,6 @@ int vfs_write_file(struct file *rfile, void *buf, int count)
 {
     int idev;
     idev = rfile->dev->devicenum;
-    if (rfile->flags != O_WRONLY && rfile->flags != O_RDWR)
-    {
-        goto error;
-    }
-
     int rcount = vfs_devices[idev].ops->write_file(rfile, buf, count);
     rfile->pos += rcount;
     return count;

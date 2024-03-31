@@ -17,8 +17,9 @@ static int open(char *path, uint32_t flags)
 {
 
     int fd = -1;
-    if (flags > MAX_FILE_FLAGS)
-        goto done;
+//    if (flags > MAX_FILE_FLAGS)
+//        goto done;
+    kprintf("open %s\n",path);
     struct dnode *dptr = vfs_read_root_dir("/");
     struct inode *iptr = vfs_walk_path(path, dptr, I_FILE);
     struct ktask *pid = get_current_process();
@@ -26,9 +27,10 @@ static int open(char *path, uint32_t flags)
     if (iptr != NULL)
     {
         fd = user_process_open_fd(pid, iptr, flags);
-        vfs_free_inode(iptr);
+//        vfs_free_inode(iptr);
     }
 done:
+    kprintf("returning %d",fd);
     return fd;
 }
 
