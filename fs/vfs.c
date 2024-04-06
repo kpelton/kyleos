@@ -190,7 +190,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
     bool found = false;
     // if (*blah == '/')
     //     return;
-    kprintf("%s\n",path);
+    //kprintf("%s\n",path);
 
     while (end != -1)
     {
@@ -215,7 +215,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
                 vfs_free_dnode(dptr);
                 struct inode *mnt = fs_is_mount_point(ptr->current);
                 if (mnt){
-                    kprintf("p1\n");
+                    //kprintf("p1\n");
 
                     dptr = mnt->dev->ops->read_root_dir(mnt->dev);
                     dptr = vfs_read_inode_dir(dptr,mnt);
@@ -330,6 +330,37 @@ error:
     return -1;
 }
 
+char * vfs_strip_path(char *ptr) {
+    char *ret_ptr = ptr;
+    char *check_ptr = ptr;
+    while(*check_ptr != '\0') {
+
+        check_ptr++;
+        if(*check_ptr == '/')
+            ret_ptr = check_ptr+1;
+    }
+    kprintf("returning %s\n",ret_ptr);
+    return ret_ptr;
+}
+
+char *vfs_get_dir( char *filename) {
+    char *directory = NULL;
+    //char *last_slash = kstrrchr(filename, '/'); // Find the last occurrence of '/'
+    // Hard coded for /2
+    char *last_slash = filename+2;
+    if (last_slash != NULL) {
+        // Allocate memory for the directory string
+        directory = (char *)kmalloc(last_slash - filename + 2);
+        if (directory == NULL) {
+            return NULL;
+        }
+        // Copy the directory part of the filename
+        kstrncpy(directory, filename, last_slash - filename );
+        directory[last_slash - filename + 1] = '\0'; // Null-terminate the string
+    }
+    
+    return directory;
+}
 
 
 int vfs_create_file(struct inode* parent, char *name, uint32_t flags)

@@ -80,6 +80,25 @@ void *memcpy(void *dest, const void *src, int n) {
     return dest;
 }
 
+char *kstrrchr(char *cstr, int ch) {
+    int last_occurrence = 0;
+    char *str = cstr;
+    // Iterate through the string
+    while (*str != '\0') {
+        if (*str == ch) {
+            last_occurrence++;
+        }
+        str++;
+    }
+
+    // Handle the case when the character is not found
+    if (ch == '\0') {
+        return 0;
+    }
+
+    // Return pointer to the last occurrence of the character or NULL if not found
+    return cstr+last_occurrence;
+}
 
  inline uint64_t * memcpy64(uint64_t *dest, const uint64_t *src,uint64_t bytes) {
     uint64_t i;

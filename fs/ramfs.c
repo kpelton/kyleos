@@ -159,7 +159,7 @@ struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *i_node)
     struct inode_list *list=NULL;
     struct inode_list *prev = NULL;
     acquire_spinlock(&ramfs_lock);
-    kprintf("Reading %d\n",i_node->i_ino);
+    //kprintf("Reading %d\n",i_node->i_ino);
     //kprintf("parent:%s parent:%d\n",parent->i_name,parent->root_inode->i_ino);
 
     dir = kmalloc(sizeof(struct dnode));
@@ -219,7 +219,7 @@ struct dnode *ramfs_read_root_dir(struct vfs_device *dev)
     acquire_spinlock(&ramfs_lock);
 
     struct dnode *dir;
-    kprintf("dev %x\n",dev);
+    //kprintf("dev %x\n",dev);
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     vfs_copy_inode((struct inode *)&ramfs_inodes[0],dir->root_inode);

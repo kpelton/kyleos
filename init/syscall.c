@@ -13,6 +13,91 @@ static int sleep(int msec)
     return 0;
 }
 
+static int creat(char path, uint32_t flags) {
+       int fd =-1;
+        struct inode *iptr= NULL;
+        struct ktask *pid = get_current_process();
+        struct dnode *dptr = vfs_read_root_dir("/");
+        kprintf("creating file\n");
+        char *last_dir = vfs_get_dir(path);
+        char *fname = vfs_strip_path(path);
+       // kprintf("last_dir %s, fname %s\n",last_dir,fname);
+        iptr = vfs_walk_path("/2", dptr, I_DIR);
+
+        vfs_create_file(iptr,vfs_strip_path(path),flags);
+
+        // File is created now open it
+        iptr = vfs_walk_path(path, dptr, I_FILE);
+        fd = user_process_open_fd(pid, iptr, flags);
+        kfree(last_dir);
+        if(iptr)
+            vfs_free_inode(iptr); 
+        return fd; 
+
+}
+#define DELIM '/'
+#define ROOT "/"
+//destructive
+char *basename(char *path) {
+	char *str = path;
+	char *last = str;
+	if (kstrcmp(path, ROOT) == 0) {
+		 return path;
+	}
+
+
+	while (*str != '\0') {
+		if  (*str == DELIM && *(str+1) != '\0') {
+			last=str+1;
+		}
+		// Trailing /
+		if(*str == DELIM && *(str+1) == '\0')
+			*str='\0';
+		str++;
+	}
+
+	return last;
+}
+
+//destructive
+// Does nothandle realtive directories
+char *dirname(char *path) {
+	char *str = path;
+	int place = 0;
+	int last = 0;
+	int found = 0;
+	
+	if (kstrcmp(path, ROOT) == 0) {
+		 return path;
+	}
+
+	while (*str != '\0') {
+		if (*str == DELIM)
+			found = 1;
+
+		if  (*str == DELIM && *(str+1) != '\0') {
+			last=place;
+		}
+		str++;
+		place++;
+	}
+	
+	// Not found case realtive directory
+	if (!found) {
+		path[0]='.';
+		path[1]='\0';
+		return path;
+	}
+	
+	// root directory case
+	if (found && last == 0 ) { 
+		last++;
+	}
+	
+	path[last] ='\0';
+	return path;
+}
+
 static int open(char *path, uint32_t flags)
 {
 
@@ -28,7 +113,30 @@ static int open(char *path, uint32_t flags)
     {
         fd = user_process_open_fd(pid, iptr, flags);
         vfs_free_inode(iptr);
+    }else if (flags & O_WRONLY == O_WRONLY) {
+        int pathlen = kstrlen(path);
+        char *s_basepath = (char *) kmalloc(pathlen+1);
+        char *s_dirname = (char *) kmalloc(pathlen+1);
+        kstrncpy(s_basepath,path,pathlen+1);
+        kstrncpy(s_dirname,path,pathlen+1);
+        
+        kprintf("creating file\n");
+        char *last_dir = dirname(s_dirname);
+        kprintf("test\n");
+        char *fname = basename(s_basepath);
+        kprintf("last_dir %s, fname %s\n",last_dir,fname);
+        struct dnode *dptr = vfs_read_root_dir("/");
+        iptr = vfs_walk_path(last_dir, dptr, I_DIR);
+        vfs_create_file(iptr,vfs_strip_path(path),flags);
+        iptr = vfs_walk_path(path, dptr, I_FILE);
+        fd = user_process_open_fd(pid, iptr, flags);
+        if(iptr)
+            vfs_free_inode(iptr);
+        kfree(s_basepath);
+        kfree(s_dirname);
     }
+
+
 done:
     //kprintf("returning %d",fd);
     return fd;
