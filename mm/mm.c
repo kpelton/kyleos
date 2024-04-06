@@ -35,7 +35,7 @@ void *kmalloc(unsigned int p_size)
     {
         //kprintf("MM  Trying to use 0x%x %x %x\n", lptr->addr, lptr->size,lptr->free);
 
-        if (running_size >= size) {
+       if (running_size >= size) {
             running_block->next = lptr;
             running_block->free = USED;
             running_block->size = running_size;
@@ -43,6 +43,7 @@ void *kmalloc(unsigned int p_size)
             release_spinlock(&kmem_spinlock);
             return running_block->addr;
         }
+        
 
         if (size == lptr->size && lptr->free == FREE)
         {

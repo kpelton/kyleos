@@ -70,7 +70,7 @@ void *user_process_sbrk(struct ktask *t, uint64_t increment)
 {
     void *ret = NULL;
     uint64_t inc;
-    //kprintf("Sbrk called with %x %x\n", increment,t->user_heap_loc);
+    kprintf("Sbrk called with %x %x\n", increment,t->user_heap_loc);
 
     if (increment == 0){
         ret = t->user_heap_loc;

@@ -208,7 +208,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
         while (ptr)
         {
              
-             kprintf("%s %s\n",ptr->current->i_name,buffer);
+             //kprintf("%s %s\n",ptr->current->i_name,buffer);
 
             if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
             {
@@ -245,13 +245,13 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
     ptr = dptr->head;
     while (ptr)
     {
-         kprintf("%s\n",ptr->current->i_name);
+         //kprintf("%s\n",ptr->current->i_name);
         if (kstrcmp(ptr->current->i_name, blah) == 0 && ptr->current->i_type == (int)type)
         {
             iptr = kmalloc(sizeof(struct inode));
             struct inode *mnt = fs_is_mount_point(ptr->current);
             if(mnt) {
-                kprintf("Mount point\n");
+                //kprintf("Mount point\n");
                 vfs_copy_inode(mnt,iptr);
             }else{
                 vfs_copy_inode(ptr->current,iptr);
@@ -289,7 +289,7 @@ static struct inode * fs_is_mount_point(struct inode *ptr) {
 
     for (i=0; i<current_device; i++){
         if (! vfs_devices[i].rootfs && vfs_compare_inode(ptr,vfs_devices[i].mnt_node)) {
-            kprintf("reading dev %d\n",i);
+            //("reading dev %d\n",i);
             struct dnode *dnode = vfs_devices[i].ops->read_root_dir(&vfs_devices[i]);
             struct inode *retval = dnode->root_inode;
             //vfs_free_dnode(dnode);

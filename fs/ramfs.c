@@ -26,6 +26,7 @@ static void create_root_dir(struct vfs_device *dev) {
     ramfs_inodes[0].i_ino = 0;
     ramfs_inodes[0].children[0]=0;
     ramfs_inodes[0].last_child = 0;
+    ramfs_inodes[0].file_size = 0;
     ramfs_inodes[0].parent = -1;
     ramfs_inodes[0].blocks = NULL;
     i_no++;
@@ -64,8 +65,10 @@ int ramfs_read_file (struct file * rfile,void *buf,uint64_t count) {
     int total_count = count;
     int copy = 0;
     uint64_t offset=0;
-    kprintf("rfile pos %d\n",rfile->pos);
+    //kprintf("rfile pos %d\n",rfile->pos);
+    //memzero8(buf,count);
     memcpy(((char *)buf),((uint8_t *)r_block->block)+rfile->pos,count);
+
         release_spinlock(&ramfs_lock);
 
     return count;
@@ -84,16 +87,20 @@ int ramfs_write_file (struct file * rfile,void *buf,uint64_t count) {
         ramfs_inodes[rfile->i_node.i_ino].file_size=count;
     }
     //we are appending to the block allocate new block
+
     else if (rfile->pos + count > file_size) {
-        //kprintf("Allocating %d \n",rfile->pos + count);
+         //kprintf("Allocating %d \n",rfile->pos + count);
         uint64_t block = kmalloc(rfile->pos + count);
+
         memcpy(block,r_block->block,file_size);
         kfree(r_block->block);
         r_block->block = block;
         ramfs_inodes[rfile->i_node.i_ino].file_size= file_size + ( (rfile->pos + count) - file_size);
-    } 
 
+     } 
+ 
     memcpy(((uint8_t *)r_block->block)+rfile->pos,buf,count);
+
     release_spinlock(&ramfs_lock);
 
     return count ;
@@ -111,11 +118,7 @@ int ramfs_create_file(struct inode *parent, char *name)
     ramfs_inodes[i_no].i_ino = i_no;
     ramfs_inodes[i_no].last_child = 0;
     ramfs_inodes[i_no].blocks = kmalloc(sizeof(struct ramfs_block));
-    ramfs_inodes[i_no].blocks->block = kmalloc(kstrlen("asdfasdf"+1));
-    kstrcpy(ramfs_inodes[i_no].blocks->block,"asdfasdf");
     ramfs_inodes[i_no].file_size = 0;
-    ramfs_inodes[i_no].blocks->size = 0;
-    ramfs_inodes[i_no].blocks->next = NULL;
     ramfs_inodes[i_no].parent =  parent->i_ino;
 
     ramfs_inodes[parent->i_ino].children[ramfs_inodes[parent->i_ino].last_child]=i_no;
@@ -140,11 +143,12 @@ int ramfs_create_dir(struct inode *parent, char *name)
     ramfs_inodes[i_no].i_type=I_DIR;
     ramfs_inodes[i_no].i_ino = i_no;
     ramfs_inodes[i_no].last_child = 0;
+    ramfs_inodes[i_no].file_size = 0;  
     ramfs_inodes[i_no].parent =  parent->i_ino;
     ramfs_inodes[parent->i_ino].children[ramfs_inodes[parent->i_ino].last_child]=i_no;
     ramfs_inodes[parent->i_ino].last_child++;
     i_no++;
-        release_spinlock(&ramfs_lock);
+    release_spinlock(&ramfs_lock);
 
     return 0;
 }
@@ -156,7 +160,7 @@ struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *i_node)
     struct inode_list *prev = NULL;
     acquire_spinlock(&ramfs_lock);
     kprintf("Reading %d\n",i_node->i_ino);
-    kprintf("parent:%s parent:%d\n",parent->i_name,parent->root_inode->i_ino);
+    //kprintf("parent:%s parent:%d\n",parent->i_name,parent->root_inode->i_ino);
 
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
@@ -167,6 +171,7 @@ struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *i_node)
 
     dir->head = kmalloc(sizeof(struct inode_list));
     dir->head->current = kmalloc(sizeof(struct inode));
+    dir->head->current->file_size = 0;
     kstrcpy(dir->head->current->i_name,"..");
     if (ramfs_inodes[i_node->i_ino].parent != -1){
         dir->head->current->i_ino = ramfs_inodes[i_node->i_ino].parent;
@@ -186,6 +191,7 @@ struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *i_node)
     dir->head->next->current->i_ino = i_node->i_ino;
     dir->head->next->current->i_type = I_DIR;
     dir->head->next->current->dev = i_node->dev;
+    dir->head->next->current->file_size = 0;
     dir->head->next->next=NULL;
     if( ramfs_inodes[i_node->i_ino].last_child)
         prev = dir->head->next;
@@ -210,10 +216,10 @@ struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *i_node)
 
 struct dnode *ramfs_read_root_dir(struct vfs_device *dev)
 {
+    acquire_spinlock(&ramfs_lock);
 
     struct dnode *dir;
     kprintf("dev %x\n",dev);
-    acquire_spinlock(&ramfs_lock);
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     vfs_copy_inode((struct inode *)&ramfs_inodes[0],dir->root_inode);
