@@ -38,7 +38,8 @@ static int creat(char path, uint32_t flags) {
 #define DELIM '/'
 #define ROOT "/"
 //destructive
-char *basename(char *path) {
+// Also does not handle duplicate ///
+static char *basename(char *path) {
 	char *str = path;
 	char *last = str;
 	if (kstrcmp(path, ROOT) == 0) {
@@ -60,8 +61,9 @@ char *basename(char *path) {
 }
 
 //destructive
-// Does nothandle realtive directories
-char *dirname(char *path) {
+// Does not handle realtive directories
+// Also does not handle duplicate ///
+static char *dirname(char *path) {
 	char *str = path;
 	int place = 0;
 	int last = 0;
@@ -113,25 +115,26 @@ static int open(char *path, uint32_t flags)
     {
         fd = user_process_open_fd(pid, iptr, flags);
         vfs_free_inode(iptr);
+        //vfs_free_dnode(dptr);
     }else if (flags & O_WRONLY == O_WRONLY) {
         int pathlen = kstrlen(path);
         char *s_basepath = (char *) kmalloc(pathlen+1);
         char *s_dirname = (char *) kmalloc(pathlen+1);
         kstrncpy(s_basepath,path,pathlen+1);
         kstrncpy(s_dirname,path,pathlen+1);
-        
-        kprintf("creating file\n");
         char *last_dir = dirname(s_dirname);
-        kprintf("test\n");
         char *fname = basename(s_basepath);
-        kprintf("last_dir %s, fname %s\n",last_dir,fname);
         struct dnode *dptr = vfs_read_root_dir("/");
         iptr = vfs_walk_path(last_dir, dptr, I_DIR);
-        vfs_create_file(iptr,vfs_strip_path(path),flags);
-        iptr = vfs_walk_path(path, dptr, I_FILE);
-        fd = user_process_open_fd(pid, iptr, flags);
-        if(iptr)
+        //TODO: Add error checking
+        if (iptr && vfs_create_file(iptr,vfs_strip_path(path),flags) == 0 ) {
             vfs_free_inode(iptr);
+            iptr = vfs_walk_path(path, dptr, I_FILE);
+            if(iptr){
+                fd = user_process_open_fd(pid, iptr, flags);
+                vfs_free_inode(iptr);
+            }
+        }
         kfree(s_basepath);
         kfree(s_dirname);
     }
@@ -154,6 +157,7 @@ static int read(int fd, void *buf, int count)
 
     struct ktask *pid = get_current_process();
     countr = user_process_read_fd(pid, fd, buf, count);
+    kprintf("READ %d\n",countr);
     return countr;
 }
 

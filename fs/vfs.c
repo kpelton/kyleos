@@ -310,7 +310,7 @@ int vfs_read_file(struct file *rfile, void *buf, int count)
 
     int rcount = vfs_devices[idev].ops->read_file(rfile, buf, count);
     rfile->pos += rcount;
-    return count;
+    return rcount;
 
 error:
     kprintf("Read error %d\n", rfile->flags);

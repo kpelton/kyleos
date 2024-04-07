@@ -61,17 +61,25 @@ int ramfs_read_file (struct file * rfile,void *buf,uint64_t count) {
 
         acquire_spinlock(&ramfs_lock);
     struct ramfs_block *r_block = ramfs_inodes[rfile->i_node.i_ino].blocks;
-    int check_count = 0;
+    uint64_t file_size = ramfs_inodes[rfile->i_node.i_ino].file_size;
     int total_count = count;
     int copy = 0;
+    int ret_count = count;
     uint64_t offset=0;
-    //kprintf("rfile pos %d\n",rfile->pos);
-    //memzero8(buf,count);
-    memcpy(((char *)buf),((uint8_t *)r_block->block)+rfile->pos,count);
+
+    // Approaching the end of the file truncate read bytes
+    kprintf("%d %d\n",rfile->pos + count,file_size);
+
+    
+    if (rfile->pos + count > file_size) {
+        ret_count = file_size - rfile->pos;
+    }
+
+    memcpy(((char *)buf),((uint8_t *)r_block->block)+rfile->pos,ret_count);
 
         release_spinlock(&ramfs_lock);
 
-    return count;
+    return ret_count;
 }
 
 int ramfs_write_file (struct file * rfile,void *buf,uint64_t count) {
