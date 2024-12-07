@@ -9,8 +9,8 @@ struct dnode *ramfs_read_root_dir(struct vfs_device *dev);
 struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *inode);
 int ramfs_create_dir(struct inode *parent, char *name);
 int ramfs_create_file(struct inode *parent, char *name);
-int ramfs_read_file (struct file * rfile,void *buf,uint64_t count);
-int ramfs_write_file (struct file * rfile,void *buf,uint64_t count);
+int ramfs_read_file (struct file * rfile,void *buf,uint32_t count);
+int ramfs_write_file (struct file * rfile,void *buf,uint32_t count);
 
 static uint64_t i_no = 0;
 static int device_num;
@@ -57,15 +57,12 @@ int ramfs_init(void) {
 
     return 0;
 }
-int ramfs_read_file (struct file * rfile,void *buf,uint64_t count) { 
+int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) { 
 
         acquire_spinlock(&ramfs_lock);
     struct ramfs_block *r_block = ramfs_inodes[rfile->i_node.i_ino].blocks;
     uint64_t file_size = ramfs_inodes[rfile->i_node.i_ino].file_size;
-    int total_count = count;
-    int copy = 0;
     int ret_count = count;
-    uint64_t offset=0;
 
     // Approaching the end of the file truncate read bytes
     kprintf("%d %d\n",rfile->pos + count,file_size);
@@ -82,27 +79,27 @@ int ramfs_read_file (struct file * rfile,void *buf,uint64_t count) {
     return ret_count;
 }
 
-int ramfs_write_file (struct file * rfile,void *buf,uint64_t count) {
+int ramfs_write_file (struct file * rfile,void *buf,uint32_t count) {
 
-        acquire_spinlock(&ramfs_lock);
+    acquire_spinlock(&ramfs_lock);
     struct ramfs_block *r_block = ramfs_inodes[rfile->i_node.i_ino].blocks;
     uint64_t file_size = ramfs_inodes[rfile->i_node.i_ino].file_size;
 
     //kprintf("Writing %d at %d\n",count,rfile->pos);
     if (file_size == 0) {
-        uint64_t block = kmalloc(count);
-        r_block->block = block;
+        uint64_t block =(uint64_t) kmalloc(count);
+        r_block->block = (uint64_t *) block;
         ramfs_inodes[rfile->i_node.i_ino].file_size=count;
     }
     //we are appending to the block allocate new block
 
     else if (rfile->pos + count > file_size) {
          //kprintf("Allocating %d \n",rfile->pos + count);
-        uint64_t block = kmalloc(rfile->pos + count);
+        uint64_t block =(uint64_t) kmalloc(rfile->pos + count);
 
-        memcpy(block,r_block->block,file_size);
+        memcpy((void *)block,r_block->block,file_size);
         kfree(r_block->block);
-        r_block->block = block;
+        r_block->block = (uint64_t *)  block;
         ramfs_inodes[rfile->i_node.i_ino].file_size= file_size + ( (rfile->pos + count) - file_size);
 
      } 
@@ -168,7 +165,7 @@ struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *i_node)
     struct inode_list *prev = NULL;
     acquire_spinlock(&ramfs_lock);
     //kprintf("Reading %d\n",i_node->i_ino);
-    //kprintf("parent:%s parent:%d\n",parent->i_name,parent->root_inode->i_ino);
+    kprintf("parent:%s parent:%d\n",parent->i_name,parent->root_inode->i_ino);
 
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
@@ -185,8 +182,7 @@ struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *i_node)
         dir->head->current->i_ino = ramfs_inodes[i_node->i_ino].parent;
         dir->head->current->i_type = I_DIR;
         dir->head->current->dev = ramfs_inodes[i_node->i_ino].dev;
-    }
-    else{
+    } else {
         //Cross mount point
         dir->head->current->i_ino = ramfs_inodes[i_node->i_ino].dev->mnt_node_parent->i_ino;
         dir->head->current->i_type = ramfs_inodes[i_node->i_ino].dev->mnt_node_parent->i_type;
@@ -227,7 +223,7 @@ struct dnode *ramfs_read_root_dir(struct vfs_device *dev)
     acquire_spinlock(&ramfs_lock);
 
     struct dnode *dir;
-    //kprintf("dev %x\n",dev);
+    kprintf("dev %x\n",dev);
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     vfs_copy_inode((struct inode *)&ramfs_inodes[0],dir->root_inode);

@@ -133,6 +133,8 @@ int user_process_fork()
     clear_fd_table(t);
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
     t->mm = vmm_map_new();
+    //TODO inc refcount on cwd;
+    t->cwd = curr->cwd;
 
     vmm_copy_section(curr->mm,t->mm,VMM_STACK);
     vmm_copy_section(curr->mm,t->mm,VMM_TEXT);
@@ -197,15 +199,16 @@ int user_process_fork()
 }
 
 
-int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm,char *argv[])
+int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm,char *argv[],struct inode *cwd)
 {
     asm("cli");
     int c_pid = t->pid;
     kprintf("%d\n",c_pid);
     // save old pid and parent pid since kill will clear them
     sched_process_kill(t->pid,false);
-    user_process_add_exec(startaddr,name,mm,true,argv,t);
+    user_process_add_exec(startaddr,name,mm,true,argv,t,cwd);
     t->pid = c_pid;
+    t->cwd = cwd;
     int i=0;
     //Free kernel allocated argv passed in from userspace
     for(i=0; i<MAX_ARGS && argv[i]; i++);
@@ -221,7 +224,7 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     return 0;
 }
 
-int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[],struct ktask *ta)
+int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[],struct ktask *ta,struct inode *cwd)
 {
 
     int pid_ret = -1;
@@ -239,7 +242,7 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     }
 
         clear_fd_table(t);
-
+    t->cwd = cwd;
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
     vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,READ_WRITE | SUPERVISOR | PAGE_PRESENT,true,true);
     vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_HEAP_SIZE,READ_WRITE | SUPERVISOR,true,true);

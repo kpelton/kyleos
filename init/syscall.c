@@ -13,16 +13,16 @@ static int sleep(int msec)
     return 0;
 }
 
-static int creat(char path, uint32_t flags) {
+static int creat(char *path, uint32_t flags) {
        int fd =-1;
         struct inode *iptr= NULL;
         struct ktask *pid = get_current_process();
         struct dnode *dptr = vfs_read_root_dir("/");
         kprintf("creating file\n");
         char *last_dir = vfs_get_dir(path);
-        char *fname = vfs_strip_path(path);
+        vfs_strip_path(path);
        // kprintf("last_dir %s, fname %s\n",last_dir,fname);
-        iptr = vfs_walk_path("/2", dptr, I_DIR);
+        iptr = vfs_walk_path(last_dir, dptr, I_DIR);
 
         vfs_create_file(iptr,vfs_strip_path(path),flags);
 
@@ -116,14 +116,13 @@ static int open(char *path, uint32_t flags)
         fd = user_process_open_fd(pid, iptr, flags);
         vfs_free_inode(iptr);
         //vfs_free_dnode(dptr);
-    }else if (flags & O_WRONLY == O_WRONLY) {
+    }else if ((flags & O_WRONLY) == O_WRONLY) {
         int pathlen = kstrlen(path);
         char *s_basepath = (char *) kmalloc(pathlen+1);
         char *s_dirname = (char *) kmalloc(pathlen+1);
         kstrncpy(s_basepath,path,pathlen+1);
         kstrncpy(s_dirname,path,pathlen+1);
         char *last_dir = dirname(s_dirname);
-        char *fname = basename(s_basepath);
         struct dnode *dptr = vfs_read_root_dir("/");
         iptr = vfs_walk_path(last_dir, dptr, I_DIR);
         //TODO: Add error checking
@@ -140,8 +139,6 @@ static int open(char *path, uint32_t flags)
     }
 
 
-done:
-    //kprintf("returning %d",fd);
     return fd;
 }
 
@@ -307,6 +304,7 @@ void *syscall_tbl[] = {
     (void *)&debug_read_input,       //10
     (void *)&exec_args,       //11
     (void *)&write,       // 12
+    (void *)&creat,       // 13
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

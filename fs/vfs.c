@@ -160,7 +160,6 @@ struct file *vfs_open_file(struct inode *i_node, uint32_t flags)
         //Release lock aquired in get open_file
         release_spinlock(&ftable.lock);
     }
-done:
     return retfile;
 }
 
@@ -325,9 +324,6 @@ int vfs_write_file(struct file *rfile, void *buf, int count)
     rfile->pos += rcount;
     return count;
 
-error:
-    kprintf("Read error %d\n", rfile->flags);
-    return -1;
 }
 
 char * vfs_strip_path(char *ptr) {

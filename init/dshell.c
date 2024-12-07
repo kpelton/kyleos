@@ -224,8 +224,7 @@ void start_dshell()
     struct inode *oldpwd = pwd;
     struct inode *itmp;
             struct file *write_file=NULL;
-    char test_str[]="ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ";
-   push_dir_stack("/");
+       push_dir_stack("/");
     print_prompt();
     //kprintf("root %x\n",pwd->i_ino);
     //write_sec(0,buffer2);
@@ -349,9 +348,7 @@ for(;;) {
         }
         else if (buffer[0] == 'w' && buffer[1] == 'r' && buffer[2] == 't' && buffer[3] == ' ' && buffer[4] != '\n') {
 
-            uint32_t bytes;
             cptr = buffer + 4;
-            char cbuffer[4096] = {'a'};
             char *arg=0;
             int wrlen=0;
             cptr = buffer + 4;
@@ -373,9 +370,11 @@ for(;;) {
             itmp = read_path(buffer + 4, dptr,I_FILE);
             if(itmp != NULL) {
                 //vfs_cat_inode_file(itmp);
-                if (! write_file)
+                if (! write_file) {
+
                     write_file = vfs_open_file(itmp,O_WRONLY);
-                    bytes = vfs_write_file(write_file,arg,wrlen);
+                    vfs_write_file(write_file,arg,wrlen);
+		}
                 //bytes = vfs_write_file(rfile,cbuffer,4095);
                 vfs_close_file(write_file);
                 write_file = NULL;

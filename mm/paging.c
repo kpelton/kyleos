@@ -397,7 +397,7 @@ void pagefault(uint64_t *addr) {
     struct ktask *proc = get_current_process();
     asm volatile("movq %%cr2 ,%0" : "=r"(cr2));
 
-    //kprintf("pagefault on 0x%x from 0x%x !\n",cr2,addr);
+    kprintf("pagefault on 0x%x from 0x%x !\n",cr2,addr);
     
     cr2 &=0xfffffffffffff000;
         if (cr2 == 0)

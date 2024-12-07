@@ -24,8 +24,8 @@ struct ktask *sched_get_process(int pid);
 bool sched_process_kill(int pid,bool cleanup);
 int user_process_fork();
 void sched_save_context();
-int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm, char *argv[]);
-int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[],struct ktask *t);
+int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm, char *argv[],struct inode *cwd);
+int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[],struct ktask *t, struct inode *cwd);
 void sched_init();
 #define FXSAVE_SIZE 512
 enum sched_states {
@@ -68,6 +68,8 @@ struct ktask{
     struct basic_timer timer;
     struct file *open_fds[MAX_TASK_OPEN_FILES];
     uint64_t fxsave_region[FXSAVE_SIZE/sizeof(uint64_t)] __attribute__((aligned(16)));
+    struct inode *cwd;
+
 };
 
 struct reg_state 
