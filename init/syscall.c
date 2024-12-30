@@ -309,6 +309,11 @@ static int stat(const char *file, struct stat *st)
     return 0;
 }
 
+static int fstat(int fd, struct stat *st)
+{
+    return 0;
+}
+
 void *syscall_tbl[] = {
     (void *)&sleep,            // 0
     (void *)&debugprint,       // 1
@@ -324,7 +329,8 @@ void *syscall_tbl[] = {
     (void *)&exec_args,        // 11
     (void *)&write,            // 12
     (void *)&creat,            // 13
-    (void *)&stat,             // 13
+    (void *)&stat,             // 14
+    (void *)&fstat,            // 15
 };
 
 const int NR_syscall = sizeof(syscall_tbl);
