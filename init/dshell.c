@@ -159,7 +159,7 @@ void print_time()
 }
 
 
-struct inode * read_path(char *path, struct dnode *pwd,enum inode_type type)
+struct inode * read_path(char *path, struct dnode *pwd,int type)
 {
     int end = 0;
     char *blah = path;

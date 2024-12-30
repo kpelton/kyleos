@@ -178,7 +178,7 @@ void vfs_close_file(struct file *ofile)
 }
 //walk path and find inode given absolute path
 //TODO redo this monster
-struct inode *vfs_walk_path(char *path, struct dnode *pwd, enum inode_type type)
+struct inode *vfs_walk_path(char *path, struct dnode *pwd, int type)
 {
     int end = 0;
     char *blah = path;
