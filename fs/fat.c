@@ -16,7 +16,8 @@ struct dnode *read_inode_dir(struct dnode *parent,struct inode *i_node);
 void cat_inode_file(struct inode *i_node);
 int fat_create_dir(struct inode *parent, char *name);
 int read_inode_file(struct file *rfile, void *buf, uint32_t count);
-
+int fat_stat_file (struct file * rfile,struct stat *st);
+static int device_num;
 #define FAT_UNUSED_DIR 0xe5
 #define FAT_END_OF_CHAIN 0x0FFFFFF8
 #define FAT_LONG_FILENAME 0xf
@@ -97,15 +98,26 @@ int fat_init(struct mbr_info mbr_entry)
     vfs_ops->cat_inode_file = &cat_inode_file;
     vfs_ops->read_file = &read_inode_file;
     vfs_ops->create_dir = &fat_create_dir;
+    vfs_ops->stat_file = &fat_stat_file;
     vfs_dev.ops = vfs_ops;
     vfs_dev.finfo.fat = fs;
     vfs_dev.rootfs = true;
     kstrcpy(vfs_dev.mountpoint,"/");
     kstrcpy(vfs_dev.mountpoint_root,"/");
     kstrcpy(vfs_dev.mountpoint_parent,"");
-    vfs_register_device(vfs_dev);
+    device_num = vfs_register_device(vfs_dev);
     return 0;
 }
+
+int fat_stat_file (struct file * rfile,struct stat *st) {
+	//TODO: this is incorrect because the inodes are not cached
+	st->st_ino = rfile->i_node.i_ino;
+	st->st_dev = device_num;
+	st->st_mode =  rfile->i_node.i_type;
+	st->st_size = rfile->i_node.file_size;
+	return 0;
+}
+
 static void write_cluster(uint32_t sector_start, uint32_t sectors_per_cluster, uint8_t *data)
 {
     uint32_t i;

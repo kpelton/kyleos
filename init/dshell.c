@@ -56,7 +56,8 @@ static void print_dir(struct dnode *parent,struct inode *pwd)
 {
     struct inode_list *ptr;
     struct dnode *dptr;
-
+    struct file *cfile = NULL;
+    struct stat st;
     dptr = vfs_read_inode_dir(parent,pwd);
     if (dptr == 0)
         goto error;
@@ -64,15 +65,19 @@ static void print_dir(struct dnode *parent,struct inode *pwd)
     while (ptr != 0)
     {
         kprintf(ptr->current->i_name);
-        if (ptr->current->i_type == I_DIR)
+        cfile = vfs_open_file(ptr->current,O_RDONLY);
+
+	vfs_stat_file(cfile,&st);
+        if (st.st_mode == I_DIR)
         {
             kprintf(" DIR");
         }
-        else
+        else if (st.st_mode == I_FILE)
         {
             kprintf(" FILE ");
         }
-        kprintf("  size=%d\n", ptr->current->file_size);
+        vfs_close_file(cfile);
+        kprintf("  size=%d\n", st.st_size);
         ptr = ptr->next;
     }
     vfs_free_dnode(dptr);
@@ -125,7 +130,7 @@ struct inode *shell_cd(char cmd[], struct dnode *dptr)
         nptr++;
     *nptr = '\0';
     kprintf("Cding to %s\n",cmdptr);
-    struct inode * data = vfs_walk_path(cmdptr,dptr,I_DIR);
+    struct inode * data = vfs_walk_path(cmdptr,dptr);
     if (data){
         if (data->i_ino == dptr->root_inode->i_ino && data->dev->devicenum == dptr->root_inode->dev->devicenum)
             return 0;

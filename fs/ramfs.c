@@ -11,6 +11,7 @@ int ramfs_create_dir(struct inode *parent, char *name);
 int ramfs_create_file(struct inode *parent, char *name);
 int ramfs_read_file (struct file * rfile,void *buf,uint32_t count);
 int ramfs_write_file (struct file * rfile,void *buf,uint32_t count);
+int ramfs_stat_file (struct file * rfile,struct stat *st);
 
 static uint64_t i_no = 0;
 static int device_num;
@@ -45,6 +46,7 @@ int ramfs_init(void) {
     vfs_ops->create_file = ramfs_create_file;
     vfs_ops->read_file = ramfs_read_file;
     vfs_ops->write_file = ramfs_write_file;
+    vfs_ops->stat_file = ramfs_stat_file;
     ////Sample code to mount device
     vfs_dev.fstype = RAM_FS;
     vfs_dev.ops = vfs_ops;
@@ -59,7 +61,7 @@ int ramfs_init(void) {
 }
 int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) { 
 
-        acquire_spinlock(&ramfs_lock);
+    acquire_spinlock(&ramfs_lock);
     struct ramfs_block *r_block = ramfs_inodes[rfile->i_node.i_ino].blocks;
     uint64_t file_size = ramfs_inodes[rfile->i_node.i_ino].file_size;
     int ret_count = count;
@@ -78,6 +80,22 @@ int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) {
 
     return ret_count;
 }
+
+int ramfs_stat_file (struct file * rfile,struct stat *st) { 
+
+    acquire_spinlock(&ramfs_lock);
+    // Leave everything else default...
+    st->st_dev = device_num;
+    st->st_ino = rfile->i_node.i_ino;
+    st->st_mode = ramfs_inodes[rfile->i_node.i_ino].i_type;
+    st->st_size = ramfs_inodes[rfile->i_node.i_ino].file_size;
+
+
+   release_spinlock(&ramfs_lock);
+
+    return 0;
+}
+
 
 int ramfs_write_file (struct file * rfile,void *buf,uint32_t count) {
 

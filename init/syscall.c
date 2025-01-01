@@ -23,12 +23,12 @@ static int creat(char *path, uint32_t flags)
     char *last_dir = vfs_get_dir(path);
     vfs_strip_path(path);
     // kprintf("last_dir %s, fname %s\n",last_dir,fname);
-    iptr = vfs_walk_path(last_dir, dptr, I_DIR);
+    iptr = vfs_walk_path(last_dir, dptr);
 
     vfs_create_file(iptr, vfs_strip_path(path), flags);
 
     // File is created now open it
-    iptr = vfs_walk_path(path, dptr, I_FILE);
+    iptr = vfs_walk_path(path, dptr);
     fd = user_process_open_fd(pid, iptr, flags);
     kfree(last_dir);
     if (iptr)
@@ -117,7 +117,7 @@ static int open(char *path, uint32_t flags)
     //        goto done;
     // kprintf("open %s\n",path);
     struct dnode *dptr = vfs_read_root_dir("/");
-    struct inode *iptr = vfs_walk_path(path, dptr, I_FILE);
+    struct inode *iptr = vfs_walk_path(path, dptr);
     struct ktask *pid = get_current_process();
 
     if (iptr != NULL)
@@ -135,12 +135,12 @@ static int open(char *path, uint32_t flags)
         kstrncpy(s_dirname, path, pathlen + 1);
         char *last_dir = dirname(s_dirname);
         struct dnode *dptr = vfs_read_root_dir("/");
-        iptr = vfs_walk_path(last_dir, dptr, I_DIR);
+        iptr = vfs_walk_path(last_dir, dptr);
         // TODO: Add error checking
         if (iptr && vfs_create_file(iptr, vfs_strip_path(path), flags) == 0)
         {
             vfs_free_inode(iptr);
-            iptr = vfs_walk_path(path, dptr, I_FILE);
+            iptr = vfs_walk_path(path, dptr);
             if (iptr)
             {
                 fd = user_process_open_fd(pid, iptr, flags);
@@ -262,7 +262,7 @@ static int exec(char *path)
 {
     int retval = -1;
     struct dnode *dptr = vfs_read_root_dir("/");
-    struct inode *iptr = vfs_walk_path(path, dptr, I_FILE);
+    struct inode *iptr = vfs_walk_path(path, dptr);
     if (iptr != NULL)
     {
         retval = exec_from_inode(iptr, true, NULL);
@@ -276,7 +276,7 @@ static int exec_args(char *path, char *argv[])
     if (!path)
         return -1;
     struct dnode *dptr = vfs_read_root_dir("/");
-    struct inode *iptr = vfs_walk_path(path, dptr, I_FILE);
+    struct inode *iptr = vfs_walk_path(path, dptr);
     char **user_argv = NULL;
     int i;
     int j;
@@ -306,12 +306,30 @@ static int exec_args(char *path, char *argv[])
 
 static int stat(const char *file, struct stat *st)
 {
-    return 0;
+    struct dnode *dptr = vfs_read_root_dir("/");
+    struct inode *iptr = vfs_walk_path(file, dptr);
+    struct stat;
+    if (iptr != NULL) {
+	
+    	struct file *fptr = vfs_open_file(iptr, O_RDONLY);
+	vfs_stat_file(fptr,st);
+	vfs_close_file(fptr);
+	return 0;
+    }
+
+    return -1;
 }
+
 
 static int fstat(int fd, struct stat *st)
 {
-    return 0;
+    struct ktask *pid = get_current_process();
+    struct file *fptr = NULL;
+    if (pid->open_fds[fd] == NULL) {
+	return -1;
+    }
+    fptr = pid->open_fds[fd];
+    return vfs_stat_file(fptr,st);
 }
 
 void *syscall_tbl[] = {

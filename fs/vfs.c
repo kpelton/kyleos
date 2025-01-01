@@ -43,7 +43,7 @@ int vfs_register_device(struct vfs_device newdev)
     kstrcpy(dev->mountpoint,newdev.mountpoint);
     if(dev->rootfs == false) {
         struct dnode *root = vfs_devices[0].ops->read_root_dir(&vfs_devices[0]);
-        dev->mnt_node = vfs_walk_path(dev->mountpoint,root,I_DIR);
+        dev->mnt_node = vfs_walk_path(dev->mountpoint,root);
         if(!dev->mnt_node)
             panic("failed to mount non rootfs");
         
@@ -51,7 +51,7 @@ int vfs_register_device(struct vfs_device newdev)
         if (kstrcmp(dev->mountpoint_parent,"/") == 0)
             dev->mnt_node_parent = root->root_inode;
         else {
-        dev->mnt_node_parent = vfs_walk_path(dev->mountpoint_parent,root,I_DIR);
+        dev->mnt_node_parent = vfs_walk_path(dev->mountpoint_parent,root);
             if(!dev->mnt_node)
                 panic("failed to mount non rootfs");
         }
@@ -178,7 +178,7 @@ void vfs_close_file(struct file *ofile)
 }
 //walk path and find inode given absolute path
 //TODO redo this monster
-struct inode *vfs_walk_path(char *path, struct dnode *pwd, int type)
+struct inode *vfs_walk_path(char *path, struct dnode *pwd)
 {
     int end = 0;
     char *blah = path;
@@ -245,7 +245,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd, int type)
     while (ptr)
     {
          //kprintf("%s\n",ptr->current->i_name);
-        if (kstrcmp(ptr->current->i_name, blah) == 0 && ptr->current->i_type == (int)type)
+        if (kstrcmp(ptr->current->i_name, blah) == 0)
         {
             iptr = kmalloc(sizeof(struct inode));
             struct inode *mnt = fs_is_mount_point(ptr->current);
@@ -315,6 +315,18 @@ error:
     kprintf("Read error %d\n", rfile->flags);
     return -1;
 }
+
+int vfs_stat_file(struct file *rfile, struct stat *st)
+{
+    int idev;
+    idev = rfile->dev->devicenum;
+    return vfs_devices[idev].ops->stat_file(rfile, st);
+
+error:
+    kprintf("Read error %d\n", rfile->flags);
+    return -1;
+}
+
 
 int vfs_write_file(struct file *rfile, void *buf, int count)
 {
