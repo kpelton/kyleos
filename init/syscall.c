@@ -332,6 +332,11 @@ static int fstat(int fd, struct stat *st)
     return vfs_stat_file(fptr,st);
 }
 
+static int getdents(int fd, uint64_t count)
+{
+    return 0;
+}
+
 void *syscall_tbl[] = {
     (void *)&sleep,            // 0
     (void *)&debugprint,       // 1
@@ -349,6 +354,7 @@ void *syscall_tbl[] = {
     (void *)&creat,            // 13
     (void *)&stat,             // 14
     (void *)&fstat,            // 15
+    (void *)&getdents,         // 16
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

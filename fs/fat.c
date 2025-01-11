@@ -12,7 +12,7 @@ static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector);
 static void write_directory(struct inode *parent, char *name);
 
 struct dnode *fat_read_root_dir(struct vfs_device *dev);
-struct dnode *read_inode_dir(struct dnode *parent,struct inode *i_node);
+struct dnode *read_inode_dir(struct inode *i_node);
 void cat_inode_file(struct inode *i_node);
 int fat_create_dir(struct inode *parent, char *name);
 int read_inode_file(struct file *rfile, void *buf, uint32_t count);
@@ -199,7 +199,7 @@ struct dnode *fat_read_root_dir(struct vfs_device *dev)
     return dir;
 }
 
-struct dnode *read_inode_dir(struct dnode *parent,struct inode *i_node)
+struct dnode *read_inode_dir(struct inode *i_node)
 {
     struct dnode *dir;
     // printf("inode_dir_alloc\n");
@@ -208,7 +208,6 @@ struct dnode *read_inode_dir(struct dnode *parent,struct inode *i_node)
     dir->root_inode->i_ino = i_node->i_ino;
     dir->root_inode->dev = i_node->dev;
     dir->root_inode->i_type = I_DIR;
-    dir->parent = parent;
     kstrncpy(dir->root_inode->i_name, i_node->i_name, FAT_MAX_FNAME);
     kstrncpy(dir->i_name, i_node->i_name, FAT_MAX_FNAME);
     read_directory(dir, i_node->dev);

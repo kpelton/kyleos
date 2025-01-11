@@ -76,7 +76,7 @@ struct file_table {
 struct vfs_ops {
     int (*read)(char* path,union fsinfo);
     struct dnode* (*read_root_dir)(struct vfs_device * dev);
-    struct dnode* (*read_inode_dir)(struct dnode *parent,struct inode* i_node);
+    struct dnode* (*read_inode_dir)(struct inode* i_node);
     void (*cat_inode_file)(struct inode* i_node);
     int (*read_file)(struct file * rfile,void *buf,uint32_t count);
     int (*write_file)(struct file * rfile,void *buf,uint32_t count);
@@ -87,7 +87,7 @@ struct vfs_ops {
 
 void vfs_init();
 struct dnode* vfs_read_root_dir(char * path);
-struct dnode* vfs_read_inode_dir(struct dnode *parent,struct inode * i_node);
+struct dnode* vfs_read_inode_dir(struct inode * i_node);
 void vfs_read_inode_file(struct inode * i_node);
 int vfs_register_device(struct vfs_device newdev);
 void vfs_free_inode(struct inode * i_node); 

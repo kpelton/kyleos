@@ -58,7 +58,7 @@ static void print_dir(struct dnode *parent,struct inode *pwd)
     struct dnode *dptr;
     struct file *cfile = NULL;
     struct stat st;
-    dptr = vfs_read_inode_dir(parent,pwd);
+    dptr = vfs_read_inode_dir(pwd);
     if (dptr == 0)
         goto error;
     ptr = dptr->head;
@@ -194,7 +194,7 @@ struct inode * read_path(char *path, struct dnode *pwd,int type)
             {
                 if (dptr != pwd)
                     vfs_free_dnode(dptr);
-                dptr = vfs_read_inode_dir((struct dnode *)ptr,ptr->current);
+                dptr = vfs_read_inode_dir(ptr->current);
                 break;
             }
             ptr = ptr->next;
@@ -307,7 +307,7 @@ for(;;) {
                 cptr++;
             }
             *cptr = '\0';
-            dptr = vfs_read_inode_dir(dptr,pwd);
+            dptr = vfs_read_inode_dir(pwd);
             itmp = read_path(buffer + 3, dptr,I_DIR);
             if(itmp != NULL) {
                 print_dir(dptr,itmp);
@@ -321,7 +321,7 @@ for(;;) {
         else if (buffer[0] == 'c' && buffer[1] == 'd' && buffer[2] == ' ' && buffer[3] != '\n')
         {
             olddptr=dptr;
-            dptr = vfs_read_inode_dir(dptr,pwd);
+            dptr = vfs_read_inode_dir(pwd);
             pwd = shell_cd(buffer, dptr);
             //If failure
             if (pwd == 0)
@@ -371,7 +371,7 @@ for(;;) {
             }
             *cptr = '\0';
             cptr++;
-            dptr = vfs_read_inode_dir(dptr,pwd);
+            dptr = vfs_read_inode_dir(pwd);
             itmp = read_path(buffer + 4, dptr,I_FILE);
             if(itmp != NULL) {
                 //vfs_cat_inode_file(itmp);
@@ -400,7 +400,7 @@ for(;;) {
                 cptr++;
             }
             *cptr = '\0';
-            dptr = vfs_read_inode_dir(dptr,pwd);
+            dptr = vfs_read_inode_dir(pwd);
             itmp = read_path(buffer + 4, dptr,I_FILE);
             if(itmp != NULL) {
                 //vfs_cat_inode_file(itmp);
@@ -425,7 +425,7 @@ for(;;) {
                 cptr++;
             }
             *cptr = '\0';
-            dptr = vfs_read_inode_dir(dptr,pwd);
+            dptr = vfs_read_inode_dir(pwd);
             itmp = read_path(buffer + 5, dptr,I_FILE);
             if(itmp != NULL) {
                 int pid = exec_from_inode(itmp,false,NULL);
@@ -446,7 +446,7 @@ for(;;) {
             char *strings[] = {"aaa","HELLO CHANNO TEST ARGV","aaaaaaaaaaaaaa","aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",0};
 
             *cptr = '\0';
-            dptr = vfs_read_inode_dir(dptr,pwd);
+            dptr = vfs_read_inode_dir(pwd);
             itmp = read_path(buffer + 5, dptr,I_FILE);
             if(itmp != NULL) {
                 int pid = exec_from_inode(itmp,false,(char **) &strings);

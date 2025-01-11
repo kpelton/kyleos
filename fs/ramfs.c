@@ -6,7 +6,7 @@
 #define MAX_RAMFS 512
 
 struct dnode *ramfs_read_root_dir(struct vfs_device *dev);
-struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *inode);
+struct dnode *ramfs_read_inode_dir(struct inode *inode);
 int ramfs_create_dir(struct inode *parent, char *name);
 int ramfs_create_file(struct inode *parent, char *name);
 int ramfs_read_file (struct file * rfile,void *buf,uint32_t count);
@@ -176,14 +176,13 @@ int ramfs_create_dir(struct inode *parent, char *name)
     return 0;
 }
 
-struct dnode *ramfs_read_inode_dir(struct dnode *parent,struct inode *i_node)
+struct dnode *ramfs_read_inode_dir(struct inode *i_node)
 {
     struct dnode *dir;
     struct inode_list *list=NULL;
     struct inode_list *prev = NULL;
     acquire_spinlock(&ramfs_lock);
     //kprintf("Reading %d\n",i_node->i_ino);
-    kprintf("parent:%s parent:%d\n",parent->i_name,parent->root_inode->i_ino);
 
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));

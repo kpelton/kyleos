@@ -62,13 +62,13 @@ int vfs_register_device(struct vfs_device newdev)
     return dev->devicenum;
 }
 
-struct dnode *vfs_read_inode_dir(struct dnode *parent,struct inode *i_node)
+struct dnode *vfs_read_inode_dir(struct inode *i_node)
 {
 
     int idev;
     idev = i_node->dev->devicenum;
 
-    return vfs_devices[idev].ops->read_inode_dir(parent,i_node);
+    return vfs_devices[idev].ops->read_inode_dir(i_node);
 }
 
 void vfs_cat_inode_file(struct inode *i_node)
@@ -217,7 +217,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
                     //kprintf("p1\n");
 
                     dptr = mnt->dev->ops->read_root_dir(mnt->dev);
-                    dptr = vfs_read_inode_dir(dptr,mnt);
+                    dptr = vfs_read_inode_dir(mnt);
                     ptr = dptr->head;
                     found = true;
                     break;
@@ -225,7 +225,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
                 else{
                     kprintf("p2\n");
                 }
-                    dptr = vfs_read_inode_dir(dptr,ptr->current);
+                    dptr = vfs_read_inode_dir(ptr->current);
                 
                 //Current entry on p ath was found
                 found = true;
