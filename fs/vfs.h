@@ -1,10 +1,12 @@
 
 #ifndef VFS_H
 #define VFS_H
+
 #include <fs/fat.h>
 #include <fs/ramfs.h>
 #include <include/types.h>
 #include <locks/spinlock.h>
+
 #define VFS_MAX_DEVICES 10
 #define FAT_FS 0
 #define RAM_FS 1
@@ -12,6 +14,15 @@
 #define VFS_MAX_MOUNT_POINT 1024
 #define I_DIR  40000
 #define I_FILE 100000
+#define DELIM '/'
+#define ROOT "/"
+
+//File open flags
+#define O_RDONLY 0x0
+#define O_WRONLY 0x1
+#define O_RDWR   0x2
+#define MAX_FILE_FLAGS (O_RDONLY | O_WRONLY | O_RDWR)
+#define VFS_MAX_OPEN 1024
 
 union fsinfo {
     struct fatFS* fat;
@@ -52,12 +63,6 @@ struct dnode {
     struct inode_list* head;
     struct dnode *parent;
 };
-//File open flags
-#define O_RDONLY 0x0
-#define O_WRONLY 0x1
-#define O_RDWR   0x2
-#define MAX_FILE_FLAGS (O_RDONLY | O_WRONLY | O_RDWR)
-#define VFS_MAX_OPEN 1024
 
 struct file {
     uint32_t refcount;
@@ -71,6 +76,13 @@ struct file {
 struct file_table {
     struct spinlock lock;    
     struct file open_files[VFS_MAX_OPEN];
+};
+
+// External API to userspace shell
+struct dirent { 
+    uint64_t i_no;
+    char i_name[VFS_MAX_FNAME];
+    int i_type;
 };
 
 struct vfs_ops {
@@ -95,12 +107,15 @@ void vfs_free_inode_list(struct inode_list * list);
 void vfs_free_dnode(struct dnode * dn);
 void vfs_copy_inode(struct inode *src,struct inode *dst);
 struct vfs_device *vfs_get_device(int num);
+int vfs_getdents(struct file * rfile,void *dirp,int count);
 int vfs_read_file(struct file * rfile,void *buf,int count);
 int vfs_write_file(struct file * rfile,void *buf,int count);
 int vfs_stat_file(struct file * rfile,struct stat *st);
 int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset);
+
 int vfs_create_dir(struct inode* parent, char *name);
 int vfs_create_file(struct inode* parent, char *name,uint32_t flags);
+
 struct file* vfs_open_file(struct inode * i_node,uint32_t flags);
 void vfs_close_file(struct file *ofile);
 struct inode * vfs_walk_path(char *path, struct dnode *pwd);

@@ -68,6 +68,9 @@ kernel.img: kernel.bin
 
 test: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin  -hda test-hd.img -serial stdio -rtc base=localtime
+
+test-nox: kernel32.bin
+	qemu-system-x86_64 -m 8G -kernel kernel32.bin  -hda test-hd.img -display none -serial stdio -rtc base=localtime
 test-log: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -serial stdio 2>log
 kvm-test: kernel32.bin
@@ -77,6 +80,9 @@ test-c: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -display none -serial stdio 2>log
 debug: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -hda test-hd.img -serial stdio -s -S
+debug-nox: kernel32.bin
+	qemu-system-x86_64 -m 8G -display none -kernel kernel32.bin -hda test-hd.img -serial stdio -s -S
+
 gdb: kernel.bin
 	gdb -ex "target remote localhost:1234" kernel.bin
 iso: kernel.bin

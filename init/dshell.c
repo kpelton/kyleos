@@ -58,7 +58,9 @@ static void print_dir(struct dnode *parent,struct inode *pwd)
     struct dnode *dptr;
     struct file *cfile = NULL;
     struct stat st;
+    struct dirent *dirents = kmalloc(sizeof(struct dirent)*500);
     dptr = vfs_read_inode_dir(pwd);
+    
     if (dptr == 0)
         goto error;
     ptr = dptr->head;
@@ -66,8 +68,7 @@ static void print_dir(struct dnode *parent,struct inode *pwd)
     {
         kprintf(ptr->current->i_name);
         cfile = vfs_open_file(ptr->current,O_RDONLY);
-
-	vfs_stat_file(cfile,&st);
+        vfs_stat_file(cfile,&st);
         if (st.st_mode == I_DIR)
         {
             kprintf(" DIR");

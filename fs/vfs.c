@@ -28,6 +28,39 @@ struct vfs_device *vfs_get_device(int num)
     return &vfs_devices[num];
 }
 
+int vfs_getdents(struct file * rfile,void *dirp,int count) {
+    
+    if (rfile->i_node.i_type != I_DIR)
+        return -1;
+    
+    struct inode_list *ptr;
+    struct file *cfile = NULL;
+    struct dirent *dir_arr = (struct dirent *) dirp;
+    struct dnode *dptr = vfs_read_inode_dir(&rfile->i_node);
+    int read_count = 0;
+    if (dptr == 0)
+        goto error;
+    
+    ptr = dptr->head;
+    while (ptr != 0)
+    {
+        dir_arr[read_count].i_no = ptr->current->i_ino;
+        dir_arr[read_count].i_type = ptr->current->i_type;
+        kstrncpy(dir_arr[read_count].i_name, ptr->current->i_name,VFS_MAX_FNAME);
+        ptr = ptr->next;
+        read_count++;
+        if (read_count >= count) {
+            panic("unable to do anything here");
+            vfs_free_dnode(dptr);
+            return -1;
+        }
+    }
+    vfs_free_dnode(dptr);
+    return read_count;
+error:
+    return -1;
+}
+
 int vfs_register_device(struct vfs_device newdev)
 {
 
@@ -102,6 +135,7 @@ void vfs_free_dnode(struct dnode *dn)
 {
     vfs_free_inode_list(dn->head);
     vfs_free_inode(dn->root_inode);
+    // Assumption here that the dnode ptr is allocated on the stack
     kfree(dn);
 }
 

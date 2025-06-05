@@ -332,9 +332,16 @@ static int fstat(int fd, struct stat *st)
     return vfs_stat_file(fptr,st);
 }
 
-static int getdents(int fd, uint64_t count)
+static int getdents(int fd, struct dirent *dir_arr, uint64_t count)
 {
-    return 0;
+    struct ktask *pid = get_current_process();
+    struct file *fptr = NULL;
+    if (pid->open_fds[fd] == NULL) {
+	    return -1;
+    }
+    fptr = pid->open_fds[fd];
+ 
+    return vfs_getdents(fptr,dir_arr,count);
 }
 
 void *syscall_tbl[] = {
