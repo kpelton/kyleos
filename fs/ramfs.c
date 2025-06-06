@@ -67,8 +67,9 @@ int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) {
     int ret_count = count;
 
     // Approaching the end of the file truncate read bytes
+#ifdef DEBUG_FS_RAMFS
     kprintf("%d %d\n",rfile->pos + count,file_size);
-
+#endif
     
     if (rfile->pos + count > file_size) {
         ret_count = file_size - rfile->pos;

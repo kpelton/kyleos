@@ -108,13 +108,14 @@ if (hdr.magic == ELF_MAGIC)
         if (map != NULL){
 
             if (replace == false){
-                retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true,argv,NULL,NULL);
+               retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true,argv,NULL,vfs_get_root_inode());
+//               retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true,argv,NULL,NULL);
             }else{
                 struct ktask *t = get_current_process();
                 kstrcpy(name,ifile->i_name);
                 vfs_free_inode(ifile);
                 release_spinlock(&exec_spinlock);
-                retval = user_process_replace_exec(t,hdr.entry,name,map,argv,NULL);
+                retval = user_process_replace_exec(t,hdr.entry,name,map,argv,t->cwd);
             }
         }
         release_spinlock(&exec_spinlock);

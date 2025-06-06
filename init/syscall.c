@@ -19,7 +19,9 @@ static int creat(char *path, uint32_t flags)
     struct inode *iptr = NULL;
     struct ktask *pid = get_current_process();
     struct dnode *dptr = vfs_read_root_dir("/");
+#ifdef DEBUG_SYS_CREATE
     kprintf("creating file\n");
+#endif
     char *last_dir = vfs_get_dir(path);
     vfs_strip_path(path);
     // kprintf("last_dir %s, fname %s\n",last_dir,fname);
@@ -116,9 +118,23 @@ static int open(char *path, uint32_t flags)
     //    if (flags > MAX_FILE_FLAGS)
     //        goto done;
     // kprintf("open %s\n",path);
-    struct dnode *dptr = vfs_read_root_dir("/");
-    struct inode *iptr = vfs_walk_path(path, dptr);
+    struct dnode *dptr;
     struct ktask *pid = get_current_process();
+    struct inode *iptr = NULL;
+
+    if (path[0] == '/') {
+        dptr = vfs_read_root_dir("/");
+    } else {
+        dptr = vfs_read_inode_dir(pid->cwd);
+    }
+    // TODO check for failed dptr here
+
+    // If we are in the root dir or cwd don't walk path
+    if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0 ) {
+        iptr = vfs_walk_path(path, dptr);
+    }else{
+        iptr = dptr->root_inode;
+    }
 
     if (iptr != NULL)
     {
@@ -166,7 +182,9 @@ static int read(int fd, void *buf, int count)
 
     struct ktask *pid = get_current_process();
     countr = user_process_read_fd(pid, fd, buf, count);
+#ifdef DEBUG_READ_SYS
     kprintf("READ %d\n", countr);
+#endif
     return countr;
 }
 
@@ -320,13 +338,39 @@ static int stat(const char *file, struct stat *st)
     return -1;
 }
 
+static int chdir(const char *path)
+{
+    struct dnode *dptr;
+    struct inode *iptr;
+    
+    struct ktask *pid = get_current_process();
+    if (path[0] == '/') {
+        dptr = vfs_read_root_dir("/");
+    } else {
+        dptr = vfs_read_inode_dir(pid->cwd);
+    }
+    //TODO refactor this to iname
+    // If we are in the root dir or cwd don't walk path
+    if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0 ) {
+        iptr = vfs_walk_path(path, dptr);
+    }else{
+        iptr = dptr->root_inode;
+    }
+
+    if (iptr != NULL) {
+        vfs_free_inode(pid->cwd);
+        pid->cwd = iptr;
+        return 0;
+    }
+    return -1;
+}
 
 static int fstat(int fd, struct stat *st)
 {
     struct ktask *pid = get_current_process();
     struct file *fptr = NULL;
     if (pid->open_fds[fd] == NULL) {
-	return -1;
+    	return -1;
     }
     fptr = pid->open_fds[fd];
     return vfs_stat_file(fptr,st);
@@ -362,6 +406,7 @@ void *syscall_tbl[] = {
     (void *)&stat,             // 14
     (void *)&fstat,            // 15
     (void *)&getdents,         // 16
+    (void *)&chdir,            // 17
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

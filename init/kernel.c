@@ -27,16 +27,14 @@ static void kernel(void)
 {
     kprintf("Kyle OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
-    kthread_add(start_dshell,"D Shell");
-    /*
+    //kthread_add(start_dshell,"D Shell");
     int retval = -1;
     struct dnode *dptr = vfs_read_root_dir("/");
-    struct inode *iptr = vfs_walk_path("shell", dptr, I_FILE);
+    struct inode *iptr = vfs_walk_path("nushell", dptr);
     if (iptr != NULL)
     {
         retval = exec_from_inode(iptr,false,NULL);
     }
-    */
     //Should never return after this point since scheduler will take over
     for(;;)
         asm("sti;hlt");

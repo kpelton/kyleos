@@ -396,9 +396,9 @@ void pagefault(uint64_t *addr) {
     uint64_t cr2;
     struct ktask *proc = get_current_process();
     asm volatile("movq %%cr2 ,%0" : "=r"(cr2));
-
+#ifdef DEBUG_PAGING
     kprintf("pagefault on 0x%x from 0x%x !\n",cr2,addr);
-    
+#endif
     cr2 &=0xfffffffffffff000;
         if (cr2 == 0)
     {
@@ -415,7 +415,4 @@ void pagefault(uint64_t *addr) {
         sched_process_kill(proc->pid,true);
         schedule();
     }
-    //kprintf("pte:%x\n",*pte);
-
-
 }

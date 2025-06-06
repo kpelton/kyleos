@@ -7,6 +7,7 @@ static int current_device = 0;
 static struct file_table ftable ;
 
 static struct inode * fs_is_mount_point(struct inode *ptr);
+struct inode* top_root_inode;
 
 void vfs_init()
 {
@@ -26,6 +27,10 @@ void vfs_init()
 struct vfs_device *vfs_get_device(int num)
 {
     return &vfs_devices[num];
+}
+struct inode *vfs_get_root_inode() 
+{   
+    return top_root_inode;
 }
 
 int vfs_getdents(struct file * rfile,void *dirp,int count) {
@@ -89,6 +94,10 @@ int vfs_register_device(struct vfs_device newdev)
                 panic("failed to mount non rootfs");
         }
     //memory leak likely here
+    } else{
+        // Store top level ref to /
+        struct dnode *root = vfs_devices[0].ops->read_root_dir(&vfs_devices[0]);
+        top_root_inode=root->root_inode;
     }
     kprintf("VFS Device registered %d at %s\n", dev->devicenum,dev->mountpoint);
     current_device += 1;
