@@ -357,12 +357,18 @@ static int chdir(const char *path)
         iptr = dptr->root_inode;
     }
 
-    if (iptr != NULL) {
-        vfs_free_inode(pid->cwd);
-        pid->cwd = iptr;
+    if (iptr != NULL ) {
+        if (iptr->i_type == I_DIR) {
+            vfs_free_inode(pid->cwd);
+            pid->cwd = iptr;
+        }else {
+            vfs_free_inode(iptr);
+            goto error;
+        }
         return 0;
     }
-    return -1;
+    error:
+        return -1;
 }
 
 static int fstat(int fd, struct stat *st)

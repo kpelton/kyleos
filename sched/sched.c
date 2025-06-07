@@ -231,10 +231,8 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     int argc = 0;
     uint64_t *sp = NULL; 
     uint64_t *ustack[MAX_ARGS];
-    kprintf("Allocating Stack\n");
     struct ktask *t;
 
-    
     if (ta == NULL) {
         t = &ktasks[find_free_task()];
     } else {

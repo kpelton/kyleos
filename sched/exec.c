@@ -75,7 +75,7 @@ if (hdr.magic == ELF_MAGIC)
             if (((phdr.vaddr) & 0x0000000000000fff) != 0UL) {
                 vaddr = phdr.vaddr & 0xfffffffffffff000;
                 offset_delta += phdr.vaddr &0xfff;
-                kprintf("not paged aligned\n");
+           //     kprintf("not paged aligned\n");
                 size++;
             }else{
                 vaddr = phdr.vaddr;

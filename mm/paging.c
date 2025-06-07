@@ -400,11 +400,14 @@ void pagefault(uint64_t *addr) {
     kprintf("pagefault on 0x%x from 0x%x !\n",cr2,addr);
 #endif
     cr2 &=0xfffffffffffff000;
-        if (cr2 == 0)
+    
+#ifdef DEBUG_PAGING
+    if (cr2 == 0)
     {
         kprintf("Test123123\n");
         panic("fail");
-    }
+    }a
+#endif
     uint64_t *pte =(uint64_t *)walk(&(proc->mm->pagetable),cr2);
     //kprintf("pte:%x\n",pte);
 
