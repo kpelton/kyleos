@@ -241,7 +241,9 @@ struct dnode *ramfs_read_root_dir(struct vfs_device *dev)
     acquire_spinlock(&ramfs_lock);
 
     struct dnode *dir;
+#ifdef DEBUG_FS_RAMFS
     kprintf("dev %x\n",dev);
+#endif
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     vfs_copy_inode((struct inode *)&ramfs_inodes[0],dir->root_inode);
