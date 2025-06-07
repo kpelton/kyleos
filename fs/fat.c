@@ -297,7 +297,6 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count)
             total_read++;
         }
     }
-    rfile->pos += bytes_read;
     //kfree(cluster_dest);
     //kprintf("read inode total bytes read %d file->size %d file->pos %d\n",bytes_read,rfile->i_node.file_size,rfile->pos);
     return bytes_read;
