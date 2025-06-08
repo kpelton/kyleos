@@ -203,7 +203,7 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
 {
     asm("cli");
     int c_pid = t->pid;
-    kprintf("%d\n",c_pid);
+    //kprintf("%d\n",c_pid);
     // save old pid and parent pid since kill will clear them
     sched_process_kill(t->pid,false);
     user_process_add_exec(startaddr,name,mm,true,argv,t,cwd);

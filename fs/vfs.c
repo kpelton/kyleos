@@ -416,7 +416,7 @@ char *vfs_get_dir( char *filename) {
 
 int vfs_create_file(struct inode* parent, char *name, uint32_t flags)
 {
-    kprintf("FLAGS %x\n",flags);
+    //kprintf("FLAGS %x\n",flags);
     return vfs_devices[parent->dev->devicenum].ops->create_file(parent, name);
 }
 

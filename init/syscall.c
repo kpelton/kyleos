@@ -234,7 +234,6 @@ static int wait(int pid)
 static int debugprint(char *msg)
 {
     kprintf("%s", msg);
-    // serial_kprintf(msg);
     return 0;
 }
 
@@ -394,6 +393,12 @@ static int getdents(int fd, struct dirent *dir_arr, uint64_t count)
     return vfs_getdents(fptr,dir_arr,count);
 }
 
+static int mkdir(const char *pathname, int mode)
+{
+    struct ktask *pid = get_current_process();
+    return vfs_create_dir(pid->cwd,pathname);
+}
+
 void *syscall_tbl[] = {
     (void *)&sleep,            // 0
     (void *)&debugprint,       // 1
@@ -413,6 +418,7 @@ void *syscall_tbl[] = {
     (void *)&fstat,            // 15
     (void *)&getdents,         // 16
     (void *)&chdir,            // 17
+    (void *)&mkdir,            // 18
 };
 
 const int NR_syscall = sizeof(syscall_tbl);
