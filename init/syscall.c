@@ -354,7 +354,9 @@ static int chdir(const char *path)
     if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0 ) {
         iptr = vfs_walk_path(path, dptr);
     }else{
-        iptr = dptr->root_inode;
+        iptr =kmalloc(sizeof(struct inode));
+        vfs_copy_inode(iptr,dptr->root_inode);
+        vfs_free_dnode(dptr);
     }
 
     if (iptr != NULL ) {
