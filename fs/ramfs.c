@@ -190,6 +190,7 @@ struct dnode *ramfs_read_inode_dir(struct inode *i_node)
     dir->root_inode->i_ino = i_node->i_ino;
     dir->root_inode->i_type = i_node->i_type;
     dir->root_inode->dev = i_node->dev;
+
     kstrcpy(dir->root_inode->i_name,i_node->i_name);
 
     dir->head = kmalloc(sizeof(struct inode_list));
@@ -246,6 +247,9 @@ struct dnode *ramfs_read_root_dir(struct vfs_device *dev)
 #endif
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
+    // TODO fix this hack
+    dir->head = NULL;
+    dir->parent = NULL;
     vfs_copy_inode(dir->root_inode,(struct inode *)&ramfs_inodes[0]);
     release_spinlock(&ramfs_lock);
 

@@ -51,11 +51,12 @@ struct inode {
     uint64_t file_size;
 };
 
+// list of inodes
 struct inode_list {
     struct inode* current;
     struct inode_list* next;
 };
-
+// directory entry
 struct dnode {
     char i_name[VFS_MAX_FNAME];
     struct inode* root_inode;

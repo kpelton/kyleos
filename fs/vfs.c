@@ -255,14 +255,14 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
              //kprintf("%s %s\n",ptr->current->i_name,buffer);
             if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
             {
-                //vfs_free_dnode(dptr);
+                vfs_free_dnode(dptr);
                 struct inode *mnt = fs_is_mount_point(ptr->current);
                 if (mnt){
                     //kprintf("p1\n");
 
                     dptr = mnt->dev->ops->read_root_dir(mnt->dev);
                     dptr = vfs_read_inode_dir(mnt);
-                    //vfs_free_inode(mnt);
+                    vfs_free_inode(mnt);
                     ptr = dptr->head;
                     found = true;
                     break;
@@ -277,14 +277,14 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
         //if we didn't find anything then the directories are bad and we can return NULL
         if(!found && end > 0) {
              if (dptr != NULL) {
-                //vfs_free_dnode(dptr);
+                vfs_free_dnode(dptr);
              }
             return NULL;
         }
     }
     
     iptr_ret = vfs_find_file_in_dir(blah,dptr);
-    //vfs_free_dnode(dptr);
+    vfs_free_dnode(dptr);
     return iptr_ret;
 }
 
@@ -300,9 +300,8 @@ static struct inode* vfs_find_file_in_dir(const char *filename, struct dnode *dp
             iptr = kmalloc(sizeof(struct inode));
             struct inode *mnt = fs_is_mount_point(ptr->current);
             if(mnt) {
-                kprintf("Mount point\n");
                 vfs_copy_inode(iptr,mnt);
-                //vfs_free_inode(mnt);
+                vfs_free_inode(mnt);
             }else{
                 vfs_copy_inode(iptr,ptr->current);
             }
@@ -336,7 +335,7 @@ static struct inode * fs_is_mount_point(struct inode *ptr) {
             struct dnode *dnode = vfs_devices[i].ops->read_root_dir(&vfs_devices[i]);
             struct inode *iptr = kmalloc(sizeof(struct inode));
             vfs_copy_inode(iptr,dnode->root_inode);
-            //vfs_free_dnode(dnode);
+            vfs_free_dnode(dnode);
             return(iptr);
         }
     }
