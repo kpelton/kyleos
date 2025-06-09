@@ -117,7 +117,7 @@ static int open(char *path, uint32_t flags)
     int fd = -1;
     //    if (flags > MAX_FILE_FLAGS)
     //        goto done;
-    // kprintf("open %s\n",path);
+     kprintf("open %s\n",path);
     struct dnode *dptr;
     struct ktask *pid = get_current_process();
     struct inode *iptr = NULL;
@@ -150,9 +150,15 @@ static int open(char *path, uint32_t flags)
         kstrncpy(s_basepath, path, pathlen + 1);
         kstrncpy(s_dirname, path, pathlen + 1);
         char *last_dir = dirname(s_dirname);
-        struct dnode *dptr = vfs_read_root_dir("/");
+        
+        if (path[0] == '/') {
+            dptr = vfs_read_root_dir("/");
+        } else {
+            dptr = vfs_read_inode_dir(pid->cwd);
+        }
         iptr = vfs_walk_path(last_dir, dptr);
         // TODO: Add error checking
+
         if (iptr && vfs_create_file(iptr, vfs_strip_path(path), flags) == 0)
         {
             dptr = vfs_read_inode_dir(iptr);
