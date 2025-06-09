@@ -155,12 +155,15 @@ static int open(char *path, uint32_t flags)
         // TODO: Add error checking
         if (iptr && vfs_create_file(iptr, vfs_strip_path(path), flags) == 0)
         {
-            vfs_free_inode(iptr);
-            iptr = vfs_walk_path(path, dptr);
+             vfs_free_dnode(dptr);
+             dptr = vfs_read_inode_dir(iptr);
+             vfs_free_inode(iptr);
+             iptr = vfs_walk_path(vfs_strip_path(path), dptr);
             if (iptr)
             {
                 fd = user_process_open_fd(pid, iptr, flags);
                 vfs_free_inode(iptr);
+                vfs_free_dnode(dptr);
             }
         }
         kfree(s_basepath);
