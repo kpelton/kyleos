@@ -8,7 +8,7 @@
 struct dnode *ramfs_read_root_dir(struct vfs_device *dev);
 struct dnode *ramfs_read_inode_dir(struct inode *inode);
 int ramfs_create_dir(struct inode *parent, char *name);
-int ramfs_create_file(struct inode *parent, char *name);
+struct inode* ramfs_create_file(struct inode *parent, char *name);
 int ramfs_read_file (struct file * rfile,void *buf,uint32_t count);
 int ramfs_write_file (struct file * rfile,void *buf,uint32_t count);
 int ramfs_stat_file (struct file * rfile,struct stat *st);
@@ -130,7 +130,7 @@ int ramfs_write_file (struct file * rfile,void *buf,uint32_t count) {
     return count ;
 }
 
-int ramfs_create_file(struct inode *parent, char *name) 
+struct inode* ramfs_create_file(struct inode *parent, char *name) 
 {
 
     if (ramfs_inodes[parent->i_ino].last_child >= RAMFS_MAX_DIRECTORY)
@@ -147,11 +147,12 @@ int ramfs_create_file(struct inode *parent, char *name)
 
     ramfs_inodes[parent->i_ino].children[ramfs_inodes[parent->i_ino].last_child]=i_no;
     ramfs_inodes[parent->i_ino].last_child++;
-    
+    struct inode *i = kmalloc(sizeof(struct inode));
+    vfs_copy_inode(i,&ramfs_inodes[i_no]);
     i_no++;
     release_spinlock(&ramfs_lock);
 
-    return 0;
+    return i;
 }
 
 
@@ -192,7 +193,6 @@ struct dnode *ramfs_read_inode_dir(struct inode *i_node)
     dir->root_inode->dev = i_node->dev;
 
     kstrcpy(dir->root_inode->i_name,i_node->i_name);
-
     dir->head = kmalloc(sizeof(struct inode_list));
     dir->head->current = kmalloc(sizeof(struct inode));
     dir->head->current->file_size = 0;
@@ -247,10 +247,27 @@ struct dnode *ramfs_read_root_dir(struct vfs_device *dev)
 #endif
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
-    // TODO fix this hack
-    dir->head = NULL;
-    dir->parent = NULL;
     vfs_copy_inode(dir->root_inode,(struct inode *)&ramfs_inodes[0]);
+
+    dir->head = kmalloc(sizeof(struct inode_list));
+    dir->head->current = kmalloc(sizeof(struct inode));
+    dir->head->current->file_size = 0;
+    kstrcpy(dir->head->current->i_name,"..");
+    //Cross mount point since we are on mount 
+    // Assumes we are not /
+    dir->head->current->i_ino = ramfs_inodes[0].dev->mnt_node_parent->i_ino;
+    dir->head->current->i_type = ramfs_inodes[0].dev->mnt_node_parent->i_type;
+    dir->head->current->dev = ramfs_inodes[0].dev->mnt_node_parent->dev;
+    dir->head->next = kmalloc(sizeof(struct inode_list));
+    
+    dir->head->next->current = kmalloc(sizeof(struct inode));
+    kstrcpy(dir->head->next->current->i_name,".");
+    dir->head->next->current->i_ino = dir->root_inode->i_ino;
+    dir->head->next->current->i_type = I_DIR;
+    dir->head->next->current->dev = dir->root_inode->dev;
+    dir->head->next->current->file_size = 0;
+    dir->head->next->next=NULL;
+
     release_spinlock(&ramfs_lock);
 
     return dir;

@@ -8,9 +8,7 @@ static struct file_table ftable ;
 
 
 static struct inode* vfs_find_file_in_dir(const char *filename, struct dnode *dptr);
-static struct inode * fs_is_mount_point(struct inode *ptr);
 struct inode* top_root_inode;
-
 void vfs_init()
 {
     init_spinlock(&ftable.lock);
@@ -228,17 +226,27 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
     int end = 0;
     char *blah = path;
     char buffer[1024];
+    char prev_buffer[1024];
     struct inode_list *ptr;
     struct inode *iptr;
     struct inode *iptr_ret=NULL;
     struct dnode *dptr = pwd;
     bool found = false;
-    // if (*blah == '/')
-    //     return;
-    //kprintf("%s\n",path);
+    bool abs = false;
+    int i=0;
+    // handle ./
+    if (path[0] == '.' && path[1] == '/' && kstrlen(path)>2) {
+        path+=2;
+    }
+    // if this a a relative path
+   if (kstrstr(path, "/") < 0  ) {
+        iptr_ret = vfs_find_file_in_dir(path,dptr);
+        return iptr_ret;
+    }
 
     while (end != -1)
     {
+
         end = kstrstr(blah, "/");
         // kprintf("%d %s\n", end, blah);
         if (end >= 0)
@@ -247,30 +255,33 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
             buffer[end] = '\0';
             blah += end + 1;
         }
+        //kprintf("main comparison %s %s\n",blah,buffer);
         // printf("%s\n",blah);
         ptr = dptr->head;
         found = false;
         while (ptr)
         {
-             //kprintf("%s %s\n",ptr->current->i_name,buffer);
+
+            //kprintf("current:%s buffer:%s\n",ptr->current->i_name,buffer);
             if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
             {
-                vfs_free_dnode(dptr);
+
                 struct inode *mnt = fs_is_mount_point(ptr->current);
                 if (mnt){
-                    //kprintf("p1\n");
-
-                    dptr = mnt->dev->ops->read_root_dir(mnt->dev);
+                    //kprintf("a\n");
                     dptr = vfs_read_inode_dir(mnt);
+                    //kprintf("b\n");
                     vfs_free_inode(mnt);
                     ptr = dptr->head;
                     found = true;
                     break;
                 }
-                dptr = vfs_read_inode_dir(ptr->current);
+                if (kstrcmp(buffer,"..") != 0) 
+                    dptr = vfs_read_inode_dir(ptr->current);
                 //Current entry on path was found
                 found = true;
                 break;
+                kstrncpy(prev_buffer,buffer,1024);
             }
             ptr = ptr->next;
         }
@@ -282,7 +293,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
             return NULL;
         }
     }
-    
+    //kprintf("Find in files%s\n",blah);
     iptr_ret = vfs_find_file_in_dir(blah,dptr);
     vfs_free_dnode(dptr);
     return iptr_ret;
@@ -294,9 +305,9 @@ static struct inode* vfs_find_file_in_dir(const char *filename, struct dnode *dp
     struct inode *iptr = NULL;
     while (ptr)
     {
-         //kprintf("%s\n",ptr->current->i_name);
-        if (kstrcmp(ptr->current->i_name, filename) == 0)
-        {
+        //kprintf("find in file  %s\n",ptr->current->i_name);
+         if (kstrcmp(ptr->current->i_name, filename) == 0)
+         {
             iptr = kmalloc(sizeof(struct inode));
             struct inode *mnt = fs_is_mount_point(ptr->current);
             if(mnt) {
@@ -328,14 +339,15 @@ static bool vfs_compare_inode(struct inode *src, struct inode *dst)
     return true;
 }
 
-static struct inode * fs_is_mount_point(struct inode *ptr) {
+struct inode * fs_is_mount_point(struct inode *ptr) {
     for (int i=0; i<current_device; i++){
         if (! vfs_devices[i].rootfs && vfs_compare_inode(ptr,vfs_devices[i].mnt_node)) {
-            //("reading dev %d\n",i);
+            kprintf("reading dev %d\n",i);
             struct dnode *dnode = vfs_devices[i].ops->read_root_dir(&vfs_devices[i]);
             struct inode *iptr = kmalloc(sizeof(struct inode));
             vfs_copy_inode(iptr,dnode->root_inode);
             vfs_free_dnode(dnode);
+            kprintf("return %x\n",iptr);
             return(iptr);
         }
     }
@@ -415,7 +427,7 @@ char *vfs_get_dir( char *filename) {
 }
 
 
-int vfs_create_file(struct inode* parent, char *name, uint32_t flags)
+struct inode* vfs_create_file(struct inode* parent, char *name, uint32_t flags)
 {
     //kprintf("FLAGS %x\n",flags);
     return vfs_devices[parent->dev->devicenum].ops->create_file(parent, name);

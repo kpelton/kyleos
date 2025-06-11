@@ -11,7 +11,7 @@ char *kernel_heap;
 #define FREE 1
 #define USED 0
 // heap size in pages
-#define HEAP_SIZE 8192*10
+#define HEAP_SIZE 8192*20
 #define KERNEL_HEAP_ADDR 0xffffc00000000000
 // TODO: Align this on cacheline boundry
 

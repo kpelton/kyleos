@@ -13,7 +13,7 @@
 #define VIRT_TO_PTE(x) ((0xfff & x) & 0xfff)
 #define PHYS_ADDR_MASK 0xffffffffff000
 
-
+#define DEBUG_PAGING_FAULT 1
 #define PHYS_MEM_MAP_START 273
 extern uint64_t _kernel_text_end;
 extern uint64_t _kernel_text_start;
@@ -396,7 +396,7 @@ void pagefault(uint64_t *addr) {
     uint64_t cr2;
     struct ktask *proc = get_current_process();
     asm volatile("movq %%cr2 ,%0" : "=r"(cr2));
-#ifdef DEBUG_PAGING
+#ifdef DEBUG_PAGING_FAULT
     kprintf("pagefault on 0x%x from 0x%x !\n",cr2,addr);
 #endif
     cr2 &=0xfffffffffffff000;

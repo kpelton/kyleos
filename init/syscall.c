@@ -121,21 +121,28 @@ static int open(char *path, uint32_t flags)
     struct dnode *dptr;
     struct ktask *pid = get_current_process();
     struct inode *iptr = NULL;
+    int pathlen = kstrlen(path);
+    char *s_basepath = (char *)kmalloc(pathlen + 1);
+    char *s_dirname = (char *)kmalloc(pathlen + 1);
+    kstrncpy(s_basepath, path, pathlen + 1);
+    kstrncpy(s_dirname, path, pathlen + 1);
+    char *last_dir = dirname(s_dirname);
+
+
 
     if (path[0] == '/') {
         dptr = vfs_read_root_dir("/");
     } else {
         dptr = vfs_read_inode_dir(pid->cwd);
     }
-    // TODO check for failed dptr here
 
     // If we are in the root dir or cwd don't walk path
-    if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0 ) {
+    if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0) {
         iptr = vfs_walk_path(path, dptr);
     }else{
         iptr = dptr->root_inode;
     }
-
+    kprintf("iptr val %x\n",iptr);
     if (iptr != NULL)
     {
         fd = user_process_open_fd(pid, iptr, flags);
@@ -144,36 +151,36 @@ static int open(char *path, uint32_t flags)
     }
     else if ((flags & O_WRONLY) == O_WRONLY)
     {
-        int pathlen = kstrlen(path);
-        char *s_basepath = (char *)kmalloc(pathlen + 1);
-        char *s_dirname = (char *)kmalloc(pathlen + 1);
-        kstrncpy(s_basepath, path, pathlen + 1);
-        kstrncpy(s_dirname, path, pathlen + 1);
-        char *last_dir = dirname(s_dirname);
-        
+           // get a directory entry in order to walk
         if (path[0] == '/') {
             dptr = vfs_read_root_dir("/");
         } else {
             dptr = vfs_read_inode_dir(pid->cwd);
         }
-        iptr = vfs_walk_path(last_dir, dptr);
-        // TODO: Add error checking
+        kprintf("last_dir%s\n",last_dir);    
+        // get parent node
+        if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0 && kstrcmp(last_dir,".") != 0 ) {
+            iptr = vfs_walk_path(last_dir, dptr);
+        }else{
+            iptr =kmalloc(sizeof(struct inode));
+            vfs_copy_inode(iptr,dptr->root_inode);
+            vfs_free_dnode(dptr);
+        }
 
-        if (iptr && vfs_create_file(iptr, vfs_strip_path(path), flags) == 0)
+        kprintf("iptr2 val %x\n",iptr);
+
+         if (iptr)
         {
-            dptr = vfs_read_inode_dir(iptr);
-            vfs_free_inode(iptr);
-            iptr = vfs_walk_path(vfs_strip_path(path), dptr);
+
+            iptr = vfs_create_file(iptr, vfs_strip_path(path), flags);
             if (iptr)
             {
                 fd = user_process_open_fd(pid, iptr, flags);
                 vfs_free_inode(iptr);
             }
         }
-        kfree(s_basepath);
-        kfree(s_dirname);
     }
-
+    kprintf("Returning %d for  path %s\n",fd,path);
     return fd;
 }
 
@@ -368,7 +375,14 @@ static int chdir(const char *path)
     if (iptr != NULL ) {
         if (iptr->i_type == I_DIR) {
             vfs_free_inode(pid->cwd);
-            pid->cwd = iptr;
+            struct inode *mnt = fs_is_mount_point(iptr);
+            if(mnt) {
+                kprintf("MOUNT");
+                vfs_free_inode(iptr);
+                pid->cwd = mnt;
+            }else {
+                pid->cwd = iptr;
+            }
         }else {
             vfs_free_inode(iptr);
             goto error;
