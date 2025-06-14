@@ -13,7 +13,7 @@
 #define VIRT_TO_PTE(x) ((0xfff & x) & 0xfff)
 #define PHYS_ADDR_MASK 0xffffffffff000
 
-#define DEBUG_PAGING_FAULT 1
+//#define DEBUG_PAGING_FAULT 1
 #define PHYS_MEM_MAP_START 273
 extern uint64_t _kernel_text_end;
 extern uint64_t _kernel_text_start;

@@ -224,21 +224,19 @@ void vfs_close_file(struct file *ofile)
 struct inode *vfs_walk_path(char *path, struct dnode *pwd)
 {
     int end = 0;
-    char *blah = path;
+    char *curr = path;
     char buffer[1024];
-    char prev_buffer[1024];
     struct inode_list *ptr;
     struct inode *iptr;
     struct inode *iptr_ret=NULL;
     struct dnode *dptr = pwd;
+    struct dnode *prev_dptr;
     bool found = false;
-    bool abs = false;
-    int i=0;
     // handle ./
     if (path[0] == '.' && path[1] == '/' && kstrlen(path)>2) {
         path+=2;
     }
-    // if this a a relative path
+    // if this a a relative path in local dir
    if (kstrstr(path, "/") < 0  ) {
         iptr_ret = vfs_find_file_in_dir(path,dptr);
         return iptr_ret;
@@ -246,42 +244,42 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
 
     while (end != -1)
     {
-
-        end = kstrstr(blah, "/");
-        // kprintf("%d %s\n", end, blah);
+        end = kstrstr(curr, "/");
+        // kprintf("%d %s\n", end, curr);
         if (end >= 0)
         {
-            kstrncpy(buffer, blah, end);
+            kstrncpy(buffer, curr, end);
             buffer[end] = '\0';
-            blah += end + 1;
+            curr += end + 1;
         }
-        //kprintf("main comparison %s %s\n",blah,buffer);
-        // printf("%s\n",blah);
+        //kprintf("main comparison %s %s\n",curr,buffer);
+        // printf("%s\n",curr);
         ptr = dptr->head;
         found = false;
         while (ptr)
         {
-
+            //Traverse directories in path
             //kprintf("current:%s buffer:%s\n",ptr->current->i_name,buffer);
             if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
             {
-
-                struct inode *mnt = fs_is_mount_point(ptr->current);
-                if (mnt){
-                    //kprintf("a\n");
-                    dptr = vfs_read_inode_dir(mnt);
-                    //kprintf("b\n");
-                    vfs_free_inode(mnt);
-                    ptr = dptr->head;
+                prev_dptr = dptr;
+                // Something left in the path name and not the final node
+                if (end > 0) {
+                    struct inode *mnt = fs_is_mount_point(ptr->current);
+                    if (mnt){
+                        kprintf("mount\n");
+                        dptr = vfs_read_inode_dir(mnt);
+                        vfs_free_inode(mnt);
+                        ptr = dptr->head;
+                    } else{
+                        dptr = vfs_read_inode_dir(ptr->current);
+                    }
+                    vfs_free_inode(prev_dptr);
                     found = true;
                     break;
+                }else {
+                    kprintf("fail\n");
                 }
-                if (kstrcmp(buffer,"..") != 0) 
-                    dptr = vfs_read_inode_dir(ptr->current);
-                //Current entry on path was found
-                found = true;
-                break;
-                kstrncpy(prev_buffer,buffer,1024);
             }
             ptr = ptr->next;
         }
@@ -293,8 +291,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
             return NULL;
         }
     }
-    //kprintf("Find in files%s\n",blah);
-    iptr_ret = vfs_find_file_in_dir(blah,dptr);
+    iptr_ret = vfs_find_file_in_dir(curr,dptr);
     vfs_free_dnode(dptr);
     return iptr_ret;
 }

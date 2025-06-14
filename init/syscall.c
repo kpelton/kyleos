@@ -367,7 +367,7 @@ static int chdir(const char *path)
     if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0 ) {
         iptr = vfs_walk_path(path, dptr);
     }else{
-        iptr =kmalloc(sizeof(struct inode));
+        iptr=kmalloc(sizeof(struct inode));
         vfs_copy_inode(iptr,dptr->root_inode);
         vfs_free_dnode(dptr);
     }
@@ -375,14 +375,7 @@ static int chdir(const char *path)
     if (iptr != NULL ) {
         if (iptr->i_type == I_DIR) {
             vfs_free_inode(pid->cwd);
-            struct inode *mnt = fs_is_mount_point(iptr);
-            if(mnt) {
-                kprintf("MOUNT");
-                vfs_free_inode(iptr);
-                pid->cwd = mnt;
-            }else {
-                pid->cwd = iptr;
-            }
+            pid->cwd = iptr;
         }else {
             vfs_free_inode(iptr);
             goto error;
