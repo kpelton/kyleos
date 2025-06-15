@@ -233,9 +233,6 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
     struct dnode *prev_dptr;
     bool found = false;
     // handle ./
-    if (path[0] == '.' && path[1] == '/' && kstrlen(path)>2) {
-        path+=2;
-    }
     // if this a a relative path in local dir
    if (kstrstr(path, "/") < 0  ) {
         iptr_ret = vfs_find_file_in_dir(path,dptr);
@@ -252,6 +249,11 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
             buffer[end] = '\0';
             curr += end + 1;
         }
+        // Skip check on local dir
+        if (kstrcmp(buffer,".") == 0) {
+            continue;
+        }
+
         //kprintf("main comparison %s %s\n",curr,buffer);
         // printf("%s\n",curr);
         ptr = dptr->head;

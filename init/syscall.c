@@ -168,8 +168,8 @@ static int open(char *path, uint32_t flags)
         }
 
         kprintf("iptr2 val %x\n",iptr);
-
-         if (iptr)
+        // if this  is a valid directory
+        if (iptr && iptr->i_type == I_DIR )
         {
 
             iptr = vfs_create_file(iptr, vfs_strip_path(path), flags);
