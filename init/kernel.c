@@ -15,7 +15,7 @@
 #include <include/types.h>
 #include <sched/exec.h>
 #define STACK_PAGES 256
-
+//#define DSHELL_EN
 static void idle_loop()
 {
     for(;;) {
@@ -27,14 +27,18 @@ static void kernel(void)
 {
     kprintf("Kyle OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
-    //kthread_add(start_dshell,"D Shell");
+#ifdef DSHELL_EN    
+    kthread_add(start_dshell,"D Shell");
+#else
     int retval = -1;
     struct dnode *dptr = vfs_read_root_dir("/");
     struct inode *iptr = vfs_walk_path("nushell", dptr);
+
     if (iptr != NULL)
     {
         retval = exec_from_inode(iptr,false,NULL);
     }
+#endif
     //Should never return after this point since scheduler will take over
     for(;;)
         asm("sti;hlt");
