@@ -185,7 +185,7 @@ struct dnode *fat_read_root_dir(struct vfs_device *dev)
 {
     struct dnode *dir;
     //kprintf("read_root_dir\n");
-
+    kprintf("READ ROOT\n");
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     dir->root_inode->i_ino = dev->finfo.fat->root_cluster;
@@ -193,7 +193,24 @@ struct dnode *fat_read_root_dir(struct vfs_device *dev)
     dir->root_inode->i_type = I_DIR;
     kstrncpy(dir->root_inode->i_name, "/", 2);
     dir->parent = NULL;
-
+    dir->head = kmalloc(sizeof(struct inode_list));
+    dir->head->current = kmalloc(sizeof(struct inode));
+    dir->head->current->file_size = 0;
+    kstrcpy(dir->head->current->i_name,"..");
+    //Cross mount point since we are on mount 
+    // Assumes we are not /
+    dir->head->current->i_ino = dev->finfo.fat->root_cluster;
+    dir->head->current->i_type = I_DIR;
+    dir->head->current->dev = dev;
+    dir->head->next = kmalloc(sizeof(struct inode_list));
+    
+    dir->head->next->current = kmalloc(sizeof(struct inode));
+    kstrcpy(dir->head->next->current->i_name,".");
+    dir->head->next->current->i_ino = dir->root_inode->i_ino;
+    dir->head->next->current->i_type = I_DIR;
+    dir->head->next->current->dev = dir->root_inode->dev;
+    dir->head->next->current->file_size = 0;
+    dir->head->next->next=NULL;
     read_directory(dir, dev);
 
     return dir;
@@ -202,12 +219,22 @@ struct dnode *fat_read_root_dir(struct vfs_device *dev)
 struct dnode *read_inode_dir(struct inode *i_node)
 {
     struct dnode *dir;
+    
+    // Standard call for root directory to handle . and ..
+    
+    if (i_node->i_ino == i_node->dev->finfo.fat->root_cluster) {
+        return fat_read_root_dir(i_node->dev);
+    }
+
+    kprintf("Fat read inode dir\n");
     // printf("inode_dir_alloc\n");
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     dir->root_inode->i_ino = i_node->i_ino;
     dir->root_inode->dev = i_node->dev;
     dir->root_inode->i_type = I_DIR;
+    dir->head = NULL; 
+
     kstrncpy(dir->root_inode->i_name, i_node->i_name, FAT_MAX_FNAME);
     kstrncpy(dir->i_name, i_node->i_name, FAT_MAX_FNAME);
     read_directory(dir, i_node->dev);
@@ -619,8 +646,13 @@ static void read_directory(struct dnode *dir, struct vfs_device *dev)
     uint32_t clust = dir->root_inode->i_ino;
     //+1 for '\0' char
     char longfname[FAT_MAX_FNAME+1];
+
+
     struct inode_list *tail = NULL;
-    dir->head = NULL;
+    // Handle case of ./.. for root dir two directories
+    if (dir->head != NULL) {
+        tail = dir->head->next;
+    }
     int lbytes_written = 0;
 
     uint32_t max_dir_records = (ATA_SECTOR_SIZE * sectors_per_cluster) / FAT_DIR_RECORD_SIZE;
