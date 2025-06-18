@@ -238,8 +238,11 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     } else {
         t= ta;
     }
+        
+    for(int i = 0; i< MAX_ARGS; i++)
+        ustack[i]=NULL;
 
-        clear_fd_table(t);
+    clear_fd_table(t);
     t->cwd = cwd;
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
     vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,READ_WRITE | SUPERVISOR | PAGE_PRESENT,true,true);

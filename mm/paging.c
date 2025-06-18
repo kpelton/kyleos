@@ -416,7 +416,7 @@ void pagefault(uint64_t *addr) {
     }
     else{
 
-        kprintf("Segfault %d on addr 0x%x\n",proc->pid,cr2);
+        kprintf("Segfault %d on addr 0x%x\n",proc->pid,addr);
         sched_process_kill(proc->pid,true);
         schedule();
     }

@@ -134,7 +134,7 @@ struct inode* ramfs_create_file(struct inode *parent, char *name)
 {
 
     if (ramfs_inodes[parent->i_ino].last_child >= RAMFS_MAX_DIRECTORY)
-        return -1;
+        return NULL;
     acquire_spinlock(&ramfs_lock);
     ramfs_inodes[i_no].dev = parent->dev;
     kstrcpy(ramfs_inodes[i_no].i_name, name);
