@@ -354,7 +354,8 @@ static int stat(const char *file, struct stat *st)
 static int chdir(const char *path)
 {
     struct dnode *dptr;
-    struct inode *iptr;
+    struct inode *iptr=NULL;
+    struct inode *iptr2;
     
     struct ktask *pid = get_current_process();
     if (path[0] == '/') {
@@ -365,9 +366,15 @@ static int chdir(const char *path)
     //TODO refactor this to iname
     // If we are in the root dir or cwd don't walk path
     if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0 ) {
-        iptr = vfs_walk_path(path, dptr);
+        iptr2 = vfs_walk_path(path, dptr);
+        if (!iptr2) {
+            goto error;
+        }
+        iptr = kmalloc(sizeof(struct inode));
+        vfs_copy_inode(iptr,iptr2);
+        vfs_free_inode(iptr2);
     }else{
-        iptr=kmalloc(sizeof(struct inode));
+        iptr = kmalloc(sizeof(struct inode));
         vfs_copy_inode(iptr,dptr->root_inode);
         vfs_free_dnode(dptr);
     }
