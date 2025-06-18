@@ -27,7 +27,7 @@ void input_read(char* dest)
 void input_add_char(char in)
 {
     //skip tab until proper tty is implemented
-    if (in == '\t')
+    if (in == '\t' || in >UART_BACKSPACE_CHAR)
         return;
     acquire_spinlock(&input_spinlock);
     char output[2];
