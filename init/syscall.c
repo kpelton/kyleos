@@ -127,7 +127,7 @@ static int open(char *path, uint32_t flags)
     kstrncpy(s_basepath, path, pathlen + 1);
     kstrncpy(s_dirname, path, pathlen + 1);
     char *last_dir = dirname(s_dirname);
-
+    bool walk = false;
 
 
     if (path[0] == '/') {
@@ -139,6 +139,7 @@ static int open(char *path, uint32_t flags)
     // If we are in the root dir or cwd don't walk path
     if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0) {
         iptr = vfs_walk_path(path, dptr);
+        walk = true;
     }else{
         iptr = dptr->root_inode;
     }
@@ -146,8 +147,10 @@ static int open(char *path, uint32_t flags)
     if (iptr != NULL)
     {
         fd = user_process_open_fd(pid, iptr, flags);
-        vfs_free_inode(iptr);
-        // vfs_free_dnode(dptr);
+        if (walk)
+            vfs_free_inode(iptr);
+        else
+            vfs_free_dnode(dptr);
     }
     else if ((flags & O_WRONLY) == O_WRONLY)
     {
@@ -359,7 +362,7 @@ static int chdir(const char *path)
     struct dnode *dptr;
     struct inode *iptr=NULL;
     struct inode *iptr2;
-    
+    bool walk=false; 
     struct ktask *pid = get_current_process();
     if (path[0] == '/') {
         dptr = vfs_read_root_dir("/");
@@ -370,6 +373,7 @@ static int chdir(const char *path)
     // If we are in the root dir or cwd don't walk path
     if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0 ) {
         iptr2 = vfs_walk_path(path, dptr);
+        walk = true;
         if (!iptr2) {
             goto error;
         }
@@ -379,8 +383,8 @@ static int chdir(const char *path)
     }else{
         iptr = kmalloc(sizeof(struct inode));
         vfs_copy_inode(iptr,dptr->root_inode);
-        vfs_free_dnode(dptr);
     }
+
 
     if (iptr != NULL ) {
         if (iptr->i_type == I_DIR) {
@@ -390,9 +394,13 @@ static int chdir(const char *path)
             vfs_free_inode(iptr);
             goto error;
         }
+        if (!walk)
+            vfs_free_dnode(dptr);
         return 0;
     }
     error:
+      if (!walk)
+            vfs_free_dnode(dptr);
         return -1;
 }
 
