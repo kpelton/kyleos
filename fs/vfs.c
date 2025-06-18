@@ -276,7 +276,7 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
                     } else{
                         dptr = vfs_read_inode_dir(ptr->current);
                     }
-                    vfs_free_inode(prev_dptr);
+                    vfs_free_dnode(prev_dptr);
                     found = true;
                     break;
                 }//else {
@@ -376,10 +376,6 @@ int vfs_stat_file(struct file *rfile, struct stat *st)
     int idev;
     idev = rfile->dev->devicenum;
     return vfs_devices[idev].ops->stat_file(rfile, st);
-
-error:
-    kprintf("Read error %d\n", rfile->flags);
-    return -1;
 }
 
 
