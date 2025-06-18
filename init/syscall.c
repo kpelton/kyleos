@@ -297,7 +297,9 @@ static int exec(char *path)
     if (iptr != NULL)
     {
         retval = exec_from_inode(iptr, true, NULL);
+        vfs_free_inode(iptr);
     }
+
     return retval;
 }
 
@@ -331,6 +333,7 @@ static int exec_args(char *path, char *argv[])
             user_argv[j] = NULL;
         }
         retval = exec_from_inode(iptr, true, user_argv);
+        vfs_free_inode(iptr);
     }
     return retval;
 }
@@ -339,13 +342,13 @@ static int stat(const char *file, struct stat *st)
 {
     struct dnode *dptr = vfs_read_root_dir("/");
     struct inode *iptr = vfs_walk_path(file, dptr);
-    struct stat;
     if (iptr != NULL) {
 	
     	struct file *fptr = vfs_open_file(iptr, O_RDONLY);
-	vfs_stat_file(fptr,st);
-	vfs_close_file(fptr);
-	return 0;
+	    vfs_stat_file(fptr,st);
+	    vfs_close_file(fptr);
+        vfs_free_inode(iptr);
+	    return 0;
     }
 
     return -1;
