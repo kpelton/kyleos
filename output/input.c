@@ -2,6 +2,7 @@
 #include <output/input.h>
 #include <locks/spinlock.h>
 #define MAX_CHARS 512
+#define UART_BACKSPACE_CHAR 127
 static char input_buffer[MAX_CHARS] = {'\0'};
 static char internal_input_buffer[MAX_CHARS];
 static int input_current_place =0;
@@ -25,11 +26,33 @@ void input_read(char* dest)
 
 void input_add_char(char in)
 {
+    //skip tab until proper tty is implemented
+    if (in == '\t')
+        return;
+    acquire_spinlock(&input_spinlock);
     char output[2];
+    int count=1;
+
+
     if (in == '\r')
         in = '\n';
+    // handle backspace
+    if (in == UART_BACKSPACE_CHAR  && input_current_place > 0 ) {
+        //kprintf("%d\n",input_current_place);
+        internal_input_buffer[input_current_place-1] = '\0';
+        input_current_place--;
+        // left one char and clear cursor
+        kprintf("\033[%dD\033[J",count,output);
+        //kprintf("%d\n",input_current_place);
 
-    acquire_spinlock(&input_spinlock);
+        release_spinlock(&input_spinlock);
+        return;
+    }
+    //empty line nothing in buffer
+    if (in == UART_BACKSPACE_CHAR  && input_current_place == 0 ) {
+        release_spinlock(&input_spinlock);
+        return;
+    }
     internal_input_buffer[input_current_place] = in;
     
     input_current_place +=1;

@@ -279,9 +279,9 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
                     vfs_free_inode(prev_dptr);
                     found = true;
                     break;
-                }else {
-                    kprintf("fail\n");
-                }
+                }//else {
+                 //   kprintf("fail\n");
+                //}
             }
             ptr = ptr->next;
         }

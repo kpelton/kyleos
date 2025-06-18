@@ -15,7 +15,7 @@
 #include <include/types.h>
 #include <sched/exec.h>
 #define STACK_PAGES 256
-//#define DSHELL_EN
+#define DSHELL_EN
 static void idle_loop()
 {
     for(;;) {
@@ -37,6 +37,9 @@ static void kernel(void)
     if (iptr != NULL)
     {
         retval = exec_from_inode(iptr,false,NULL);
+        if(retval <0) {
+            panic("Unable to start userspace shell");
+        }
     }
 #endif
     //Should never return after this point since scheduler will take over

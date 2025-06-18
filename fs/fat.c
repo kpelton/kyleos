@@ -185,7 +185,6 @@ struct dnode *fat_read_root_dir(struct vfs_device *dev)
 {
     struct dnode *dir;
     //kprintf("read_root_dir\n");
-    kprintf("READ ROOT\n");
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     dir->root_inode->i_ino = dev->finfo.fat->root_cluster;
@@ -226,8 +225,6 @@ struct dnode *read_inode_dir(struct inode *i_node)
         return fat_read_root_dir(i_node->dev);
     }
 
-    kprintf("Fat read inode dir\n");
-    // printf("inode_dir_alloc\n");
     dir = kmalloc(sizeof(struct dnode));
     dir->root_inode = kmalloc(sizeof(struct inode));
     dir->root_inode->i_ino = i_node->i_ino;
