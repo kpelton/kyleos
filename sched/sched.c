@@ -205,8 +205,8 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     int c_pid = t->pid;
     //kprintf("%d\n",c_pid);
     // save old pid and parent pid since kill will clear them
-    sched_process_kill(t->pid,false);
-    user_process_add_exec(startaddr,name,mm,true,argv,t,cwd);
+    sched_process_kill(t->pid,false,false);
+    user_process_add_exec(startaddr,name,mm,true,argv,t,cwd,false);
     t->pid = c_pid;
     t->cwd = cwd;
     int i=0;
@@ -224,7 +224,7 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     return 0;
 }
 
-int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[],struct ktask *ta,struct inode *cwd)
+int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[],struct ktask *ta,struct inode *cwd,bool setup_files)
 {
 
     int pid_ret = -1;
@@ -241,8 +241,16 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
         
     for(int i = 0; i< MAX_ARGS; i++)
         ustack[i]=NULL;
-
-    clear_fd_table(t);
+    if (setup_files) 
+    {
+        clear_fd_table(t);
+        // Setup stdin/sterr/stdout
+        struct dnode *dptr = vfs_read_root_dir("/");
+        struct inode *iptr = vfs_walk_path("/2/console", dptr);
+        t->open_fds[0] = vfs_open_file(iptr, O_RDWR);
+        t->open_fds[1] = vfs_open_file(iptr, O_RDWR);
+        t->open_fds[2] = vfs_open_file(iptr, O_RDWR);
+    }
     t->cwd = cwd;
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
     vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,READ_WRITE | SUPERVISOR | PAGE_PRESENT,true,true);
@@ -310,7 +318,7 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     return pid_ret;
 }
 
-bool sched_process_kill(int pid, bool cleanup)
+bool sched_process_kill(int pid, bool cleanup, bool close_files)
 {
     int i;
     int j;
@@ -340,13 +348,15 @@ bool sched_process_kill(int pid, bool cleanup)
             kprintf("Killed %d\n", t->pid);
 #endif
             // Close any opened files
-            for (j = 0; j < MAX_TASK_OPEN_FILES; j++)
-                if (t->open_fds[j] != NULL)
-                {
-                    vfs_close_file(t->open_fds[j]);
-                    t->open_fds[j] = NULL;
-                }
-
+            if (close_files) 
+            {
+                for (j = 0; j < MAX_TASK_OPEN_FILES; j++)
+                    if (t->open_fds[j] != NULL)
+                    {
+                        vfs_close_file(t->open_fds[j]);
+                        t->open_fds[j] = NULL;
+                    }
+            }
             t->state = TASK_DONE;
             // TODO: have init process handle reaping all pids and update children PIDs
             if (cleanup == true || t->parent <= 0)

@@ -14,6 +14,7 @@
 #define VFS_MAX_MOUNT_POINT 1024
 #define I_DIR  40000
 #define I_FILE 100000
+#define I_DEV  400000
 #define DELIM '/'
 #define ROOT "/"
 

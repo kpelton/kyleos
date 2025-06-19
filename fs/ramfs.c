@@ -4,7 +4,7 @@
 #include <locks/spinlock.h>
 #include <output/output.h>
 #define MAX_RAMFS 512
-
+#define CONSOLE_INO 1
 struct dnode *ramfs_read_root_dir(struct vfs_device *dev);
 struct dnode *ramfs_read_inode_dir(struct inode *inode);
 int ramfs_create_dir(struct inode *parent, char *name);
@@ -25,12 +25,24 @@ static void create_root_dir(struct vfs_device *dev) {
     kstrcpy(ramfs_inodes[0].i_name, dev->mountpoint_root);
     ramfs_inodes[0].i_type=I_DIR;
     ramfs_inodes[0].i_ino = 0;
-    ramfs_inodes[0].children[0]=0;
-    ramfs_inodes[0].last_child = 0;
+    ramfs_inodes[0].children[0]=1;
+    ramfs_inodes[0].last_child = 1;
     ramfs_inodes[0].file_size = 0;
     ramfs_inodes[0].parent = -1;
     ramfs_inodes[0].blocks = NULL;
-    i_no++;
+    // create console node
+    ramfs_inodes[1].dev = dev;
+    kstrcpy(ramfs_inodes[1].i_name,"console");
+    ramfs_inodes[1].i_type=I_DEV;
+    ramfs_inodes[1].i_ino = 1;
+    ramfs_inodes[1].children[0]=0;
+    ramfs_inodes[1].last_child = 0;
+    ramfs_inodes[1].file_size = 0;
+    ramfs_inodes[1].parent = 0;
+    ramfs_inodes[1].blocks = NULL;
+
+
+    i_no+=2;
 }
 
 int ramfs_init(void) {
@@ -59,13 +71,36 @@ int ramfs_init(void) {
 
     return 0;
 }
+static int ramfs_read_console(void *buf, uint32_t count) {
+    int val;
+    while (val == 0)
+    {
+        input_read(buf);    
+        val = kstrlen(buf);
+        ksleepm(50);
+    }
+    return val;
+}
+
+static int ramfs_write_console(void *buf, uint32_t count) {
+    char buffer[4096];
+    if (count > 4095)
+        panic("can't handle console write of this size");
+    memcpy(buffer,buf,count);
+    buffer[count]='\0';
+    kprintf("%s",buffer); 
+    return count;
+}
+
 int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) { 
 
-    acquire_spinlock(&ramfs_lock);
     struct ramfs_block *r_block = ramfs_inodes[rfile->i_node.i_ino].blocks;
     uint64_t file_size = ramfs_inodes[rfile->i_node.i_ino].file_size;
     int ret_count = count;
-
+    if (rfile->i_node.i_ino == CONSOLE_INO) {
+        return ramfs_read_console(buf,count);
+    }
+    acquire_spinlock(&ramfs_lock);
     // Approaching the end of the file truncate read bytes
 #ifdef DEBUG_FS_RAMFS
     kprintf("%d %d\n",rfile->pos + count,file_size);
@@ -77,7 +112,7 @@ int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) {
 
     memcpy(((char *)buf),((uint8_t *)r_block->block)+rfile->pos,ret_count);
 
-        release_spinlock(&ramfs_lock);
+    release_spinlock(&ramfs_lock);
 
     return ret_count;
 }
@@ -100,6 +135,10 @@ int ramfs_stat_file (struct file * rfile,struct stat *st) {
 
 int ramfs_write_file (struct file * rfile,void *buf,uint32_t count) {
 
+    if (rfile->i_node.i_ino == CONSOLE_INO) {
+        return ramfs_write_console(buf,count);
+    }
+ 
     acquire_spinlock(&ramfs_lock);
     struct ramfs_block *r_block = ramfs_inodes[rfile->i_node.i_ino].blocks;
     uint64_t file_size = ramfs_inodes[rfile->i_node.i_ino].file_size;

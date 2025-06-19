@@ -21,11 +21,11 @@ void sched_stats();
 void ksleepm(uint32_t ms);
 struct ktask* get_current_process();
 struct ktask *sched_get_process(int pid);
-bool sched_process_kill(int pid,bool cleanup);
+bool sched_process_kill(int pid,bool cleanup,bool closefiles);
 int user_process_fork();
 void sched_save_context();
 int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm, char *argv[],struct inode *cwd);
-int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[],struct ktask *t, struct inode *cwd);
+int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[],struct ktask *t, struct inode *cwd,bool setup_files);
 void sched_init();
 #define FXSAVE_SIZE 512
 enum sched_states {
