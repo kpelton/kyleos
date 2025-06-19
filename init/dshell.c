@@ -332,7 +332,7 @@ for(;;) {
             }
             else
             {
-                if (buffer[3] == '.' && buffer[4] == '.' && kstrcmp(dptr->i_name, "/") != 0 && oldpwd != pwd)
+                if (buffer[3] == '.' && buffer[4] == '.' && kstrcmp(dptr->root_inode->i_name, "/") != 0 && oldpwd != pwd)
                     pop_dir_stack();
                 else if (oldpwd != pwd)
                     push_dir_stack(pwd->i_name);

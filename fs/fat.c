@@ -233,7 +233,6 @@ struct dnode *read_inode_dir(struct inode *i_node)
     dir->head = NULL; 
 
     kstrncpy(dir->root_inode->i_name, i_node->i_name, FAT_MAX_FNAME);
-    kstrncpy(dir->i_name, i_node->i_name, FAT_MAX_FNAME);
     read_directory(dir, i_node->dev);
     return dir;
 }

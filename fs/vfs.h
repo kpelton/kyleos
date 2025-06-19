@@ -58,7 +58,6 @@ struct inode_list {
 };
 // directory entry
 struct dnode {
-    char i_name[VFS_MAX_FNAME];
     struct inode* root_inode;
     //children files and folders
     struct inode_list* head;
