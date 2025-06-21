@@ -18,7 +18,7 @@ static int creat(char *path, uint32_t flags)
     int fd = -1;
     struct inode *iptr = NULL;
     struct ktask *pid = get_current_process();
-    struct dnode *dptr = vfs_read_root_dir("/");
+    struct dnode *dptr = vfs_read_root_dir(ROOT);
 #ifdef DEBUG_SYS_CREATE
     kprintf("creating file\n");
 #endif
@@ -37,9 +37,6 @@ static int creat(char *path, uint32_t flags)
         vfs_free_inode(iptr);
     return fd;
 }
-#define DELIM '/'
-#define ROOT "/"
-// destructive
 //  Also does not handle duplicate ///
 static char *basename(char *path)
 {
@@ -131,13 +128,13 @@ static int open(char *path, uint32_t flags)
 
 
     if (path[0] == '/') {
-        dptr = vfs_read_root_dir("/");
+        dptr = vfs_read_root_dir(ROOT);
     } else {
         dptr = vfs_read_inode_dir(pid->cwd);
     }
 
     // If we are in the root dir or cwd don't walk path
-    if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0) {
+    if (kstrcmp(path,ROOT) != 0 && kstrcmp (path,".") != 0) {
         iptr = vfs_walk_path(path, dptr);
         walk = true;
     }else{
@@ -155,14 +152,14 @@ static int open(char *path, uint32_t flags)
     else if ((flags & O_WRONLY) == O_WRONLY)
     {
            // get a directory entry in order to walk
-        if (path[0] == '/') {
-            dptr = vfs_read_root_dir("/");
+        if (path[0] == DELIM) {
+            dptr = vfs_read_root_dir(ROOT);
         } else {
             dptr = vfs_read_inode_dir(pid->cwd);
         }
         kprintf("last_dir%s\n",last_dir);    
         // get parent node
-        if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0 && kstrcmp(last_dir,".") != 0 ) {
+        if (kstrcmp(path,ROOT) != 0 && kstrcmp (path,".") != 0 && kstrcmp(last_dir,".") != 0 ) {
             iptr = vfs_walk_path(last_dir, dptr);
         }else{
             iptr =kmalloc(sizeof(struct inode));
@@ -295,7 +292,7 @@ static void debug_read_input(char *dst)
 static int exec(char *path)
 {
     int retval = -1;
-    struct dnode *dptr = vfs_read_root_dir("/");
+    struct dnode *dptr = vfs_read_root_dir(ROOT);
     struct inode *iptr = vfs_walk_path(path, dptr);
     if (iptr != NULL && iptr->i_type == I_FILE)
     {
@@ -311,7 +308,7 @@ static int exec_args(char *path, char *argv[])
     int retval = -1;
     if (!path)
         return -1;
-    struct dnode *dptr = vfs_read_root_dir("/");
+    struct dnode *dptr = vfs_read_root_dir(ROOT);
     struct inode *iptr = vfs_walk_path(path, dptr);
     char **user_argv = NULL;
     int i;
@@ -343,7 +340,7 @@ static int exec_args(char *path, char *argv[])
 
 static int stat(const char *file, struct stat *st)
 {
-    struct dnode *dptr = vfs_read_root_dir("/");
+    struct dnode *dptr = vfs_read_root_dir(ROOT);
     struct inode *iptr = vfs_walk_path(file, dptr);
     if (iptr != NULL) {
 	
@@ -364,14 +361,14 @@ static int chdir(const char *path)
     struct inode *iptr2;
     bool walk=false; 
     struct ktask *pid = get_current_process();
-    if (path[0] == '/') {
-        dptr = vfs_read_root_dir("/");
+    if (path[0] == DELIM) {
+        dptr = vfs_read_root_dir(ROOT);
     } else {
         dptr = vfs_read_inode_dir(pid->cwd);
     }
     //TODO refactor this to iname
     // If we are in the root dir or cwd don't walk path
-    if (kstrcmp(path,"/") != 0 && kstrcmp (path,".") != 0 ) {
+    if (kstrcmp(path,ROOT) != 0 && kstrcmp (path,".") != 0 ) {
         iptr2 = vfs_walk_path(path, dptr);
         walk = true;
         if (!iptr2) {

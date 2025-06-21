@@ -86,7 +86,7 @@ int vfs_register_device(struct vfs_device newdev)
             panic("failed to mount non rootfs");
         
         root =vfs_devices[0].ops->read_root_dir(&vfs_devices[0]);
-        if (kstrcmp(dev->mountpoint_parent,"/") == 0)
+        if (kstrcmp(dev->mountpoint_parent,ROOT) == 0)
             dev->mnt_node_parent = root->root_inode;
         else {
         dev->mnt_node_parent = vfs_walk_path(dev->mountpoint_parent,root);
@@ -234,14 +234,14 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
     bool found = false;
     // handle ./
     // if this a a relative path in local dir
-   if (kstrstr(path, "/") < 0  ) {
+   if (kstrstr(path, ROOT) < 0  ) {
         iptr_ret = vfs_find_file_in_dir(path,dptr);
         return iptr_ret;
     }
 
     while (end != -1)
     {
-        end = kstrstr(curr, "/");
+        end = kstrstr(curr, ROOT);
         // kprintf("%d %s\n", end, curr);
         if (end >= 0)
         {
