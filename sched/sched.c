@@ -236,15 +236,16 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     if (ta == NULL) {
         t = &ktasks[find_free_task()];
     } else {
-        t= ta;
+        t = ta;
     }
         
     for(int i = 0; i< MAX_ARGS; i++)
         ustack[i]=NULL;
+
+    // Setup stdin/sterr/stdout
     if (setup_files) 
     {
         clear_fd_table(t);
-        // Setup stdin/sterr/stdout
         struct dnode *dptr = vfs_read_root_dir("/");
         struct inode *iptr = vfs_walk_path("/2/console", dptr);
         t->open_fds[0] = vfs_open_file(iptr, O_RDWR);
@@ -256,7 +257,6 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,READ_WRITE | SUPERVISOR | PAGE_PRESENT,true,true);
     vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_HEAP_SIZE,READ_WRITE | SUPERVISOR,true,true);
     user_switch_paging(&(mm->pagetable));
-
 
     t->heap_size = USER_HEAP_SIZE;
     t->user_start_heap = (uint64_t *)USER_HEAP_VADDR;

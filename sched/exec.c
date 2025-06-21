@@ -108,7 +108,7 @@ if (hdr.magic == ELF_MAGIC)
         if (map != NULL){
 
             if (replace == false){
-               retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true,argv,NULL,vfs_get_root_inode());
+               retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true,argv,NULL,vfs_get_root_inode(),true);
 //               retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true,argv,NULL,NULL);
             }else{
                 struct ktask *t = get_current_process();

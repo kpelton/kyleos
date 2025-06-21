@@ -349,7 +349,7 @@ for(;;) {
             }
             *cptr = '\0';
             pid = atoi(buffer + 5);
-            if (sched_process_kill(pid,true) == false)
+            if (sched_process_kill(pid,true,true) == false)
                 kprintf("Kill failed\n");
         }
         else if (buffer[0] == 'w' && buffer[1] == 'r' && buffer[2] == 't' && buffer[3] == ' ' && buffer[4] != '\n') {
