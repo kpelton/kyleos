@@ -72,7 +72,7 @@ int ramfs_init(void) {
     return 0;
 }
 static int ramfs_read_console(void *buf, uint32_t count) {
-    int val;
+    int val=0;
     while (val == 0)
     {
         input_read(buf);    

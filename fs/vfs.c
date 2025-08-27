@@ -5,10 +5,9 @@ struct vfs_device vfs_devices[VFS_MAX_DEVICES];
 
 static int current_device = 0;
 static struct file_table ftable ;
-
-
 static struct inode* vfs_find_file_in_dir(const char *filename, struct dnode *dptr);
 struct inode* top_root_inode;
+
 void vfs_init()
 {
     init_spinlock(&ftable.lock);
@@ -28,6 +27,7 @@ struct vfs_device *vfs_get_device(int num)
 {
     return &vfs_devices[num];
 }
+
 struct inode *vfs_get_root_inode() 
 {   
     return top_root_inode;
@@ -103,6 +103,7 @@ int vfs_register_device(struct vfs_device newdev)
     current_device += 1;
     return dev->devicenum;
 }
+
 // Parent must free d_node
 struct dnode *vfs_read_inode_dir(struct inode *i_node)
 {

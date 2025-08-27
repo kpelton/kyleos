@@ -201,10 +201,11 @@ int user_process_fork()
 
 int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm,char *argv[],struct inode *cwd)
 {
-    asm("cli");
     int c_pid = t->pid;
     //kprintf("%d\n",c_pid);
     // save old pid and parent pid since kill will clear them
+    // Don't clear file descriptors
+    // TODO cleanup inode from cwd
     sched_process_kill(t->pid,false,false);
     user_process_add_exec(startaddr,name,mm,true,argv,t,cwd,false);
     t->pid = c_pid;

@@ -36,10 +36,13 @@ static void kernel(void)
 
     if (iptr != NULL)
     {
+        kprintf("Starting shell\n");
         retval = exec_from_inode(iptr,false,NULL);
         if(retval <0) {
             panic("Unable to start userspace shell");
         }
+    }else{
+        panic("Could not find Shell in rootfs");
     }
 #endif
     //Should never return after this point since scheduler will take over
