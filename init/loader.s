@@ -78,6 +78,15 @@ kernel_bootstrap:
     mov DWORD [edi],eax
     add eax,0x200000
     mov DWORD [edi+8],eax
+    add eax, 0x200000          ; move to next 2MB physical page
+    mov DWORD [edi+16], eax     ; store in next PDE
+    add eax, 0x200000          ; move to next 2MB physical page
+    mov DWORD [edi+24], eax     ; store in next PDE
+    add eax, 0x200000          ; move to next 2MB physical page
+    mov DWORD [edi+32], eax     ; store in next PDE
+
+
+
 .do_long_mode:
     mov eax, cr4                 ; Set the A-register to control register 4.
     or eax, 1 << 5               ; Set the PAE-bit, which is the 6th bit (bit 5).

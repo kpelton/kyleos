@@ -2,7 +2,7 @@ CC	?= gcc
 AS = nasm
 ASFLAGS = -f elf64
 KERNEL_ROOT=$(shell pwd)
-CFLAGS	= -m64 -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2  -I $(KERNEL_ROOT)  -g 
+CFLAGS	= -m64 -O0 -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2  -I $(KERNEL_ROOT)  -g 
 LD	= ld  -m elf_x86_64 
 export CFLAGS 
 export CC
@@ -70,7 +70,7 @@ test: kernel32.bin
 	qemu-system-x86_64 -m 64M -kernel kernel32.bin  -hda test-hd.img -serial stdio -rtc base=localtime
 
 test-nox: kernel32.bin
-	qemu-system-x86_64 -m 8G -kernel kernel32.bin  -hda test-hd.img -display none -serial stdio -rtc base=localtime
+	qemu-system-x86_64 -m 4G -kernel kernel32.bin  -hda test-hd.img -display none -serial stdio -rtc base=localtime
 test-log: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -serial stdio 2>log
 kvm-test: kernel32.bin
