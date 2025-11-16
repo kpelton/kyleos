@@ -430,6 +430,45 @@ static int mkdir(const char *pathname, int mode)
     return vfs_create_dir(pid->cwd,pathname);
 }
 
+static int dup(const int oldfd)
+{
+    kprintf("DUP\n");
+    //TODO broken
+    return oldfd;
+}
+
+static int dup2(const int oldfd,const int newfd)
+{
+
+    kprintf("DUP2 old:%d  newfd:%d \n",oldfd,newfd);
+    if (oldfd >= MAX_TASK_OPEN_FILES || oldfd < 0)
+        return -1;
+
+    if (newfd >= MAX_TASK_OPEN_FILES || newfd < 0)
+        return -1;
+    
+    // See if oldfd is really open
+    struct ktask *t = get_current_process();
+    if (t->open_fds[oldfd] == NULL) {
+        kprintf("ERROR dup2 oldfd is not open\n");
+	    return -1;
+    }
+
+    // If newfd already open close it first
+    if (t->open_fds[newfd] != NULL) {
+        //TODO error handling on vfs close
+        vfs_close_file(t->open_fds[newfd]);
+        t->open_fds[newfd] = NULL;
+    }
+    
+    // Now dup the fd
+    //TODO lock fd    
+    t->open_fds[newfd] = t->open_fds[oldfd];
+    t->open_fds[newfd]->refcount++;
+    kprintf("%x newfd\n",newfd);
+    return newfd;
+}
+
 void *syscall_tbl[] = {
     (void *)&sleep,            // 0
     (void *)&debugprint,       // 1
@@ -450,6 +489,8 @@ void *syscall_tbl[] = {
     (void *)&getdents,         // 16
     (void *)&chdir,            // 17
     (void *)&mkdir,            // 18
+    (void *)&dup,              // 19
+    (void *)&dup2             // 20
 };
 
 const int NR_syscall = sizeof(syscall_tbl);
