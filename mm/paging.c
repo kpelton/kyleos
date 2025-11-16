@@ -20,12 +20,14 @@ extern uint64_t _kernel_text_start;
 extern uint64_t _kernel_rodata_end;
 extern uint64_t _kernel_rodata_start;
 
-uint64_t initial_pml4[512] __attribute__((aligned(0x1000)));         // must be aligned to (at least)0x20, ...
-uint64_t initial_page_dir_tab[512] __attribute__((aligned(0x1000))); // must be aligned to (at least)0x20, ...
-uint64_t initial_page_dir[512] __attribute__((aligned(0x1000)));   // must be aligned to page boundary
-uint64_t initial_page_tab[INITIAL_PAGE_TAB][512] __attribute__((aligned(0x1000)));
-uint64_t initial_iden_page_dir_tab[512] __attribute__((aligned(0x1000)));
-uint64_t initial_iden_page_dir[512] __attribute__((aligned(0x1000)));
+#define PAGETABLE_SECTION __attribute__((section(".pagetables"), aligned(0x1000), used))
+
+PAGETABLE_SECTION uint64_t initial_pml4[512];
+PAGETABLE_SECTION uint64_t initial_page_dir_tab[512];
+PAGETABLE_SECTION uint64_t initial_page_dir[512];
+PAGETABLE_SECTION uint64_t initial_page_tab[INITIAL_PAGE_TAB][512];
+PAGETABLE_SECTION uint64_t initial_iden_page_dir_tab[512];
+PAGETABLE_SECTION uint64_t initial_iden_page_dir[512];
 
 
 uint64_t *kernel_pml4;

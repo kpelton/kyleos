@@ -1,6 +1,8 @@
 #include <fs/ramfs.h>
 #include <mm/mm.h>
 #include <fs/vfs.h>
+#include <sched/sched.h>
+#include <output/input.h>
 #include <locks/spinlock.h>
 #include <output/output.h>
 #define MAX_RAMFS 512
@@ -187,7 +189,7 @@ struct inode* ramfs_create_file(struct inode *parent, char *name)
     ramfs_inodes[parent->i_ino].children[ramfs_inodes[parent->i_ino].last_child]=i_no;
     ramfs_inodes[parent->i_ino].last_child++;
     struct inode *i = kmalloc(sizeof(struct inode));
-    vfs_copy_inode(i,&ramfs_inodes[i_no]);
+    vfs_copy_inode(i,(struct inode *)&ramfs_inodes[i_no]);
     i_no++;
     release_spinlock(&ramfs_lock);
 

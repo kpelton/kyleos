@@ -34,11 +34,18 @@ SECTIONS
     {
         *(.data)
     }
-
+	_kernel_data_end = .;
     .bss  ALIGN(0x1000) :AT (ADDR (.bss) - 0xffffffff80000000)
     {
         *(COMMON)
         *(.bss)
     }
+    . = ALIGN(0x1000);
+    .pagetables ALIGN(0x1000) : AT(ADDR(.pagetables) - 0xffffffff80000000)
+    {
+        KEEP(*(.pagetables))
+    }
+    . = ALIGN(0x1000);
+
 	_kernel_end = .;
 }
