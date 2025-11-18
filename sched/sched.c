@@ -284,13 +284,12 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     if( argv) {
 
         //Copy name of prog in argv[0]
-        /*
+       
         int len = kstrlen(name);
-        sp = (uint64_t)(((char*)sp) - len) & 0xffffffffffffff00;
+        sp = (uint64_t *) ((uint64_t) (((char*)sp) - len) & 0xffffffffffffff00);
         ustack[argc] = sp;
-        kstrncpy(sp,name,len);
-*/
-        for(argc = 0; argv[argc] && argc < MAX_ARGS; argc++) 
+        kstrncpy((char *) sp,name,len);
+        for(argc = 1; argv[argc] && argc < MAX_ARGS; argc++) 
         {
             //kprintf(" %d %s\n",argc, argv[argc]);
             int len = kstrlen(argv[argc]);
