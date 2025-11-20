@@ -71,7 +71,6 @@ struct file {
     struct vfs_device* dev;
     uint64_t pos;
     uint32_t flags;
-    struct spinlock lock;    
 };
 
 struct file_table {

@@ -10,6 +10,8 @@ static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t firs
 static inline uint32_t clust2sec(uint32_t cluster, struct fatFS *fs);
 static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector);
 static void write_directory(struct inode *parent, char *name);
+static int fat_write_file(struct file *rfile, void *buf, uint32_t count);
+static struct inode* fat_create_file (struct inode* parent, char *name);
 
 struct dnode *fat_read_root_dir(struct vfs_device *dev);
 struct dnode *read_inode_dir(struct inode *i_node);
@@ -17,6 +19,7 @@ void cat_inode_file(struct inode *i_node);
 int fat_create_dir(struct inode *parent, char *name);
 int read_inode_file(struct file *rfile, void *buf, uint32_t count);
 int fat_stat_file (struct file * rfile,struct stat *st);
+
 static int device_num;
 #define FAT_UNUSED_DIR 0xe5
 #define FAT_END_OF_CHAIN 0x0FFFFFF8
@@ -98,7 +101,9 @@ int fat_init(struct mbr_info mbr_entry)
     vfs_ops->cat_inode_file = &cat_inode_file;
     vfs_ops->read_file = &read_inode_file;
     vfs_ops->create_dir = &fat_create_dir;
+    vfs_ops->create_file = &fat_create_file;
     vfs_ops->stat_file = &fat_stat_file;
+    vfs_ops->write_file = &fat_write_file;
     vfs_dev.ops = vfs_ops;
     vfs_dev.finfo.fat = fs;
     vfs_dev.rootfs = true;
@@ -323,6 +328,16 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count)
     //kfree(cluster_dest);
     //kprintf("read inode total bytes read %d file->size %d file->pos %d\n",bytes_read,rfile->i_node.file_size,rfile->pos);
     return bytes_read;
+}
+
+static int fat_write_file(struct file *rfile, void *buf, uint32_t count) {
+    kprintf("Called");
+    return count;
+}
+
+static struct inode* fat_create_file (struct inode* parent, char *name) {
+    kprintf("fat_create_file called");
+    return NULL;
 }
 
 static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t first_data_sector, uint32_t sectors_per_cluster)
