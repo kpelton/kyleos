@@ -12,6 +12,7 @@ static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector);
 static void write_directory(struct inode *parent, char *name);
 static int fat_write_file(struct file *rfile, void *buf, uint32_t count);
 static struct inode* fat_create_file (struct inode* parent, char *name);
+static int fat_setup_8_3_attr(const char *fname, struct std_fat_8_3_fmt *fptr, const int attr_type, uint32_t new_cluster);
 
 struct dnode *fat_read_root_dir(struct vfs_device *dev);
 struct dnode *read_inode_dir(struct inode *i_node);
@@ -488,21 +489,9 @@ static void prepare_new_dir(struct inode *parent, uint32_t new_cluster)
     read_cluster(sector, sectors_per_cluster, cluster);
     memzero8(cluster, FAT_CLUSTER_SIZE);
 
-    fmt = (struct std_fat_8_3_fmt *)dir_ptr;
-    fmt->attribute = FAT_DIR;
-    fmt->file_size = 0;
-    fmt->low_cluster = 0xffff & parent->i_ino;
-    fmt->high_cluster = (0x0fff0000 & parent->i_ino) >> 16;
-    kstrcpy((char *)fmt->fname, "..");
+    fat_setup_8_3_attr(".", (struct std_fat_8_3_fmt *)dir_ptr, FAT_DIR, new_cluster);
     dir_ptr += FAT_DIR_RECORD_SIZE;
-
-    fmt = (struct std_fat_8_3_fmt *)dir_ptr;
-    fmt->attribute = FAT_DIR;
-    fmt->file_size = 0;
-    fmt->low_cluster = 0xffff & new_cluster;
-    fmt->high_cluster = (0x0fff0000 & new_cluster) >> 16;
-    kstrcpy((char *)fmt->fname, ".");
-
+    fat_setup_8_3_attr("..", (struct std_fat_8_3_fmt *)dir_ptr, FAT_DIR, parent->i_ino);
     write_cluster(sector, sectors_per_cluster, cluster);
     kfree(cluster);
 }
@@ -595,7 +584,6 @@ static void write_directory(struct inode *parent, char *name)
     uint32_t sector = 0;
     uint32_t new_cluster = 0;
     uint32_t prev_clust = FAT_END_OF_CHAIN;
-    struct std_fat_8_3_fmt *fmt;
     uint32_t max_dir_records = (ATA_SECTOR_SIZE * sectors_per_cluster) / FAT_DIR_RECORD_SIZE;
 
 //    write_longfname(parent, name);
@@ -615,7 +603,6 @@ static void write_directory(struct inode *parent, char *name)
                 new_cluster = find_free_cluster(parent->dev->finfo.fat);
                 parent->dev->finfo.fat->fat_ptr[new_cluster] = FAT_END_OF_CHAIN;
                 write_fat_ptr(new_cluster, FAT_END_OF_CHAIN, parent->dev->finfo.fat->first_fat_sector);
-                fmt = (struct std_fat_8_3_fmt *)dir_ptr;
                 fat_setup_8_3_attr(name, (struct std_fat_8_3_fmt *)dir_ptr, FAT_DIR, new_cluster);
                 // rework how name is copied over and use long filename if longer than 8 chars
                 sector = clust2sec(clust, parent->dev->finfo.fat);
