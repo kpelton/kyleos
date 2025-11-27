@@ -588,7 +588,7 @@ static void write_directory(struct inode *parent, char *name)
     struct std_fat_8_3_fmt *fmt;
     uint32_t max_dir_records = (ATA_SECTOR_SIZE * sectors_per_cluster) / FAT_DIR_RECORD_SIZE;
 
-    write_longfname(parent, name);
+//    write_longfname(parent, name);
     // asm("kyle: jmp kyle");
     read_cluster(clust2sec(clust, parent->dev->finfo.fat), parent->dev->finfo.fat->fat_boot.sectors_per_cluster, cluster);
     // kprintf("REading sector %x\n", clust2sec(clust, parent->dev->finfo.fat));

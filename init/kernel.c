@@ -15,7 +15,8 @@
 #include <include/types.h>
 #include <sched/exec.h>
 #define STACK_PAGES 256
-#define DSHELL_EN
+//#define DSHELL_EN
+#define SHELL "nushell"
 static void idle_loop()
 {
     for(;;) {
@@ -32,7 +33,7 @@ static void kernel(void)
 #else
     int retval = -1;
     struct dnode *dptr = vfs_read_root_dir("/");
-    struct inode *iptr = vfs_walk_path("nushell", dptr);
+    struct inode *iptr = vfs_walk_path(SHELL, dptr);
 
     if (iptr != NULL)
     {
