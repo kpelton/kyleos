@@ -480,15 +480,11 @@ static void prepare_new_dir(struct inode *parent, uint32_t new_cluster)
 {
     uint32_t sectors_per_cluster = parent->dev->finfo.fat->fat_boot.sectors_per_cluster;
     uint8_t *cluster = kmalloc(sectors_per_cluster * ATA_SECTOR_SIZE);
-
     uint8_t *dir_ptr = cluster;
-    struct std_fat_8_3_fmt *fmt;
     uint32_t sector = 0;
+
     sector = clust2sec(new_cluster, parent->dev->finfo.fat);
-
-    read_cluster(sector, sectors_per_cluster, cluster);
     memzero8(cluster, FAT_CLUSTER_SIZE);
-
     fat_setup_8_3_attr(".", (struct std_fat_8_3_fmt *)dir_ptr, FAT_DIR, new_cluster);
     dir_ptr += FAT_DIR_RECORD_SIZE;
     fat_setup_8_3_attr("..", (struct std_fat_8_3_fmt *)dir_ptr, FAT_DIR, parent->i_ino);
@@ -574,6 +570,25 @@ static int fat_setup_8_3_attr(const char *fname, struct std_fat_8_3_fmt *fptr, c
     return 0;
 }
 
+static int write_new_file(struct inode *parent, uint8_t *dir_ptr, uint8_t *cluster, char *name, bool is_dir) {
+    // setup long filename
+    uint32_t new_cluster = 0;
+    uint32_t sector = 0;
+    uint32_t clust = parent->i_ino;
+    new_cluster = find_free_cluster(parent->dev->finfo.fat);
+    parent->dev->finfo.fat->fat_ptr[new_cluster] = FAT_END_OF_CHAIN;
+    write_fat_ptr(new_cluster, FAT_END_OF_CHAIN, parent->dev->finfo.fat->first_fat_sector);
+    fat_setup_8_3_attr(name, (struct std_fat_8_3_fmt *)dir_ptr, FAT_DIR, new_cluster);
+    // rework how name is copied over and use long filename if longer than 8 chars
+    sector = clust2sec(clust, parent->dev->finfo.fat);
+    write_cluster(sector, parent->dev->finfo.fat->fat_boot.sectors_per_cluster, cluster);
+    // kprintf("Writing sector %x %x\n", sector, *dir_ptr);
+    prepare_new_dir(parent, new_cluster);
+    /// kprintf("cluster:%x new_cluster:%x  parent_cluster:%x\n", clust, new_cluster, parent->i_ino);
+
+    return 0;
+}
+
 static void write_directory(struct inode *parent, char *name)
 {
     uint32_t sectors_per_cluster = parent->dev->finfo.fat->fat_boot.sectors_per_cluster;
@@ -581,8 +596,6 @@ static void write_directory(struct inode *parent, char *name)
     uint8_t *dir_ptr = cluster;
     uint32_t k = 0;
     uint32_t clust = parent->i_ino;
-    uint32_t sector = 0;
-    uint32_t new_cluster = 0;
     uint32_t prev_clust = FAT_END_OF_CHAIN;
     uint32_t max_dir_records = (ATA_SECTOR_SIZE * sectors_per_cluster) / FAT_DIR_RECORD_SIZE;
 
@@ -599,19 +612,7 @@ static void write_directory(struct inode *parent, char *name)
 
             if (*dir_ptr == FAT_UNUSED_DIR || *dir_ptr == 0)
             {
-                // setup long filename
-                new_cluster = find_free_cluster(parent->dev->finfo.fat);
-                parent->dev->finfo.fat->fat_ptr[new_cluster] = FAT_END_OF_CHAIN;
-                write_fat_ptr(new_cluster, FAT_END_OF_CHAIN, parent->dev->finfo.fat->first_fat_sector);
-                fat_setup_8_3_attr(name, (struct std_fat_8_3_fmt *)dir_ptr, FAT_DIR, new_cluster);
-                // rework how name is copied over and use long filename if longer than 8 chars
-                sector = clust2sec(clust, parent->dev->finfo.fat);
-                write_cluster(sector, parent->dev->finfo.fat->fat_boot.sectors_per_cluster, cluster);
-                // kprintf("Writing sector %x %x\n", sector, *dir_ptr);
-
-                prepare_new_dir(parent, new_cluster);
-                /// kprintf("cluster:%x new_cluster:%x  parent_cluster:%x\n", clust, new_cluster, parent->i_ino);
-
+                write_new_file(parent,dir_ptr,cluster,name, true);
                 kfree(cluster);
                 return;
             }
