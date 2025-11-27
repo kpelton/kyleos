@@ -575,6 +575,16 @@ static void write_longfname(struct inode *parent, char *name)
     panic("Should never get here");
 }
 
+static int fat_setup_8_3_attr(const char *fname, struct std_fat_8_3_fmt *fptr, const int attr_type, uint32_t new_cluster)
+{
+    fptr->attribute = attr_type;
+    fptr->file_size = 0;
+    fptr->low_cluster = 0xffff & new_cluster;
+    fptr->high_cluster = (0x0fff0000 & new_cluster) >> 16;
+    kstrncpy((char *)fptr->fname, fname, FAT_MAX_STD_FNAME);
+    return 0;
+}
+
 static void write_directory(struct inode *parent, char *name)
 {
     uint32_t sectors_per_cluster = parent->dev->finfo.fat->fat_boot.sectors_per_cluster;
@@ -606,13 +616,8 @@ static void write_directory(struct inode *parent, char *name)
                 parent->dev->finfo.fat->fat_ptr[new_cluster] = FAT_END_OF_CHAIN;
                 write_fat_ptr(new_cluster, FAT_END_OF_CHAIN, parent->dev->finfo.fat->first_fat_sector);
                 fmt = (struct std_fat_8_3_fmt *)dir_ptr;
+                fat_setup_8_3_attr(name, (struct std_fat_8_3_fmt *)dir_ptr, FAT_DIR, new_cluster);
                 // rework how name is copied over and use long filename if longer than 8 chars
-                fmt->attribute = FAT_DIR;
-                fmt->file_size = 0;
-                fmt->low_cluster = 0xffff & new_cluster;
-                fmt->high_cluster = (0x0fff0000 & new_cluster) >> 16;
-                kstrncpy((char *)fmt->fname, name, FAT_MAX_STD_FNAME);
-
                 sector = clust2sec(clust, parent->dev->finfo.fat);
                 write_cluster(sector, parent->dev->finfo.fat->fat_boot.sectors_per_cluster, cluster);
                 // kprintf("Writing sector %x %x\n", sector, *dir_ptr);
