@@ -13,6 +13,8 @@ static void write_directory(struct inode *parent, char *name);
 static int fat_write_file(struct file *rfile, void *buf, uint32_t count);
 static struct inode* fat_create_file (struct inode* parent, char *name);
 static int fat_setup_8_3_attr(const char *fname, struct std_fat_8_3_fmt *fptr, const int attr_type, uint32_t new_cluster);
+static int write_new_file(struct inode *parent, uint8_t *dir_ptr, uint8_t *cluster, char *name, bool is_dir);
+
 
 struct dnode *fat_read_root_dir(struct vfs_device *dev);
 struct dnode *read_inode_dir(struct inode *i_node);
@@ -337,8 +339,54 @@ static int fat_write_file(struct file *rfile, void *buf, uint32_t count) {
 }
 
 static struct inode* fat_create_file (struct inode* parent, char *name) {
-    kprintf("fat_create_file called");
-    return NULL;
+    uint32_t sectors_per_cluster = parent->dev->finfo.fat->fat_boot.sectors_per_cluster;
+    uint8_t *cluster = kmalloc(sectors_per_cluster * ATA_SECTOR_SIZE);
+    uint8_t *dir_ptr = cluster;
+    uint32_t k = 0;
+    uint32_t clust = parent->i_ino;
+    uint32_t prev_clust = FAT_END_OF_CHAIN;
+    uint32_t max_dir_records = (ATA_SECTOR_SIZE * sectors_per_cluster) / FAT_DIR_RECORD_SIZE;
+    struct inode *new_inode = NULL;
+    read_cluster(clust2sec(clust, parent->dev->finfo.fat), parent->dev->finfo.fat->fat_boot.sectors_per_cluster, cluster);
+    do
+    {
+        while (k < max_dir_records)
+        {
+            if (*dir_ptr == FAT_UNUSED_DIR || *dir_ptr == 0)
+            {
+                write_new_file(parent,dir_ptr,cluster,name,false);
+                new_inode = kmalloc(sizeof(struct inode));
+                new_inode->i_type = I_FILE;
+                new_inode->i_ino = 0; // new file is empty point to 0th cluster;
+                new_inode->dev = parent->dev;
+                kstrncpy(new_inode->i_name,name,kstrlen(name));
+                new_inode->file_size = 0;
+                kfree(cluster);
+                return new_inode;
+            }
+            dir_ptr += FAT_DIR_RECORD_SIZE;
+            k += 1;
+        }
+        prev_clust = clust;
+        clust = parent->dev->finfo.fat->fat_ptr[clust];
+
+        k = 0;
+        // kprintf("cluster:%x prev_cluster:%x \n", clust, prev_clust);
+
+        if (clust >= FAT_END_OF_CHAIN)
+        {
+
+            // kprintf("NEw cluster chanin %d \n",prev_clust);
+            clust = add_new_link_to_chain(prev_clust, parent->dev->finfo.fat);
+            // kprintf("NEw cluster chanin %d %d \n",prev_clust,clust);
+            memzero8(cluster, sectors_per_cluster * ATA_SECTOR_SIZE);
+            // kprintf("DONE\n");
+        }
+        dir_ptr = cluster;
+
+    } while (clust < FAT_END_OF_CHAIN);
+    panic("Should never get here");
+
 }
 
 static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t first_data_sector, uint32_t sectors_per_cluster)
@@ -578,12 +626,13 @@ static int write_new_file(struct inode *parent, uint8_t *dir_ptr, uint8_t *clust
     new_cluster = find_free_cluster(parent->dev->finfo.fat);
     parent->dev->finfo.fat->fat_ptr[new_cluster] = FAT_END_OF_CHAIN;
     write_fat_ptr(new_cluster, FAT_END_OF_CHAIN, parent->dev->finfo.fat->first_fat_sector);
-    fat_setup_8_3_attr(name, (struct std_fat_8_3_fmt *)dir_ptr, FAT_DIR, new_cluster);
+    fat_setup_8_3_attr(name, (struct std_fat_8_3_fmt *)dir_ptr, is_dir ? FAT_DIR:FAT_FILE, new_cluster);
     // rework how name is copied over and use long filename if longer than 8 chars
     sector = clust2sec(clust, parent->dev->finfo.fat);
     write_cluster(sector, parent->dev->finfo.fat->fat_boot.sectors_per_cluster, cluster);
     // kprintf("Writing sector %x %x\n", sector, *dir_ptr);
-    prepare_new_dir(parent, new_cluster);
+    if (is_dir) 
+        prepare_new_dir(parent, new_cluster);
     /// kprintf("cluster:%x new_cluster:%x  parent_cluster:%x\n", clust, new_cluster, parent->i_ino);
 
     return 0;
@@ -671,6 +720,7 @@ static void read_directory(struct dnode *dir, struct vfs_device *dev)
             //   IF this is a long file name entry handle it
             if (*dir_ptr != FAT_UNUSED_DIR && dir_ptr[FAT_ATTRIBUTE] == FAT_LONG_FILENAME)
             {
+            
                 using_lfname = 1;
                 
                 // keep track of how many bytes have been written to arary
