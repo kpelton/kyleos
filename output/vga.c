@@ -29,17 +29,22 @@ void update_cursor(int row, int col)
 
 void vga_clear()
 {
+    acquire_spinlock(&vga_spinlock);
     int i;
     for(i=0; i<(80*25)*2; i++) {
         vram[i] = 0x00;
     }
+    release_spinlock(&vga_spinlock);
 }
 void vga_scroll()
 {
+
+    acquire_spinlock(&vga_spinlock);
     int width = 80 * 2; // 2 bytes per char
     int rows = 25;
     memcpy64((uint64_t *)vram,(uint64_t *)(vram + width),width*rows);
 
+    release_spinlock(&vga_spinlock);
 }
 
 static inline void print_loc(const int x, const int y,
@@ -47,15 +52,17 @@ static inline void print_loc(const int x, const int y,
         const char c, const int blink)
 {
 
+    acquire_spinlock(&vga_spinlock);
     int i = (x*2)+((y*80)*2);
     vram[i] = c;
     vram[i+1] = (fore) | (back << 4) | ((blink &1)<<8) ;
+
+    release_spinlock(&vga_spinlock);
 }
 
 void vga_kprintf(char *str)
 {
 
-    acquire_spinlock(&vga_spinlock);
     for(;*str !='\0'; str++) {
 
         if (*str == '\n') {
@@ -81,6 +88,5 @@ void vga_kprintf(char *str)
         }
     }
     //update_cursor(cursor_y,cursor_x);
-    release_spinlock(&vga_spinlock);
 }
 
