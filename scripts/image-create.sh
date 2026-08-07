@@ -78,7 +78,7 @@ if [[ -z $mapper ]]; then
 fi
 device="/dev/mapper/$mapper"
 sudo "$mkfs_fat_bin" -F 32 "$device" >/dev/null
-sudo mount "$device" "$mount_dir"
+sudo mount -o "uid=$(id -u),gid=$(id -g),umask=022" "$device" "$mount_dir"
 mounted=1
 
 cp -a "$seed_dir"/. "$mount_dir"/

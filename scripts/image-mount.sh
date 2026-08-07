@@ -13,6 +13,6 @@ mkdir -p "$mount_dir"
 map_output=$(sudo "$kpartx_bin" -av "$image")
 mapper=$(awk '/add map/ { print $3; exit }' <<<"$map_output")
 [[ -n $mapper ]] || { echo "kpartx did not create a mapper" >&2; exit 1; }
-sudo mount "/dev/mapper/$mapper" "$mount_dir"
+sudo mount -o "uid=$(id -u),gid=$(id -g),umask=022" "/dev/mapper/$mapper" "$mount_dir"
 echo "$mapper" > "$root/build/image/mapper"
 echo "mounted at $mount_dir"
