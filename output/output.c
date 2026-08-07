@@ -125,7 +125,7 @@ uint8_t * memzero8(uint8_t *dest,uint64_t bytes) {
     return dest;
 }
 
-int kstrcmp(char *dest, const char *src) {
+int kstrcmp(const char *dest, const char *src) {
     int i;
     for (i=0; (src[i] != '\0' || dest[i] !='\0' ) ; i++) 
         if (src[i] != dest[i]) {
@@ -134,9 +134,9 @@ int kstrcmp(char *dest, const char *src) {
     return 0;
 }
 
-int kstrstr(char *base, char *delim)
+int kstrstr(const char *base, const char *delim)
 {
-    char *baseptr = base;
+    const char *baseptr = base;
     int kstart = 0;
     if (!base || !delim || !*base || !*delim)
         return -1;

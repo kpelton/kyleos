@@ -148,6 +148,7 @@ int ramfs_init(void) {
     return 0;
 }
 static int ramfs_read_console(void *buf, uint32_t count) {
+    (void)count;
     int val=0;
     while (val == 0)
     {
@@ -351,7 +352,11 @@ int ramfs_remove_file(struct inode *i_node)
     if (inode_num < 2 || inode_num >= MAX_RAMFS)
         return -1;
     acquire_spinlock(&fs->lock);
-    if (fs->inodes[inode_num].dev == NULL || fs->inodes[inode_num].i_type != I_FILE) {
+    if (fs->inodes[inode_num].dev == NULL ||
+        (fs->inodes[inode_num].i_type != I_FILE &&
+         fs->inodes[inode_num].i_type != I_DIR) ||
+        (fs->inodes[inode_num].i_type == I_DIR &&
+         fs->inodes[inode_num].last_child != 0)) {
         release_spinlock(&fs->lock);
         return -1;
     }
@@ -388,7 +393,7 @@ static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
 {
     struct ramfs_instance *fs = ramfs_for_device(i_node->dev);
     int inode_num = i_node->i_ino;
-    int old_parent;
+    uint64_t old_parent;
     int index = -1;
 
     if (inode_num < 2 || inode_num >= MAX_RAMFS || new_name[0] == '\0' ||

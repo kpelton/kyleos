@@ -167,12 +167,12 @@ static int open(char *path, uint32_t flags)
         kprintf("last_dir%s\n", last_dir);
 #endif
         // get parent node
-        if (kstrcmp(path,ROOT) != 0 && kstrcmp (path,".") != 0 && kstrcmp(last_dir,".") != 0 ) {
-            iptr = vfs_walk_path(last_dir, dptr);
-        }else{
+        if (kstrcmp(last_dir, ROOT) == 0 || kstrcmp(last_dir, ".") == 0) {
             iptr =kmalloc(sizeof(struct inode));
             vfs_copy_inode(iptr,dptr->root_inode);
             vfs_free_dnode(dptr);
+        } else {
+            iptr = vfs_walk_path(last_dir, dptr);
         }
 
 #ifdef DEBUG_SYSCALL
@@ -481,9 +481,14 @@ static int getdents(int fd, struct dirent *dir_arr, uint64_t count)
 static int mkdir(const char *pathname, int mode)
 {
     struct ktask *pid = get_current_process();
+    struct dnode *dptr;
+    struct inode *parent;
     char *path;
+    char *parent_copy;
     char *name;
+    char *parent_path;
     int len;
+    int result;
     (void)mode;
 
     if (pathname == NULL)
@@ -492,20 +497,48 @@ static int mkdir(const char *pathname, int mode)
     if (len == 0)
         return -1;
     path = kmalloc(len + 1);
-    if (path == NULL)
+    parent_copy = kmalloc(len + 1);
+    if (path == NULL || parent_copy == NULL) {
+        if (path != NULL)
+            kfree(path);
+        if (parent_copy != NULL)
+            kfree(parent_copy);
         return -1;
+    }
     kstrncpy(path, pathname, len + 1);
+    kstrncpy(parent_copy, pathname, len + 1);
     name = basename(path); /* also removes a trailing slash */
     if (name[0] == '\0') {
         kfree(path);
+        kfree(parent_copy);
         return -1;
     }
 
-    /* Doom creates ./savegame/.  Its parent is the current working
-     * directory; passing the full path to FAT used to create a malformed
-     * single directory entry instead. */
-    int result = vfs_create_dir(pid->cwd, name);
+    parent_path = dirname(parent_copy);
+    dptr = pathname[0] == DELIM ? vfs_read_root_dir(ROOT) :
+                                  vfs_read_inode_dir(pid->cwd);
+    if (dptr == NULL) {
+        kfree(path);
+        kfree(parent_copy);
+        return -1;
+    }
+    if (kstrcmp(parent_path, ROOT) == 0 || kstrcmp(parent_path, ".") == 0) {
+        result = vfs_create_dir(dptr->root_inode, name);
+        vfs_free_dnode(dptr);
+    } else {
+        parent = vfs_walk_path(parent_path, dptr);
+        if (parent == NULL || parent->i_type != I_DIR) {
+            if (parent != NULL)
+                vfs_free_inode(parent);
+            kfree(path);
+            kfree(parent_copy);
+            return -1;
+        }
+        result = vfs_create_dir(parent, name);
+        vfs_free_inode(parent);
+    }
     kfree(path);
+    kfree(parent_copy);
     return result;
 }
 
@@ -526,6 +559,46 @@ static int unlink(char *path)
     if (iptr == NULL)
         return -1;
     retval = vfs_unlink(iptr);
+    vfs_free_inode(iptr);
+    return retval;
+}
+
+static bool rmdir_targets_dot(char *path)
+{
+    int length = kstrlen(path);
+    int start;
+
+    while (length > 0 && path[length - 1] == DELIM)
+        length--;
+    if (length == 0)
+        return true;
+    start = length - 1;
+    while (start > 0 && path[start - 1] != DELIM)
+        start--;
+    return (length - start == 1 && path[start] == '.') ||
+           (length - start == 2 && path[start] == '.' && path[start + 1] == '.');
+}
+
+static int rmdir(char *path)
+{
+    struct ktask *pid = get_current_process();
+    struct dnode *dptr;
+    struct inode *iptr;
+    int retval;
+
+    if (path == NULL || rmdir_targets_dot(path))
+        return -1;
+    dptr = path[0] == DELIM ? vfs_read_root_dir(ROOT) : vfs_read_inode_dir(pid->cwd);
+    if (dptr == NULL)
+        return -1;
+    iptr = vfs_walk_path(path, dptr);
+    if (iptr == NULL)
+        return -1;
+    if (iptr->dev == pid->cwd->dev && iptr->i_ino == pid->cwd->i_ino) {
+        vfs_free_inode(iptr);
+        return -1;
+    }
+    retval = vfs_rmdir(iptr);
     vfs_free_inode(iptr);
     return retval;
 }
@@ -586,7 +659,7 @@ static int rename(char *old_path, char *new_path)
         vfs_free_inode(source);
         return -1;
     }
-    if (kstrcmp(parent_path, ".") == 0) {
+    if (kstrcmp(parent_path, ROOT) == 0 || kstrcmp(parent_path, ".") == 0) {
         parent = kmalloc(sizeof(struct inode));
         if (parent != NULL)
             vfs_copy_inode(parent, new_dir->root_inode);
@@ -684,7 +757,8 @@ void *syscall_tbl[] = {
     (void *)&ticks_ms_syscall,            // 25
     (void *)&pipe,                        // 26
     (void *)&tty_raw_syscall,             // 27
-    (void *)&rename                       // 28
+    (void *)&rename,                      // 28
+    (void *)&rmdir                        // 29
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

@@ -461,3 +461,18 @@ void pagefault(uint64_t *addr) {
         schedule();
     }
 }
+
+/* #GP is commonly raised by invalid privileged instructions or malformed
+ * returns in user programs.  Keep it contained to the current user task;
+ * a kernel-mode #GP is handled by the panic path in the assembly stub. */
+void general_protection_fault(uint64_t *addr)
+{
+    struct ktask *proc = get_current_process();
+
+    if (proc == NULL || proc->type != USER_PROCESS)
+        panic("kernel general protection fault");
+
+    kprintf("Segfault %d on addr 0x%x\n", proc->pid, addr);
+    sched_process_kill(proc->pid, true, true);
+    schedule();
+}

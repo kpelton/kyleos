@@ -52,13 +52,12 @@ static char *pop_dir_stack()
     return val;
 }
 
-static void print_dir(struct dnode *parent,struct inode *pwd)
+static void print_dir(struct inode *pwd)
 {
     struct inode_list *ptr;
     struct dnode *dptr;
     struct file *cfile = NULL;
     struct stat st;
-    struct dirent *dirents = kmalloc(sizeof(struct dirent)*500);
     dptr = vfs_read_inode_dir(pwd);
     
     if (dptr == 0)
@@ -270,7 +269,7 @@ for(;;) {
         if (kstrcmp(buffer, "ls\n") == 0)
         {
 
-            print_dir(dptr,pwd);
+            print_dir(pwd);
             //kprintf("root %x\n",pwd->i_ino);
 
         }
@@ -311,7 +310,7 @@ for(;;) {
             dptr = vfs_read_inode_dir(pwd);
             itmp = read_path(buffer + 3, dptr,I_DIR);
             if(itmp != NULL) {
-                print_dir(dptr,itmp);
+                print_dir(itmp);
 
                 //vfs_free_dnode(dptr);
             }else

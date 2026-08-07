@@ -5,4 +5,3 @@ spinlock.o:  spinlock.c spinlock.h
 
 mutex.o:  mutex.c mutex.h
 	$(CC) $(CFLAGS) -o $@ -c $<
-	rm -rfv *.o

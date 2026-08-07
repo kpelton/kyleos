@@ -15,6 +15,8 @@ DOOM_BINARY ?= $(KERNEL_ROOT)/build/extras/doom/doom
 DOOM_WAD ?= $(KERNEL_ROOT)/assets/doom.wad
 LUA_SOURCE ?= $(KERNEL_ROOT)/extras/lua/src
 LUA_BINARY ?= $(KERNEL_ROOT)/build/extras/lua/lua
+LUA_INPUTS := $(wildcard $(LUA_SOURCE)/*.[ch]) $(LUA_SOURCE)/Makefile
+BIBLE_TEXT ?= $(KERNEL_ROOT)/assets/bible.txt
 ifneq (,$(wildcard config.mk))
 include config.mk
 endif
@@ -26,7 +28,18 @@ export AS
 export ASFLAGS
 SUBDIRS = $(shell ls -d */)
 KERNEL_OBJECT_DIRS = asm block fs init irq locks mm output sched timer utils
-OBJ_FILES = $(shell find $(KERNEL_OBJECT_DIRS) -type f -name '*.o')
+OBJ_FILES = asm/asm.o asm/asm_calls.o \
+	block/ata.o \
+	fs/fat.o fs/ramfs.o fs/vfs.o fs/pipe.o \
+	init/kernel.o init/tables.o init/dshell.o init/loader.o init/syscall.o \
+	irq/irq.o \
+	locks/spinlock.o locks/mutex.o \
+	mm/paging.o mm/mm.o mm/pmem.o mm/vmm.o \
+	output/keyboard.o output/uart.o output/vga.o output/framebuffer.o \
+	output/output.o output/input.o \
+	sched/sched.o sched/ps.o sched/exec.o \
+	timer/timer.o timer/rtc.o timer/pit.o \
+	utils/llist.o
 
 output/font.h: output/font.psf.gz scripts/psf-to-header.sh
 	sh scripts/psf-to-header.sh $< $@
@@ -74,7 +87,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland kedit doom doom-image lua image image-reset image-mount image-unmount image-copy
+.PHONY: toolchain userland kedit rm rmdir fstest gpfault breakout doom doom-image image image-reset image-mount image-unmount image-copy
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -83,7 +96,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) kedit
+	$(MAKE) kedit rm rmdir fstest gpfault breakout
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -97,6 +110,26 @@ kedit: extras/kedit/kedit.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kedit
 
+rm: extras/rm/rm.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/rm
+
+rmdir: extras/rmdir/rmdir.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/rmdir
+
+fstest: extras/fstest/fstest.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/fstest
+
+gpfault: extras/gpfault/gpfault.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/gpfault
+
+breakout: extras/breakout/breakout.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/breakout
+
 doom:
 	SYSROOT=$(SYSROOT) scripts/build-doom.sh
 
@@ -104,17 +137,19 @@ doom-image:
 	$(MAKE) doom
 	$(MAKE) image-reset
 
-lua:
+lua: $(LUA_BINARY)
+
+$(LUA_BINARY): $(LUA_INPUTS)
 	$(MAKE) -C $(LUA_SOURCE) clean
 	$(MAKE) -C $(LUA_SOURCE) lua SYSROOT=$(SYSROOT)
 	mkdir -p $(dir $(LUA_BINARY))
 	cp $(LUA_SOURCE)/lua $(LUA_BINARY)
 
 image: userland lua
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) scripts/image-create.sh
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) scripts/image-create.sh
 
 image-reset: userland lua
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) scripts/image-create.sh --reset
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) scripts/image-create.sh --reset
 
 image-mount:
 	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) scripts/image-mount.sh
@@ -135,7 +170,7 @@ clean:
 	rm -rfv kernel.bin
 	rm -rfv kernel32.bin
 
-kernel.bin: asm block init irq mm output timer sched fs locks utils
+kernel.bin: $(OBJ_FILES)
 	$(LD) -T linker.ld -o kernel.bin $(OBJ_FILES) 
 
 kernel.img: kernel.bin

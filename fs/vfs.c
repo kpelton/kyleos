@@ -51,7 +51,6 @@ int vfs_getdents(struct file * rfile,void *dirp,int count) {
         return -1;
     
     struct inode_list *ptr;
-    struct file *cfile = NULL;
     struct dirent *dir_arr = (struct dirent *) dirp;
     struct dnode *dptr = vfs_read_inode_dir(&rfile->i_node);
     int read_count = 0;
@@ -264,13 +263,12 @@ void vfs_close_file(struct file *ofile)
 }
 //walk path and find inode given absolute path
 //will free dnode internally
-struct inode *vfs_walk_path(char *path, struct dnode *pwd)
+struct inode *vfs_walk_path(const char *path, struct dnode *pwd)
 {
     int end = 0;
-    char *curr = path;
+    const char *curr = path;
     char buffer[1024];
     struct inode_list *ptr;
-    struct inode *iptr;
     struct inode *iptr_ret=NULL;
     struct dnode *dptr = pwd;
     struct dnode *prev_dptr;
@@ -582,10 +580,9 @@ char * vfs_strip_path(char *ptr) {
     char *ret_ptr = ptr;
     char *check_ptr = ptr;
     while(*check_ptr != '\0') {
-
-        check_ptr++;
         if(*check_ptr == '/')
             ret_ptr = check_ptr+1;
+        check_ptr++;
     }
 #ifdef DEBUG_VFS
     kprintf("returning %s\n", ret_ptr);
@@ -620,6 +617,7 @@ char *vfs_get_dir( char *filename) {
 
 struct inode* vfs_create_file(struct inode* parent, char *name, uint32_t flags)
 {
+    (void)flags;
     //kprintf("FLAGS %x\n",flags);
     return vfs_devices[parent->dev->devicenum].ops->create_file(parent, name);
 }
@@ -629,6 +627,32 @@ int vfs_unlink(struct inode *i_node)
     if (i_node == NULL || i_node->i_type != I_FILE || vfs_file_is_open(i_node))
         return -1;
     return i_node->dev->ops->remove_file(i_node);
+}
+
+int vfs_rmdir(struct inode *i_node)
+{
+    struct dnode *dir;
+    struct inode_list *entry;
+    int result;
+
+    if (i_node == NULL || i_node->i_type != I_DIR || vfs_file_is_open(i_node))
+        return -1;
+
+    dir = vfs_read_inode_dir(i_node);
+    if (dir == NULL)
+        return -1;
+    for (entry = dir->head; entry != NULL; entry = entry->next) {
+        if (entry->current != NULL &&
+            kstrcmp(entry->current->i_name, ".") != 0 &&
+            kstrcmp(entry->current->i_name, "..") != 0) {
+            vfs_free_dnode(dir);
+            return -1;
+        }
+    }
+    vfs_free_dnode(dir);
+
+    result = i_node->dev->ops->remove_file(i_node);
+    return result;
 }
 
 int vfs_read_file_offset(struct file *rfile, void *buf, int count, uint32_t offset)

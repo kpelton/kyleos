@@ -3,11 +3,14 @@
 # and install them explicitly with `make image-copy FILE=...`.
 argv
 argv-copy
+breakout
 cat
 constest
 cp
 donut
 echo
+fstest
+gpfault
 ed
 grep
 head
@@ -18,6 +21,7 @@ mv
 nushell
 rdwr
 rm
+rmdir
 shell
 stat
 tail

@@ -5,168 +5,157 @@
 #include <mm/vmm.h>
 #include <mm/paging.h>
 #include <locks/spinlock.h>
+
 static struct spinlock kmem_spinlock;
 extern uint64_t *kernel_pml4;
-char *kernel_heap;
+
 #define FREE 1
 #define USED 0
-// heap size in pages
 #define HEAP_SIZE 8192
 #define KERNEL_HEAP_ADDR 0xffffc00000000000
-// TODO: Align this on cacheline boundry
+#define MM_BLOCK_MAGIC 0x4b4d454d424c4f43UL
 
-static struct mm_block *head = 0;
-static struct mm_block *tail = 0;
-static uint64_t total_used = 0;
+static struct mm_block *head;
+static char *heap_start;
+static char *heap_end;
+static uint64_t live_bytes;
+static uint64_t peak_live_bytes;
 
-void *kmalloc(unsigned int p_size)
+static unsigned long align_size(unsigned long size)
 {
-    acquire_spinlock(&kmem_spinlock);
+    return (size + MM_ALIGNMENT - 1) & ~(MM_ALIGNMENT - 1);
+}
 
-    uint64_t *ret;
-    struct mm_block *lptr = head;
-    unsigned int size = p_size;
-    uint32_t running_size = 0;
-    struct mm_block *running_block = NULL;
+static void split_block(struct mm_block *block, unsigned long size)
+{
+    struct mm_block *remaining;
+
+    if (block->size < size + sizeof(*block) + MM_MIN_SIZE)
+        return;
+    remaining = (struct mm_block *)((char *)(block + 1) + size);
+    remaining->size = block->size - size - sizeof(*remaining);
+    remaining->next = block->next;
+    remaining->prev = block;
+    remaining->magic = MM_BLOCK_MAGIC;
+    remaining->free = FREE;
+    if (remaining->next != NULL)
+        remaining->next->prev = remaining;
+    block->next = remaining;
+    block->size = size;
+}
+
+static void merge_with_next(struct mm_block *block)
+{
+    struct mm_block *next = block->next;
+
+    if (next == NULL || !next->free)
+        return;
+    block->size += sizeof(*next) + next->size;
+    block->next = next->next;
+    if (block->next != NULL)
+        block->next->prev = block;
+}
+
+void *kmalloc(unsigned int requested)
+{
+    struct mm_block *block;
+    unsigned long size = requested;
+
     if (size < MM_MIN_SIZE)
         size = MM_MIN_SIZE;
+    size = align_size(size);
 
-    while (lptr != 0)
-    {
-        //kprintf("MM  Trying to use 0x%x %x %x\n", lptr->addr, lptr->size,lptr->free);
-
-       if (running_size >= size) {
-            running_block->next = lptr;
-            running_block->free = USED;
-            running_block->size = running_size;
-            //kprintf("Running block %x",running_block->addr);
-            release_spinlock(&kmem_spinlock);
-            return running_block->addr;
+    acquire_spinlock(&kmem_spinlock);
+    for (block = head; block != NULL; block = block->next) {
+        if (block->magic != MM_BLOCK_MAGIC) {
+            panic("Kernel heap metadata corruption");
         }
-        
-
-        if (size == lptr->size && lptr->free == FREE)
-        {
-            if ((unsigned long)lptr->addr < KERNEL_HEAP_ADDR)
-            {
-                kprintf("old alloc %x\n", (unsigned long)&lptr->addr);
-                kprintf("old alloc %x\n", (unsigned long)&lptr->addr);
-                kprintf("mem corrution detected %x\n", (unsigned long)&lptr->addr);
-
-                continue;
-            }
-            lptr->free = USED;
-
-            // kprintf("MM Allocating 0x%x 0x%x\n",p_size,lptr->addr);
-            release_spinlock(&kmem_spinlock);
-
-            //kprintf("MM reuse Alloc 0x%x %x\n", lptr->addr, size);
-
-            return lptr->addr;
-        }
-        if (lptr->free == FREE)
-        {
-            if(running_size == 0)
-                running_block = lptr;
-            running_size += lptr->size;
-        }else{
-            running_block = NULL;
-            running_size = 0;
-        }
-        lptr = lptr->next;
+        if (!block->free || block->size < size)
+            continue;
+        split_block(block, size);
+        block->free = USED;
+        live_bytes += block->size;
+        if (live_bytes > peak_live_bytes)
+            peak_live_bytes = live_bytes;
+        release_spinlock(&kmem_spinlock);
+        return (void *)(block + 1);
     }
-    // TODO: Add allignment
-    struct mm_block *ptr = (void *)kernel_heap;
-    kernel_heap += sizeof(struct mm_block);
-    total_used += sizeof(struct mm_block);
-    ret = (void *)kernel_heap;
-    if (head == 0)
-    {
-        head = ptr;
-        tail = head;
-    }
-    else
-    {
-        tail->next = ptr;
-        tail = ptr;
-    }
-    ptr->size = size;
-    ptr->next = 0;
-    ptr->free = USED;
-    ptr->addr = ret;
-    // kprint_hex("Alloc ",size);
-    //kprintf("MM Alloc 0x%x %x\n", ret, size);
-    kernel_heap += size;
-    total_used += size;
-    if (total_used >= HEAP_SIZE*PAGE_SIZE)
-        panic("Kernel Heap out of memory");
     release_spinlock(&kmem_spinlock);
-
-    return ret;
+    panic("Kernel Heap out of memory");
+    return NULL;
 }
 
 void kfree(void *ptr)
 {
+    struct mm_block *block;
+
+    if (ptr == NULL)
+        return;
     acquire_spinlock(&kmem_spinlock);
-    //kprintf("kfree called %x\n",ptr);
-    struct mm_block *lptr = (struct mm_block *)(((uint64_t)ptr) - (sizeof(struct mm_block)));
-    if (lptr->addr == ptr)
-    {
-        if(lptr->free == FREE) {
-            kprintf("block already freed:0x%x\n",lptr->addr);
-            for(;;);
-        }
-        else
-        {
-            lptr->free = FREE;
-        }
-    }
-    else
-    {
-        panic("Memory courrption detected on free\n");
+    block = ((struct mm_block *)ptr) - 1;
+    if ((char *)block < heap_start || (char *)block >= heap_end ||
+        block->magic != MM_BLOCK_MAGIC || block->free == FREE)
+        panic("Kernel heap corruption on free");
+    live_bytes -= block->size;
+    block->free = FREE;
+    merge_with_next(block);
+    if (block->prev != NULL && block->prev->free) {
+        block = block->prev;
+        merge_with_next(block);
     }
     release_spinlock(&kmem_spinlock);
 }
 
 void mm_print_stats()
 {
+    struct mm_block *block;
+    unsigned long free_bytes = 0;
+    unsigned long largest_free = 0;
+    unsigned long blocks = 0;
+
     acquire_spinlock(&kmem_spinlock);
-    struct mm_block *lptr = head;
-    unsigned long size = 0;
-    unsigned long ll_size = 0;
-    int i = 0;
-    while (lptr != 0)
-    {
-        kprintf("MM  List %d -> %x size:%x free:%x\n", i,lptr->addr, lptr->size,lptr->free);
-        size += sizeof(struct mm_block);
-        if (lptr->free == 0)
-            size += lptr->size;
-
-        ll_size += 1;
-        lptr = lptr->next;
-        i++;
+    for (block = head; block != NULL; block = block->next) {
+        if (block->magic != MM_BLOCK_MAGIC)
+            panic("Kernel heap metadata corruption");
+        if (block->free) {
+            free_bytes += block->size;
+            if (block->size > largest_free)
+                largest_free = block->size;
+        }
+        blocks++;
     }
-
     release_spinlock(&kmem_spinlock);
-    kprintf("Total Used Memory     %dK\n", size / 1024);
-    kprintf("LL nodes              %d\n", ll_size);
-    kprintf("LL node size          %dK\n", (ll_size * sizeof(struct mm_block)) / 1024);
-    kprintf("End of kernel         0x%x\n", (unsigned long)&_kernel_end);
-    kprintf("Start of kernel       0x%x\n", 0xffffffff80000000);
-    kprintf("Total allocated         %d out of %d\n", total_used, HEAP_SIZE * 4096);
+
+    kprintf("Kernel heap live       %dK\n", live_bytes / 1024);
+    kprintf("Kernel heap peak       %dK\n", peak_live_bytes / 1024);
+    kprintf("Kernel heap free       %dK\n", free_bytes / 1024);
+    kprintf("Kernel heap largest    %dK\n", largest_free / 1024);
+    kprintf("Kernel heap blocks     %d\n", blocks);
 }
 
 void mm_init()
 {
+    struct pg_tbl pg;
+    char *heap_loc;
 
     setup_paging();
-    struct pg_tbl pg;
     pg.pml4 = kernel_pml4;
     init_spinlock(&kmem_spinlock);
-    char *heap_loc = pmem_alloc_block(HEAP_SIZE);
+    heap_loc = pmem_alloc_block(HEAP_SIZE);
     kprintf("Heap Loc:0x%x\n", heap_loc);
-    kernel_heap = (char *) KERNEL_HEAP_ADDR;
-    paging_map_range(&pg,(uint64_t)heap_loc,KERNEL_HEAP_ADDR,HEAP_SIZE,KERNEL_PAGE);
+    paging_map_range(&pg, (uint64_t)heap_loc, KERNEL_HEAP_ADDR, HEAP_SIZE,
+                     KERNEL_PAGE);
     kernel_switch_paging();
+
+    heap_start = (char *)KERNEL_HEAP_ADDR;
+    heap_end = heap_start + HEAP_SIZE * PAGE_SIZE;
+    head = (struct mm_block *)heap_start;
+    head->size = HEAP_SIZE * PAGE_SIZE - sizeof(*head);
+    head->next = NULL;
+    head->prev = NULL;
+    head->magic = MM_BLOCK_MAGIC;
+    head->free = FREE;
+    live_bytes = 0;
+    peak_live_bytes = 0;
     vmm_init();
 }

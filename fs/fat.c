@@ -66,7 +66,7 @@ static void read_fat_to_mem(struct fatFS *fs)
 {
     kprintf("reading in 0x%x sectors\n", fs->fat_size);
     fs->fat_ptr = kmalloc(ATA_SECTOR_SIZE * fs->fat_size);
-    uint32_t *FAT_table = kmalloc(ATA_SECTOR_SIZE / sizeof(uint32_t));
+    uint32_t *FAT_table = kmalloc(ATA_SECTOR_SIZE);
     int k = 0;
 
     for (uint32_t i = 0; i < fs->fat_size; i++)
@@ -224,7 +224,7 @@ int fat_create_dir(struct inode *parent, char *name)
     char truncated_name[FAT_MAX_FNAME + 1];
     kstrncpy(truncated_name, name, FAT_MAX_FNAME + 1);
     write_directory(parent, truncated_name);
-    return 1;
+    return 0;
 }
 
 static inline uint32_t clust2sec(uint32_t cluster, struct fatFS *fs)
@@ -890,7 +890,7 @@ static void prepare_new_dir(struct inode *parent, uint32_t new_cluster)
     uint32_t sector = 0;
 
     sector = clust2sec(new_cluster, parent->dev->finfo.fat);
-    memzero8(cluster, FAT_CLUSTER_SIZE);
+    memzero8(cluster, sectors_per_cluster * ATA_SECTOR_SIZE);
     fat_setup_8_3_attr(".", (struct std_fat_8_3_fmt *)dir_ptr, FAT_DIR, new_cluster);
     dir_ptr += FAT_DIR_RECORD_SIZE;
     fat_setup_8_3_attr("..", (struct std_fat_8_3_fmt *)dir_ptr, FAT_DIR, parent->i_ino);
@@ -898,7 +898,7 @@ static void prepare_new_dir(struct inode *parent, uint32_t new_cluster)
     kfree(cluster);
 }
 
-static void write_longfname(struct inode *parent, char *name)
+static void __attribute__((unused)) write_longfname(struct inode *parent, char *name)
 {
     uint32_t sectors_per_cluster = parent->dev->finfo.fat->fat_boot.sectors_per_cluster;
     uint8_t *cluster = kmalloc(sectors_per_cluster * ATA_SECTOR_SIZE);

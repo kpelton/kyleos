@@ -6,17 +6,25 @@ has a framebuffer-capable DoomGeneric port.
 
 ## Features
 
-- x86-64 long mode, paging, physical-memory allocation, and a kernel heap.
+- x86-64 long mode, paging, physical-memory allocation, and a 16-byte-aligned
+  first-fit kernel heap with block splitting, adjacent-block coalescing, and
+  corruption checks.
 - Preemptive round-robin scheduling with user processes, copy-on-write
   `fork`, `exec`, `wait`, file descriptors, and standard input/output/error.
 - FAT32 root filesystem plus separate RAM filesystems at `/dev` and `/tmp`.
 - `/dev/console`, `/dev/null`, and `/dev/zero`.
-- Directories, file creation/removal, 8.3-safe rename, truncate-on-open, seek,
-  file sizes, and a simple VFS.
+- Directories, file and empty-directory removal, 8.3-safe rename,
+  truncate-on-open, seek, file sizes, and a simple VFS.
 - Pipes and shell redirection, including chained pipelines.
+- In-image filesystem, heap, and user-fault regression suites, plus a single
+  integrated runner: `nushell < /tests/all.sh`.
+- User-mode page and general-protection faults terminate only the offending
+  process; kernel-mode faults retain the register-dump panic path.
 - UART/serial input, keyboard input, raw-console mode, and a framebuffer.
 - Small userspace: `ls`, `cat`, `cp`, `rm`, `mkdir`, `grep`, `wc`, `head`,
   `tail`, `mv`, `ed`, `kedit`, and more.
+- Incrementally rendered ASCII Breakout at `/bin/breakout` (`a`/`d` move,
+  `q` quits), with input/render timing independent from ball movement.
 - DoomGeneric as an optional extra, installed at `/usr/bin/doom`.
 - Lua 5.4.4 as an optional Newlib-built extra, installed at `/usr/bin/lua`.
 
@@ -130,6 +138,49 @@ DOOM_WAD=/path/to/doom.wad make doom-image
 make test
 ```
 
+If `DOOM_WAD` is omitted, `doom-image` looks for `assets/doom.wad`.  The image
+builder installs the selected file as `/usr/share/doom/doom.wad`; Doom will
+start without it but will stop with an `IWAD file ... not found` message.
+
+## In-OS regression tests
+
+After booting, run the bundled suite through the shell:
+
+```sh
+nushell < /tests/fs-suite.sh
+```
+
+It prints an individual PASS/FAIL line and a final report.  The suite covers
+FAT and `/tmp` file operations, directory removal, and `/dev/null` and
+`/dev/zero`; it cleans up its own test files.
+
+To stress the kernel heap with repeated large RAMFS allocations, after the
+Bible text has been installed run:
+
+```sh
+nushell < /tests/heap-copy.sh
+```
+
+It copies `/usr/share/text/bible.txt` to `/tmp` four times, removing each
+temporary copy before the next pass.
+
+The user-fault regression test deliberately executes a privileged instruction
+in a child process; it should print `Segfault` and return to its invoking
+shell:
+
+```sh
+nushell < /tests/gp-fault.sh
+```
+
+Run every in-image regression in sequence with:
+
+```sh
+nushell < /tests/all.sh
+```
+
+The integrated runner ends with `ALL-TESTS-COMPLETE`.  It requires the Bible
+text installed by `make image` or `make image-reset` for the heap-copy phase.
+
 `doom-image` recreates the generated image, installs Doom at `/usr/bin/doom`,
 and installs the supplied WAD as `/usr/share/doom/doom.wad`.  The WAD is
 user-supplied, ignored by Git, and never distributed with KyleOS.  Inside
@@ -150,6 +201,9 @@ lua /usr/share/lua/life.lua
 lua /usr/share/lua/adven.lua
 ```
 
+The top-level build tracks the Lua source timestamps, so ordinary `make test`
+runs reuse the existing Lua binary unless its sources changed.
+
 `life.lua` accepts an optional generation count, for example
 `lua /usr/share/lua/life.lua 50`.
 
@@ -157,6 +211,17 @@ The image also includes serial-friendly terminal games: `rogue.lua`,
 `snake.lua`, `hunt.lua`, `lander.lua`, `invaders.lua`, `empire.lua`,
 `maze.lua`, and `shquest.lua`. They use line commands, so they work over the
 serial console without raw terminal support.
+
+## Searchable text corpus
+
+If `assets/bible.txt` is present, image creation installs the public-domain
+Project Gutenberg King James Bible at `/usr/share/text/bible.txt` (about 4.4
+MiB).  Search it inside KyleOS, for example:
+
+```sh
+grep "In the beginning" /usr/share/text/bible.txt
+grep "Moses" /usr/share/text/bible.txt | grep "said"
+```
 
 ## Current limitations
 

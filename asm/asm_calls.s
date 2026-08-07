@@ -12,6 +12,7 @@
 [extern sched_save_context]
 [extern syscall]
 [extern pagefault]
+[extern general_protection_fault]
 [global gdt_flush]
 [global load_page_directory]
 [global setup_long_mode]
@@ -320,7 +321,7 @@ switch_to:
     mov rax,rsi
     sti
     jmp rax
-    ud
+    ud2
 
 [global resume_p];
 resume_p:
@@ -407,6 +408,50 @@ panic_handler_12:
 
 [global panic_handler_13] ;
 panic_handler_13:
+    ; #GP pushes an error code, RIP, CS, RFLAGS, RSP and SS.  A ring-3
+    ; selector has RPL 3, so user faults are process failures rather than
+    ; kernel panics.
+    test byte [rsp+16], 3
+    jz .kernel_gp_fault
+    cli
+    add rsp,8 ; discard the #GP error code
+    push rax
+    mov rax,[rsp+8] ; RIP saved by the CPU
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    pushfq
+    mov rdi,rax
+    call general_protection_fault
+    popfq
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    iretq
+.kernel_gp_fault:
     mov rax,13
     jmp panic_handler
 

@@ -7,7 +7,7 @@ void print_regs(unsigned long exception,unsigned long rip);
 char * itoa( unsigned long value, char * str, int base );
 char * kstrcpy( char *dest, const char *src);
 char * kstrncpy(char *dest, const char *src,int bytes);
-int kstrstr(char *base, char *delim);
+int kstrstr(const char *base, const char *delim);
 //Doesn't belong here
 void *memcpy(void *dest, const void *src, int n);
  uint8_t *memcpy8(uint8_t *dest, const uint8_t *src,uint64_t bytes);
@@ -18,7 +18,7 @@ int atoi(char *str);
 int kpow(int base, int exp);
 void kprintf( char *format, ...);
 void output_init();
-int kstrcmp(char *dest, const char *src);
+int kstrcmp(const char *dest, const char *src);
 int kstrlen(char *str);
 void read_input(char * dest);
 void panic(char* msg);

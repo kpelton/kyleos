@@ -9,6 +9,7 @@ seed_dir="$root/image/rootfs"
 doom_binary=${DOOM_BINARY:-"$root/build/extras/doom/doom"}
 doom_wad=${DOOM_WAD:-"$root/assets/doom.wad"}
 lua_binary=${LUA_BINARY:-"$root/build/extras/lua/lua"}
+bible_text=${BIBLE_TEXT:-"$root/assets/bible.txt"}
 ready_file="$image.ready"
 fdisk_bin=${FDISK_BIN:-/sbin/fdisk}
 kpartx_bin=${KPARTX_BIN:-/sbin/kpartx}
@@ -107,6 +108,10 @@ if [[ -f $lua_binary ]]; then
     mkdir -p "$mount_dir/usr/bin" "$mount_dir/usr/share/lua"
     cp "$lua_binary" "$mount_dir/usr/bin/lua"
     cp "$root/extras/lua/examples"/*.lua "$mount_dir/usr/share/lua/"
+fi
+if [[ -f $bible_text ]]; then
+    mkdir -p "$mount_dir/usr/share/text"
+    cp "$bible_text" "$mount_dir/usr/share/text/bible.txt"
 fi
 sync
 touch "$ready_file"
