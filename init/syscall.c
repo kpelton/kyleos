@@ -260,6 +260,12 @@ static int key_poll_syscall(int *pressed, uint8_t *scancode, bool *extended)
     return input_poll_key(pressed, scancode, extended);
 }
 
+static int tty_raw_syscall(int enabled)
+{
+    input_set_raw(enabled != 0);
+    return 0;
+}
+
 static uint32_t ticks_ms_syscall(void)
 {
     return (read_jiffies() * 1000) / TICK_HZ;
@@ -596,7 +602,8 @@ void *syscall_tbl[] = {
     (void *)&framebuffer_present_syscall, // 23
     (void *)&key_poll_syscall,            // 24
     (void *)&ticks_ms_syscall,            // 25
-    (void *)&pipe                         // 26
+    (void *)&pipe,                        // 26
+    (void *)&tty_raw_syscall              // 27
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

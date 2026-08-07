@@ -12,6 +12,7 @@ struct key_event { uint8_t scancode; bool extended; bool pressed; };
 static struct key_event key_queue[KEY_QUEUE_SIZE];
 static int key_head;
 static int key_tail;
+static bool raw_mode;
 
 void input_init() 
 {
@@ -31,6 +32,8 @@ void input_read(char* dest)
 
 void input_add_char(char in)
 {
+    if (raw_mode)
+        return;
     //skip tab until proper tty is implemented
     if (in == '\t' )
         return;
@@ -76,6 +79,25 @@ void input_add_char(char in)
     output[1] = '\0';
     kprintf("%s",output);
 
+}
+
+void input_set_raw(bool enabled)
+{
+    acquire_spinlock(&input_spinlock);
+    raw_mode = enabled;
+    if (enabled) {
+        input_current_place = 0;
+        for (int i = 0; i < MAX_CHARS; i++) {
+            input_buffer[i] = '\0';
+            internal_input_buffer[i] = '\0';
+        }
+    }
+    release_spinlock(&input_spinlock);
+}
+
+bool input_is_raw(void)
+{
+    return raw_mode;
 }
 
 void input_add_key(uint8_t scancode, bool extended, bool pressed)
