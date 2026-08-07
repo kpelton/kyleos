@@ -2,6 +2,7 @@
 #include <asm/asm.h>
 #include <mm/paging.h>
 #include <output/output.h>
+#include <output/vga.h>
 
 /* QEMU's std VGA exposes the Bochs VBE extension on these ports. */
 #define BGA_INDEX_PORT  0x1ce
@@ -91,7 +92,35 @@ void framebuffer_init(void)
     pages = (fb_size + PAGE_SIZE - 1) / PAGE_SIZE;
     paging_map_physmap_range(phys_base, pages);
     framebuffer = (uint8_t *)KERN_PHYS_TO_PVIRT(phys_base);
+    framebuffer_clear(0x00000000);
+    vga_framebuffer_ready();
     kprintf("Framebuffer %dx%dx32 at %x\n", fb_width, fb_height, phys_base);
+}
+
+bool framebuffer_is_ready(void)
+{
+    return framebuffer != NULL;
+}
+
+void framebuffer_clear(uint32_t color)
+{
+    framebuffer_fill_rect(0, 0, fb_width, fb_height, color);
+}
+
+void framebuffer_fill_rect(uint32_t x, uint32_t y, uint32_t width,
+                           uint32_t height, uint32_t color)
+{
+    if (framebuffer == NULL || x >= fb_width || y >= fb_height)
+        return;
+    if (x + width > fb_width)
+        width = fb_width - x;
+    if (y + height > fb_height)
+        height = fb_height - y;
+    for (uint32_t row = 0; row < height; row++) {
+        uint32_t *pixels = (uint32_t *)(framebuffer + (y + row) * fb_pitch + x * 4);
+        for (uint32_t col = 0; col < width; col++)
+            pixels[col] = color;
+    }
 }
 
 int framebuffer_present(const void *pixels, uint32_t bytes)

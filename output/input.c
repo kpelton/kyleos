@@ -62,7 +62,6 @@ void input_add_char(char in)
         return;
     acquire_spinlock(&input_spinlock);
     char output[2];
-    int count=1;
 
 
     if (in == '\r')
@@ -73,7 +72,7 @@ void input_add_char(char in)
         internal_input_buffer[input_current_place-1] = '\0';
         input_current_place--;
         // left one char and clear cursor
-        kprintf("\033[%dD\033[J",count,output);
+        kprintf("\b \b");
         //kprintf("%d\n",input_current_place);
 
         release_spinlock(&input_spinlock);

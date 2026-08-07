@@ -1,4 +1,5 @@
 CC	?= gcc
+.DEFAULT_GOAL := all
 OP ?= -O0
 AS = nasm
 ASFLAGS = -f elf64
@@ -26,6 +27,11 @@ export ASFLAGS
 SUBDIRS = $(shell ls -d */)
 KERNEL_OBJECT_DIRS = asm block fs init irq locks mm output sched timer utils
 OBJ_FILES = $(shell find $(KERNEL_OBJECT_DIRS) -type f -name '*.o')
+
+output/font.h: output/font.psf.gz scripts/psf-to-header.sh
+	sh scripts/psf-to-header.sh $< $@
+
+output/vga.o: output/font.h
 
 all: kernel.img user
 
@@ -68,7 +74,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland doom doom-image lua image image-reset image-mount image-unmount image-copy
+.PHONY: toolchain userland kedit doom doom-image lua image image-reset image-mount image-unmount image-copy
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -76,14 +82,20 @@ toolchain:
 
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
-	$(MAKE) -C $(PROGS_SRC) kedit mv
+	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
+	$(MAKE) kedit
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
-		if [ -f $(CORE_SRC)/$$program ]; then cp $(CORE_SRC)/$$program $(USERLAND_STAGE)/$$program; \
+		if [ -f $(USERLAND_STAGE)/$$program ]; then :; \
+		elif [ -f $(CORE_SRC)/$$program ]; then cp $(CORE_SRC)/$$program $(USERLAND_STAGE)/$$program; \
 		elif [ -f $(PROGS_SRC)/progs/$$program ]; then cp $(PROGS_SRC)/progs/$$program $(USERLAND_STAGE)/$$program; \
 		else echo "missing userland program: $$program" >&2; exit 1; fi; \
 	done < image/manifest.txt
+
+kedit: extras/kedit/kedit.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kedit
 
 doom:
 	SYSROOT=$(SYSROOT) scripts/build-doom.sh

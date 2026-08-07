@@ -21,3 +21,4 @@ extras/lua/src/*.o
 extras/lua/src/liblua.a
 extras/lua/src/lua
 extras/lua/src/luac
+output/font.h

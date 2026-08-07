@@ -6,7 +6,10 @@ output.o:  output.c output.h
 uart.o:  uart.c uart.h
 	$(CC) $(CFLAGS) -o $@  -c uart.c
 
-vga.o:  vga.c vga.h
+font.h: font.psf.gz ../scripts/psf-to-header.sh
+	sh ../scripts/psf-to-header.sh $< $@
+
+vga.o:  vga.c vga.h font.h
 	$(CC) $(CFLAGS) -o $@ -c vga.c
 
 keyboard.o:  keyboard.c keyboard.h
