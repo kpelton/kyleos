@@ -248,7 +248,7 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     {
         clear_fd_table(t);
         struct dnode *dptr = vfs_read_root_dir("/");
-        struct inode *iptr = vfs_walk_path("/2/console", dptr);
+        struct inode *iptr = vfs_walk_path("/dev/console", dptr);
         t->open_fds[0] = vfs_open_file(iptr, O_RDWR);
         t->open_fds[1] = vfs_open_file(iptr, O_RDWR);
         t->open_fds[2] = vfs_open_file(iptr, O_RDWR);

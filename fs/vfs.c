@@ -444,18 +444,23 @@ char * vfs_strip_path(char *ptr) {
 
 char *vfs_get_dir( char *filename) {
     char *directory = NULL;
-    //char *last_slash = kstrrchr(filename, '/'); // Find the last occurrence of '/'
-    // Hard coded for /2
-    char *last_slash = filename+2;
+    char *last_slash = filename;
+    char *ptr = filename;
+    int length;
+    while (*ptr != '\0') {
+        if (*ptr == DELIM)
+            last_slash = ptr;
+        ptr++;
+    }
     if (last_slash != NULL) {
-        // Allocate memory for the directory string
-        directory = (char *)kmalloc(last_slash - filename + 2);
+        length = (last_slash == filename) ? 1 : (int)(last_slash - filename);
+        directory = (char *)kmalloc(length + 1);
         if (directory == NULL) {
             return NULL;
         }
-        // Copy the directory part of the filename
-        kstrncpy(directory, filename, last_slash - filename );
-        directory[last_slash - filename + 1] = '\0'; // Null-terminate the string
+        for (int i = 0; i < length; i++)
+            directory[i] = filename[i];
+        directory[length] = '\0';
     }
     
     return directory;
