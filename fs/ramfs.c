@@ -11,15 +11,23 @@ struct dnode *ramfs_read_root_dir(struct vfs_device *dev);
 struct dnode *ramfs_read_inode_dir(struct inode *inode);
 int ramfs_create_dir(struct inode *parent, char *name);
 struct inode* ramfs_create_file(struct inode *parent, char *name);
+int ramfs_remove_file(struct inode *i_node);
 int ramfs_read_file (struct file * rfile,void *buf,uint32_t count);
 int ramfs_write_file (struct file * rfile,void *buf,uint32_t count);
 int ramfs_stat_file (struct file * rfile,struct stat *st);
 
-static uint64_t i_no = 0;
 static int device_num;
 static struct ramfs_inode ramfs_inodes[MAX_RAMFS];
 static struct vfs_device vfs_dev;
 static struct spinlock ramfs_lock;
+
+static int ramfs_alloc_inode(void)
+{
+    for (int i = 2; i < MAX_RAMFS; i++)
+        if (ramfs_inodes[i].dev == NULL)
+            return i;
+    return -1;
+}
 
 static void create_root_dir(struct vfs_device *dev) {
 
@@ -43,8 +51,6 @@ static void create_root_dir(struct vfs_device *dev) {
     ramfs_inodes[1].parent = 0;
     ramfs_inodes[1].blocks = NULL;
 
-
-    i_no+=2;
 }
 
 int ramfs_init(void) {
@@ -58,6 +64,7 @@ int ramfs_init(void) {
     vfs_ops->read_inode_dir= ramfs_read_inode_dir;
     vfs_ops->create_dir = ramfs_create_dir;
     vfs_ops->create_file = ramfs_create_file;
+    vfs_ops->remove_file = ramfs_remove_file;
     vfs_ops->read_file = ramfs_read_file;
     vfs_ops->write_file = ramfs_write_file;
     vfs_ops->stat_file = ramfs_stat_file;
@@ -177,20 +184,30 @@ struct inode* ramfs_create_file(struct inode *parent, char *name)
     if (ramfs_inodes[parent->i_ino].last_child >= RAMFS_MAX_DIRECTORY)
         return NULL;
     acquire_spinlock(&ramfs_lock);
-    ramfs_inodes[i_no].dev = parent->dev;
-    kstrcpy(ramfs_inodes[i_no].i_name, name);
-    ramfs_inodes[i_no].i_type=I_FILE;
-    ramfs_inodes[i_no].i_ino = i_no;
-    ramfs_inodes[i_no].last_child = 0;
-    ramfs_inodes[i_no].blocks = kmalloc(sizeof(struct ramfs_block));
-    ramfs_inodes[i_no].file_size = 0;
-    ramfs_inodes[i_no].parent =  parent->i_ino;
+    int inode_num = ramfs_alloc_inode();
+    if (inode_num < 0) {
+        release_spinlock(&ramfs_lock);
+        return NULL;
+    }
+    ramfs_inodes[inode_num].dev = parent->dev;
+    kstrcpy(ramfs_inodes[inode_num].i_name, name);
+    ramfs_inodes[inode_num].i_type=I_FILE;
+    ramfs_inodes[inode_num].i_ino = inode_num;
+    ramfs_inodes[inode_num].last_child = 0;
+    ramfs_inodes[inode_num].blocks = kmalloc(sizeof(struct ramfs_block));
+    if (ramfs_inodes[inode_num].blocks == NULL) {
+        ramfs_inodes[inode_num].dev = NULL;
+        release_spinlock(&ramfs_lock);
+        return NULL;
+    }
+    memzero8((uint8_t *)ramfs_inodes[inode_num].blocks, sizeof(struct ramfs_block));
+    ramfs_inodes[inode_num].file_size = 0;
+    ramfs_inodes[inode_num].parent =  parent->i_ino;
 
-    ramfs_inodes[parent->i_ino].children[ramfs_inodes[parent->i_ino].last_child]=i_no;
+    ramfs_inodes[parent->i_ino].children[ramfs_inodes[parent->i_ino].last_child]=inode_num;
     ramfs_inodes[parent->i_ino].last_child++;
     struct inode *i = kmalloc(sizeof(struct inode));
-    vfs_copy_inode(i,(struct inode *)&ramfs_inodes[i_no]);
-    i_no++;
+    vfs_copy_inode(i,(struct inode *)&ramfs_inodes[inode_num]);
     release_spinlock(&ramfs_lock);
 
     return i;
@@ -203,19 +220,63 @@ int ramfs_create_dir(struct inode *parent, char *name)
         return -1;
 
     acquire_spinlock(&ramfs_lock);
+    int inode_num = ramfs_alloc_inode();
+    if (inode_num < 0) {
+        release_spinlock(&ramfs_lock);
+        return -1;
+    }
 
-    ramfs_inodes[i_no].dev = parent->dev;
-    kstrcpy(ramfs_inodes[i_no].i_name, name);
-    ramfs_inodes[i_no].i_type=I_DIR;
-    ramfs_inodes[i_no].i_ino = i_no;
-    ramfs_inodes[i_no].last_child = 0;
-    ramfs_inodes[i_no].file_size = 0;  
-    ramfs_inodes[i_no].parent =  parent->i_ino;
-    ramfs_inodes[parent->i_ino].children[ramfs_inodes[parent->i_ino].last_child]=i_no;
+    ramfs_inodes[inode_num].dev = parent->dev;
+    kstrcpy(ramfs_inodes[inode_num].i_name, name);
+    ramfs_inodes[inode_num].i_type=I_DIR;
+    ramfs_inodes[inode_num].i_ino = inode_num;
+    ramfs_inodes[inode_num].last_child = 0;
+    ramfs_inodes[inode_num].file_size = 0;
+    ramfs_inodes[inode_num].parent =  parent->i_ino;
+    ramfs_inodes[parent->i_ino].children[ramfs_inodes[parent->i_ino].last_child]=inode_num;
     ramfs_inodes[parent->i_ino].last_child++;
-    i_no++;
     release_spinlock(&ramfs_lock);
 
+    return 0;
+}
+
+int ramfs_remove_file(struct inode *i_node)
+{
+    int inode_num = i_node->i_ino;
+    struct ramfs_block *block;
+
+    if (inode_num < 2 || inode_num >= MAX_RAMFS)
+        return -1;
+    acquire_spinlock(&ramfs_lock);
+    if (ramfs_inodes[inode_num].dev == NULL || ramfs_inodes[inode_num].i_type != I_FILE) {
+        release_spinlock(&ramfs_lock);
+        return -1;
+    }
+    int parent = ramfs_inodes[inode_num].parent;
+    int index = -1;
+    for (int i = 0; i < ramfs_inodes[parent].last_child; i++)
+        if (ramfs_inodes[parent].children[i] == inode_num) {
+            index = i;
+            break;
+        }
+    if (index < 0) {
+        release_spinlock(&ramfs_lock);
+        return -1;
+    }
+    for (int i = index; i + 1 < ramfs_inodes[parent].last_child; i++)
+        ramfs_inodes[parent].children[i] = ramfs_inodes[parent].children[i + 1];
+    ramfs_inodes[parent].last_child--;
+    ramfs_inodes[parent].children[ramfs_inodes[parent].last_child] = 0;
+    block = ramfs_inodes[inode_num].blocks;
+    while (block != NULL) {
+        struct ramfs_block *next = block->next;
+        if (block->block != NULL)
+            kfree(block->block);
+        kfree(block);
+        block = next;
+    }
+    memzero8((uint8_t *)&ramfs_inodes[inode_num], sizeof(struct ramfs_inode));
+    release_spinlock(&ramfs_lock);
     return 0;
 }
 

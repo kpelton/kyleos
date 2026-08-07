@@ -430,6 +430,27 @@ static int mkdir(const char *pathname, int mode)
     return vfs_create_dir(pid->cwd,pathname);
 }
 
+static int unlink(char *path)
+{
+    struct ktask *pid = get_current_process();
+    struct dnode *dptr;
+    struct inode *iptr;
+    int retval;
+
+    if (path == NULL || kstrcmp(path, ROOT) == 0 || kstrcmp(path, ".") == 0 ||
+        kstrcmp(path, "..") == 0)
+        return -1;
+    dptr = path[0] == DELIM ? vfs_read_root_dir(ROOT) : vfs_read_inode_dir(pid->cwd);
+    if (dptr == NULL)
+        return -1;
+    iptr = vfs_walk_path(path, dptr);
+    if (iptr == NULL)
+        return -1;
+    retval = vfs_unlink(iptr);
+    vfs_free_inode(iptr);
+    return retval;
+}
+
 static int dup(const int oldfd)
 {
     kprintf("DUP\n");
@@ -490,7 +511,8 @@ void *syscall_tbl[] = {
     (void *)&chdir,            // 17
     (void *)&mkdir,            // 18
     (void *)&dup,              // 19
-    (void *)&dup2             // 20
+    (void *)&dup2,             // 20
+    (void *)&unlink            // 21
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

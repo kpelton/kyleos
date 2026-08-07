@@ -50,6 +50,10 @@ struct inode {
     struct vfs_device* dev;
     uint64_t  i_ino;
     uint64_t file_size;
+    /* FAT directory entry location.  Filesystems that do not need this leave
+     * these fields zero. */
+    uint32_t dir_cluster;
+    uint32_t dir_offset;
 };
 
 // list of inodes
@@ -94,6 +98,7 @@ struct vfs_ops {
     int (*write_file)(struct file * rfile,void *buf,uint32_t count);
     int (*create_dir)(struct inode* parent, char *name);
     struct inode* (*create_file)(struct inode* parent, char *name);
+    int (*remove_file)(struct inode *i_node);
     int (*stat_file)(struct file *rfile, struct stat *st);
 };
 
@@ -115,6 +120,7 @@ int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset
 
 int vfs_create_dir(struct inode* parent, char *name);
 struct inode* vfs_create_file(struct inode* parent, char *name,uint32_t flags);
+int vfs_unlink(struct inode *i_node);
 
 struct file* vfs_open_file(struct inode * i_node,uint32_t flags);
 void vfs_close_file(struct file *ofile);

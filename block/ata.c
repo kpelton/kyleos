@@ -55,6 +55,7 @@ int write_sec(uint32_t sec, void *buffer)
     uint8_t status;
     int i;
     data = buffer;
+    acquire_mutex(&ata_mutex);
 #ifdef ATA_DEBUG
     print_drive_status();
 #endif
@@ -93,6 +94,11 @@ int write_sec(uint32_t sec, void *buffer)
             status = read_status();
         // print_drive_status();
     }
+    outb(PRIMARY + COMMAND_REG, CMD_CACHE_FLUSH);
+    status = read_status();
+    while ((status & STAT_DRIVE_BUSY) != 0)
+        status = read_status();
+    release_mutex(&ata_mutex);
     return 0;
 }
 int read_sec(uint32_t sec, void *buffer)

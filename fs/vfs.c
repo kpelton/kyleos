@@ -8,6 +8,16 @@ static struct file_table ftable ;
 static struct inode* vfs_find_file_in_dir(const char *filename, struct dnode *dptr);
 struct inode* top_root_inode;
 
+static bool vfs_file_is_open(struct inode *i_node)
+{
+    for (int i = 0; i < VFS_MAX_OPEN; i++)
+        if (ftable.open_files[i].refcount &&
+            ftable.open_files[i].dev == i_node->dev &&
+            ftable.open_files[i].i_node.i_ino == i_node->i_ino)
+            return true;
+    return false;
+}
+
 void vfs_init()
 {
     init_spinlock(&ftable.lock);
@@ -330,6 +340,8 @@ void vfs_copy_inode(struct inode *dst, struct inode *src)
     dst->i_ino = src->i_ino;
     dst->dev = src->dev;
     dst->i_type = src->i_type;
+    dst->dir_cluster = src->dir_cluster;
+    dst->dir_offset = src->dir_offset;
 }
 
 static bool vfs_compare_inode(struct inode *src, struct inode *dst)
@@ -382,11 +394,16 @@ int vfs_stat_file(struct file *rfile, struct stat *st)
 
 int vfs_write_file(struct file *rfile, void *buf, int count)
 {
+    uint32_t access_mode = rfile->flags & MAX_FILE_FLAGS;
+    /* Callers such as fopen("wb") retain create/truncate bits in flags. */
+    if (count < 0 || (access_mode != O_WRONLY && access_mode != O_RDWR))
+        return -1;
     int idev;
     idev = rfile->dev->devicenum;
     int rcount = vfs_devices[idev].ops->write_file(rfile, buf, count);
-    rfile->pos += rcount;
-    return count;
+    if (rcount > 0)
+        rfile->pos += rcount;
+    return rcount;
 
 }
 
@@ -427,6 +444,13 @@ struct inode* vfs_create_file(struct inode* parent, char *name, uint32_t flags)
 {
     //kprintf("FLAGS %x\n",flags);
     return vfs_devices[parent->dev->devicenum].ops->create_file(parent, name);
+}
+
+int vfs_unlink(struct inode *i_node)
+{
+    if (i_node == NULL || i_node->i_type != I_FILE || vfs_file_is_open(i_node))
+        return -1;
+    return i_node->dev->ops->remove_file(i_node);
 }
 
 int vfs_read_file_offset(struct file *rfile, void *buf, int count, uint32_t offset)
