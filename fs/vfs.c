@@ -487,6 +487,34 @@ int vfs_write_file(struct file *rfile, void *buf, int count)
 
 }
 
+int vfs_rename(struct inode *i_node, struct inode *new_parent, char *new_name)
+{
+    struct dnode *dir;
+    struct inode *existing;
+    int idev;
+
+    if (i_node == NULL || new_parent == NULL || new_name == NULL ||
+        new_name[0] == '\0' || new_parent->i_type != I_DIR ||
+        i_node->dev != new_parent->dev)
+        return -1;
+    dir = vfs_read_inode_dir(new_parent);
+    if (dir == NULL)
+        return -1;
+    existing = vfs_find_file_in_dir(new_name, dir);
+    if (existing != NULL) {
+        int same = existing->i_ino == i_node->i_ino &&
+                   existing->dev == i_node->dev;
+        vfs_free_inode(existing);
+        vfs_free_dnode(dir);
+        return same ? 0 : -1;
+    }
+    vfs_free_dnode(dir);
+    idev = i_node->dev->devicenum;
+    if (vfs_devices[idev].ops->rename_file == NULL)
+        return -1;
+    return vfs_devices[idev].ops->rename_file(i_node, new_parent, new_name);
+}
+
 int vfs_truncate_file(struct file *rfile)
 {
     int idev;

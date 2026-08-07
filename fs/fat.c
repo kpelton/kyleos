@@ -15,6 +15,8 @@ static int fat_write_file(struct file *rfile, void *buf, uint32_t count);
 static int fat_truncate_file(struct file *rfile);
 static struct inode* fat_create_file (struct inode* parent, char *name);
 static int fat_remove_file(struct inode *i_node);
+static int fat_rename_file(struct inode *i_node, struct inode *new_parent,
+                           char *new_name);
 static int fat_setup_8_3_attr(const char *fname, struct std_fat_8_3_fmt *fptr, const int attr_type, uint32_t new_cluster);
 static uint32_t write_new_file(struct inode *parent, uint32_t dir_cluster,
                                uint8_t *dir_ptr, uint8_t *cluster, char *name,
@@ -123,6 +125,7 @@ int fat_init(struct mbr_info mbr_entry)
     vfs_ops->create_dir = &fat_create_dir;
     vfs_ops->create_file = &fat_create_file;
     vfs_ops->remove_file = &fat_remove_file;
+    vfs_ops->rename_file = &fat_rename_file;
     vfs_ops->stat_file = &fat_stat_file;
     vfs_ops->write_file = &fat_write_file;
     vfs_ops->truncate_file = &fat_truncate_file;
@@ -575,6 +578,93 @@ static int fat_remove_file(struct inode *i_node)
     }
     release_mutex(&fat_lock);
     kfree(directory);
+    return 0;
+}
+
+/* Move a short-name FAT entry without copying its data clusters.  The current
+ * filesystem creates 8.3 entries, so this deliberately rejects names that
+ * cannot be represented by its existing 8.3 writer. */
+static int fat_rename_file(struct inode *i_node, struct inode *new_parent,
+                           char *new_name)
+{
+    struct fatFS *fs = i_node->dev->finfo.fat;
+    uint32_t cluster_size = fat_cluster_size(fs);
+    struct inode *created;
+    uint8_t *old_dir;
+    uint8_t *new_dir;
+    struct std_fat_8_3_fmt saved;
+    struct std_fat_8_3_fmt renamed;
+
+    if (i_node->dir_cluster < 2 || i_node->dir_offset >= cluster_size ||
+        new_parent->dev != i_node->dev || new_name[0] == '\0')
+        return -1;
+    /* Moving a directory would also require rewriting its internal "..". */
+    if (i_node->i_type == I_DIR && i_node->dir_cluster != new_parent->i_ino)
+        return -1;
+    if (kstrlen(new_name) > 12)
+        return -1;
+
+    created = fat_create_file(new_parent, new_name);
+    if (created == NULL)
+        return -1;
+    old_dir = kmalloc(cluster_size);
+    new_dir = kmalloc(cluster_size);
+    if (old_dir == NULL || new_dir == NULL) {
+        if (old_dir) kfree(old_dir);
+        if (new_dir) kfree(new_dir);
+        return -1;
+    }
+
+    acquire_mutex(&fat_lock);
+    read_cluster(clust2sec(i_node->dir_cluster, fs),
+                 fs->fat_boot.sectors_per_cluster, old_dir);
+    read_cluster(clust2sec(created->dir_cluster, fs),
+                 fs->fat_boot.sectors_per_cluster, new_dir);
+    saved = *(struct std_fat_8_3_fmt *)(old_dir + i_node->dir_offset);
+    if (saved.fname[0] == 0 || saved.fname[0] == FAT_UNUSED_DIR) {
+        release_mutex(&fat_lock);
+        kfree(old_dir);
+        kfree(new_dir);
+        vfs_free_inode(created);
+        return -1;
+    }
+    fat_setup_8_3_attr(new_name, &renamed, saved.attribute,
+                        ((uint32_t)saved.high_cluster << 16) | saved.low_cluster);
+    renamed.file_size = saved.file_size;
+    old_dir[i_node->dir_offset] = FAT_UNUSED_DIR;
+    for (uint32_t offset = i_node->dir_offset; offset >= FAT_DIR_RECORD_SIZE; ) {
+        offset -= FAT_DIR_RECORD_SIZE;
+        if (old_dir[offset + FAT_ATTRIBUTE] != FAT_LONG_FILENAME)
+            break;
+        old_dir[offset] = FAT_UNUSED_DIR;
+    }
+    if (created->dir_cluster == i_node->dir_cluster) {
+        *(struct std_fat_8_3_fmt *)(old_dir + created->dir_offset) = renamed;
+        if (write_cluster(clust2sec(i_node->dir_cluster, fs),
+                          fs->fat_boot.sectors_per_cluster, old_dir) < 0) {
+            release_mutex(&fat_lock);
+            kfree(old_dir);
+            kfree(new_dir);
+            vfs_free_inode(created);
+            return -1;
+        }
+    } else {
+        *(struct std_fat_8_3_fmt *)(new_dir + created->dir_offset) = renamed;
+        if (write_cluster(clust2sec(created->dir_cluster, fs),
+                          fs->fat_boot.sectors_per_cluster, new_dir) < 0 ||
+            write_cluster(clust2sec(i_node->dir_cluster, fs),
+                          fs->fat_boot.sectors_per_cluster, old_dir) < 0) {
+            release_mutex(&fat_lock);
+            kfree(old_dir);
+            kfree(new_dir);
+            vfs_free_inode(created);
+            return -1;
+        }
+    }
+    release_mutex(&fat_lock);
+    kfree(old_dir);
+    kfree(new_dir);
+    vfs_free_inode(created);
     return 0;
 }
 

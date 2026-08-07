@@ -530,6 +530,86 @@ static int unlink(char *path)
     return retval;
 }
 
+static int rename(char *old_path, char *new_path)
+{
+    struct ktask *pid = get_current_process();
+    struct dnode *old_dir;
+    struct dnode *new_dir;
+    struct inode *source;
+    struct inode *parent;
+    char *new_copy;
+    char *name_copy;
+    char *parent_path;
+    char *new_name;
+    int length;
+    int result;
+
+    if (old_path == NULL || new_path == NULL || old_path[0] == '\0' ||
+        new_path[0] == '\0' || kstrcmp(old_path, ROOT) == 0 ||
+        kstrcmp(old_path, ".") == 0 || kstrcmp(old_path, "..") == 0)
+        return -1;
+    old_dir = old_path[0] == DELIM ? vfs_read_root_dir(ROOT) :
+                                     vfs_read_inode_dir(pid->cwd);
+    if (old_dir == NULL)
+        return -1;
+    source = vfs_walk_path(old_path, old_dir);
+    if (kstrstr(old_path, ROOT) < 0)
+        vfs_free_dnode(old_dir);
+    if (source == NULL)
+        return -1;
+
+    length = kstrlen(new_path);
+    new_copy = kmalloc(length + 1);
+    name_copy = kmalloc(length + 1);
+    if (new_copy == NULL || name_copy == NULL) {
+        if (new_copy) kfree(new_copy);
+        if (name_copy) kfree(name_copy);
+        vfs_free_inode(source);
+        return -1;
+    }
+    kstrncpy(new_copy, new_path, length + 1);
+    kstrncpy(name_copy, new_path, length + 1);
+    new_name = basename(name_copy);
+    parent_path = dirname(new_copy);
+    if (new_name[0] == '\0' || kstrcmp(new_name, ".") == 0 ||
+        kstrcmp(new_name, "..") == 0) {
+        kfree(new_copy);
+        kfree(name_copy);
+        vfs_free_inode(source);
+        return -1;
+    }
+    new_dir = new_path[0] == DELIM ? vfs_read_root_dir(ROOT) :
+                                     vfs_read_inode_dir(pid->cwd);
+    if (new_dir == NULL) {
+        kfree(new_copy);
+        kfree(name_copy);
+        vfs_free_inode(source);
+        return -1;
+    }
+    if (kstrcmp(parent_path, ".") == 0) {
+        parent = kmalloc(sizeof(struct inode));
+        if (parent != NULL)
+            vfs_copy_inode(parent, new_dir->root_inode);
+        vfs_free_dnode(new_dir);
+    } else {
+        parent = vfs_walk_path(parent_path, new_dir);
+        if (kstrstr(parent_path, ROOT) < 0)
+            vfs_free_dnode(new_dir);
+    }
+    if (parent == NULL) {
+        kfree(new_copy);
+        kfree(name_copy);
+        vfs_free_inode(source);
+        return -1;
+    }
+    result = vfs_rename(source, parent, new_name);
+    vfs_free_inode(parent);
+    vfs_free_inode(source);
+    kfree(new_copy);
+    kfree(name_copy);
+    return result;
+}
+
 static int dup(const int oldfd)
 {
 #ifdef DEBUG_SYSCALL
@@ -603,7 +683,8 @@ void *syscall_tbl[] = {
     (void *)&key_poll_syscall,            // 24
     (void *)&ticks_ms_syscall,            // 25
     (void *)&pipe,                        // 26
-    (void *)&tty_raw_syscall              // 27
+    (void *)&tty_raw_syscall,             // 27
+    (void *)&rename                       // 28
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

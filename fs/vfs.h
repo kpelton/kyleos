@@ -103,6 +103,8 @@ struct vfs_ops {
     int (*create_dir)(struct inode* parent, char *name);
     struct inode* (*create_file)(struct inode* parent, char *name);
     int (*remove_file)(struct inode *i_node);
+    int (*rename_file)(struct inode *i_node, struct inode *new_parent,
+                       char *new_name);
     int (*stat_file)(struct file *rfile, struct stat *st);
 };
 
@@ -127,6 +129,7 @@ int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset
 int vfs_create_dir(struct inode* parent, char *name);
 struct inode* vfs_create_file(struct inode* parent, char *name,uint32_t flags);
 int vfs_unlink(struct inode *i_node);
+int vfs_rename(struct inode *i_node, struct inode *new_parent, char *new_name);
 int vfs_create_pipe(struct file **reader, struct file **writer);
 
 struct file* vfs_open_file(struct inode * i_node,uint32_t flags);

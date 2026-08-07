@@ -5,6 +5,8 @@
 #include <output/input.h>
 
 static int ramfs_truncate_file(struct file *rfile);
+static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
+                             char *new_name);
 #include <locks/spinlock.h>
 #include <output/output.h>
 #define MAX_RAMFS 512
@@ -132,6 +134,7 @@ int ramfs_init(void) {
     ramfs_ops.create_dir = ramfs_create_dir;
     ramfs_ops.create_file = ramfs_create_file;
     ramfs_ops.remove_file = ramfs_remove_file;
+    ramfs_ops.rename_file = ramfs_rename_file;
     ramfs_ops.read_file = ramfs_read_file;
     ramfs_ops.write_file = ramfs_write_file;
     ramfs_ops.truncate_file = ramfs_truncate_file;
@@ -376,6 +379,52 @@ int ramfs_remove_file(struct inode *i_node)
         block = next;
     }
     memzero8((uint8_t *)&fs->inodes[inode_num], sizeof(struct ramfs_inode));
+    release_spinlock(&fs->lock);
+    return 0;
+}
+
+static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
+                             char *new_name)
+{
+    struct ramfs_instance *fs = ramfs_for_device(i_node->dev);
+    int inode_num = i_node->i_ino;
+    int old_parent;
+    int index = -1;
+
+    if (inode_num < 2 || inode_num >= MAX_RAMFS || new_name[0] == '\0' ||
+        new_parent->dev != i_node->dev || new_parent->i_type != I_DIR)
+        return -1;
+    if (fs->has_console && inode_num <= ZERO_INO)
+        return -1;
+    acquire_spinlock(&fs->lock);
+    if (fs->inodes[inode_num].dev == NULL ||
+        fs->inodes[new_parent->i_ino].dev == NULL) {
+        release_spinlock(&fs->lock);
+        return -1;
+    }
+    old_parent = fs->inodes[inode_num].parent;
+    if (old_parent != new_parent->i_ino) {
+        if (fs->inodes[new_parent->i_ino].last_child >= RAMFS_MAX_DIRECTORY) {
+            release_spinlock(&fs->lock);
+            return -1;
+        }
+        for (int i = 0; i < fs->inodes[old_parent].last_child; i++)
+            if (fs->inodes[old_parent].children[i] == inode_num) {
+                index = i;
+                break;
+            }
+        if (index < 0) {
+            release_spinlock(&fs->lock);
+            return -1;
+        }
+        for (int i = index; i + 1 < fs->inodes[old_parent].last_child; i++)
+            fs->inodes[old_parent].children[i] = fs->inodes[old_parent].children[i + 1];
+        fs->inodes[old_parent].last_child--;
+        fs->inodes[new_parent->i_ino]
+            .children[fs->inodes[new_parent->i_ino].last_child++] = inode_num;
+        fs->inodes[inode_num].parent = new_parent->i_ino;
+    }
+    kstrcpy(fs->inodes[inode_num].i_name, new_name);
     release_spinlock(&fs->lock);
     return 0;
 }
