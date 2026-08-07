@@ -100,9 +100,6 @@ void user_process_exit(struct ktask *t, int code)
 {
     //kprintf("Exit called");
     t->exit_code = code;
-    for (int i = 0; i < MAX_TASK_OPEN_FILES; i++)
-        if (t->open_fds[i] != NULL)
-            user_process_close_fd(t, i);
     sched_process_kill(t->pid,false,true);
     schedule();
 }
