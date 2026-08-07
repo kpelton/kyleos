@@ -22,7 +22,8 @@ export CC
 export AS
 export ASFLAGS
 SUBDIRS = $(shell ls -d */)
-OBJ_FILES = $(shell find . -type f -name '*.o')
+KERNEL_OBJECT_DIRS = asm block fs init irq locks mm output sched timer utils
+OBJ_FILES = $(shell find $(KERNEL_OBJECT_DIRS) -type f -name '*.o')
 
 all: kernel.img user
 

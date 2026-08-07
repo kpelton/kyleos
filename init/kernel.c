@@ -16,7 +16,7 @@
 #include <sched/exec.h>
 #define STACK_PAGES 256
 //#define DSHELL_EN
-#define SHELL "nushell"
+#define SHELL "/bin/nushell"
 static void idle_loop()
 {
     for(;;) {

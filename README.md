@@ -15,6 +15,8 @@ make test           # builds the kernel and boots the existing image
 
 `make image-reset` recreates the image and destroys files stored in it.  Use it
 only when that is intended.  Normal `make test` preserves the existing image.
+Generated userland programs are installed in `/bin`; optional extras are
+installed in `/usr/bin`.
 
 For manual asset changes:
 

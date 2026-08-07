@@ -84,14 +84,14 @@ sudo mount -o "uid=$(id -u),gid=$(id -g),umask=022" "$device" "$mount_dir"
 mounted=1
 
 cp -a "$seed_dir"/. "$mount_dir"/
-mkdir -p "$mount_dir/2"
+mkdir -p "$mount_dir/bin"
 while IFS= read -r program; do
     [[ -z $program || $program == \#* ]] && continue
     [[ -f $stage_dir/$program ]] || {
         echo "staged program missing: $program" >&2
         exit 1
     }
-    cp "$stage_dir/$program" "$mount_dir/$program"
+    cp "$stage_dir/$program" "$mount_dir/bin/$program"
 done < "$root/image/manifest.txt"
 if [[ -f $doom_binary ]]; then
     mkdir -p "$mount_dir/usr/bin" "$mount_dir/usr/share/doom"
