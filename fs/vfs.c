@@ -399,6 +399,15 @@ error:
 int vfs_stat_file(struct file *rfile, struct stat *st)
 {
     int idev;
+    if (rfile == NULL || st == NULL)
+        return -1;
+    if (rfile->pipe != NULL) {
+        st->st_dev = 0;
+        st->st_ino = 0;
+        st->st_mode = I_FILE;
+        st->st_size = 0;
+        return 0;
+    }
     idev = rfile->dev->devicenum;
     return vfs_devices[idev].ops->stat_file(rfile, st);
 }
