@@ -13,6 +13,10 @@ static struct key_event key_queue[KEY_QUEUE_SIZE];
 static int key_head;
 static int key_tail;
 static bool raw_mode;
+#define RAW_QUEUE_SIZE 128
+static char raw_queue[RAW_QUEUE_SIZE];
+static int raw_head;
+static int raw_tail;
 
 void input_init() 
 {
@@ -24,6 +28,17 @@ void input_read(char* dest)
 {
 
     acquire_spinlock(&input_spinlock);
+    if (raw_mode) {
+        if (raw_head != raw_tail) {
+            dest[0] = raw_queue[raw_tail];
+            raw_tail = (raw_tail + 1) % RAW_QUEUE_SIZE;
+            dest[1] = '\0';
+        } else {
+            dest[0] = '\0';
+        }
+        release_spinlock(&input_spinlock);
+        return;
+    }
     kstrcpy(dest,input_buffer);
     for (int i=0; i<MAX_CHARS; i++) 
         input_buffer[i] = '\0';
@@ -32,8 +47,16 @@ void input_read(char* dest)
 
 void input_add_char(char in)
 {
-    if (raw_mode)
+    if (raw_mode) {
+        acquire_spinlock(&input_spinlock);
+        int next = (raw_head + 1) % RAW_QUEUE_SIZE;
+        if (next != raw_tail) {
+            raw_queue[raw_head] = in;
+            raw_head = next;
+        }
+        release_spinlock(&input_spinlock);
         return;
+    }
     //skip tab until proper tty is implemented
     if (in == '\t' )
         return;
@@ -91,6 +114,8 @@ void input_set_raw(bool enabled)
             input_buffer[i] = '\0';
             internal_input_buffer[i] = '\0';
         }
+        raw_head = 0;
+        raw_tail = 0;
     }
     release_spinlock(&input_spinlock);
 }
