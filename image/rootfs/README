@@ -1,0 +1,4 @@
+This directory is copied into every newly-created KyleOS FAT image.
+
+Keep only tracked, reproducible seed files here.  User data, Doom WADs, save
+games, and generated binaries belong outside this directory.

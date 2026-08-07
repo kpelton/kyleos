@@ -1,0 +1,6 @@
+# Copy to config.mk to override paths while the source trees are being
+# migrated into this repository.  All defaults are relative to this repo.
+CORE_SRC = ../../kyleos-userspace
+PROGS_SRC = ../../newlib-progs
+NEWLIB_BUILD = ../../newlib-build
+SYSROOT = /tmp/z

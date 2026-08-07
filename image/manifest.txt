@@ -1,0 +1,27 @@
+# Files installed by `make image` after `make userland` stages them.
+# Doom assets are deliberately not listed: put user-owned assets in assets/
+# and install them explicitly with `make image-copy FILE=...`.
+argv
+argv-copy
+cat
+constest
+cp
+donut
+echo
+ed
+grep
+head
+kedit
+ls
+mkdir
+mv
+nushell
+rdwr
+rm
+shell
+stat
+tail
+testprint
+wc
+write
+writebomb

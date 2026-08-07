@@ -1,0 +1,19 @@
+# Kernel and generated images
+*.o
+kernel.bin
+kernel32.bin
+*.img
+build/
+
+# Editor, test, and runtime by-products
+*.sw?
+*~
+.#*
+log
+qemu.log*
+cscope.*
+.vscode/
+
+# Local machine configuration and proprietary game assets
+config.mk
+assets/
