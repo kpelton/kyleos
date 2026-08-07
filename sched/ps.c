@@ -154,8 +154,9 @@ int process_wait(int pid)
             child->pid = -1;
             return child->exit_code;
         }
-        //try again in 100 ms
-        ksleepm(100);
+        /* The shell waits here after every foreground command.  A 100 ms
+         * polling interval made even a cached `ls` feel delayed. */
+        ksleepm(10);
     }
     return 0;
 }
