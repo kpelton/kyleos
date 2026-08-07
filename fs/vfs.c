@@ -223,6 +223,28 @@ struct file *vfs_open_file(struct inode *i_node, uint32_t flags)
     return retfile;
 }
 
+/* Forked processes need their own descriptor object.  Sharing the same file
+ * table entry made a child's close() clear the parent's console descriptor. */
+struct file *vfs_clone_file(struct file *source)
+{
+    struct file *copy = NULL;
+    if (source == NULL)
+        return NULL;
+    acquire_spinlock(&ftable.lock);
+    for (int i = 0; i < VFS_MAX_OPEN; i++) {
+        if (ftable.open_files[i].refcount == 0) {
+            copy = &ftable.open_files[i];
+            *copy = *source;
+            copy->refcount = 1;
+            if (copy->pipe != NULL)
+                pipe_add_ref((struct pipe_data *)copy->pipe, copy->pipe_writer);
+            break;
+        }
+    }
+    release_spinlock(&ftable.lock);
+    return copy;
+}
+
 void vfs_close_file(struct file *ofile)
 {
     if (ofile && ofile->refcount)

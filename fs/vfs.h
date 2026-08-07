@@ -127,6 +127,7 @@ int vfs_unlink(struct inode *i_node);
 int vfs_create_pipe(struct file **reader, struct file **writer);
 
 struct file* vfs_open_file(struct inode * i_node,uint32_t flags);
+struct file* vfs_clone_file(struct file *source);
 void vfs_close_file(struct file *ofile);
 struct inode * vfs_walk_path(char *path, struct dnode *pwd);
 struct inode * vfs_get_root_inode();

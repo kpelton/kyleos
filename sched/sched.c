@@ -187,9 +187,9 @@ int user_process_fork()
 
     for (int j = 0; j < MAX_TASK_OPEN_FILES; j++)
     {
-        t->open_fds[j] = curr->open_fds[j];
-        if (t->open_fds[j] != NULL)
-            t->open_fds[j]->refcount++;
+        t->open_fds[j] = vfs_clone_file(curr->open_fds[j]);
+        if (curr->open_fds[j] != NULL && t->open_fds[j] == NULL)
+            panic("unable to duplicate file descriptor");
     }
 
     pid += 1;

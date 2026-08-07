@@ -19,5 +19,6 @@ struct pipe_data {
 int pipe_read(struct pipe_data *pipe, void *buf, int count);
 int pipe_write(struct pipe_data *pipe, const void *buf, int count);
 void pipe_close(struct pipe_data *pipe, bool writer);
+void pipe_add_ref(struct pipe_data *pipe, bool writer);
 
 #endif

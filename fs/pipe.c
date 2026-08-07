@@ -63,3 +63,15 @@ void pipe_close(struct pipe_data *pipe, bool writer)
     if (free_pipe)
         kfree(pipe);
 }
+
+void pipe_add_ref(struct pipe_data *pipe, bool writer)
+{
+    if (pipe == NULL)
+        return;
+    acquire_spinlock(&pipe->lock);
+    if (writer)
+        pipe->writers++;
+    else
+        pipe->readers++;
+    release_spinlock(&pipe->lock);
+}
