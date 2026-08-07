@@ -7,8 +7,8 @@ has a framebuffer-capable DoomGeneric port.
 ## Features
 
 - x86-64 long mode, paging, physical-memory allocation, and a kernel heap.
-- Preemptive round-robin scheduling with user processes, `fork`, `exec`,
-  `wait`, file descriptors, and standard input/output/error.
+- Preemptive round-robin scheduling with user processes, copy-on-write
+  `fork`, `exec`, `wait`, file descriptors, and standard input/output/error.
 - FAT32 root filesystem plus separate RAM filesystems at `/dev` and `/tmp`.
 - `/dev/console`, `/dev/null`, and `/dev/zero`.
 - Directories, file creation/removal, 8.3-safe rename, truncate-on-open, seek,
@@ -18,6 +18,7 @@ has a framebuffer-capable DoomGeneric port.
 - Small userspace: `ls`, `cat`, `cp`, `rm`, `mkdir`, `grep`, `wc`, `head`,
   `tail`, `mv`, `ed`, `kedit`, and more.
 - DoomGeneric as an optional extra, installed at `/usr/bin/doom`.
+- Lua 5.4.4 as an optional Newlib-built extra, installed at `/usr/bin/lua`.
 
 ## Prerequisites
 
@@ -138,6 +139,20 @@ KyleOS, run:
 doom
 ```
 
+## Lua extra
+
+Lua 5.4.4 is vendored under `extras/lua` and built against Newlib. A fresh
+image installs the interpreter at `/usr/bin/lua` and its bundled examples at
+`/usr/share/lua/`:
+
+```sh
+lua /usr/share/lua/life.lua
+lua /usr/share/lua/adven.lua
+```
+
+`life.lua` accepts an optional generation count, for example
+`lua /usr/share/lua/life.lua 50`.
+
 ## Current limitations
 
 - No multiuser model, permissions, signals, networking, or dynamic linker.
@@ -147,5 +162,7 @@ doom
   shell environment.
 - The scheduler wait path is polling-based; it is tuned for responsiveness,
   not yet a full wait-queue implementation.
+- Copy-on-write currently uses full TLB flushes at process switches and has no
+  demand paging, swap, shared-memory mappings, or copy-on-write page cache.
 - The userspace and Newlib source relocation described above is still in
   progress.

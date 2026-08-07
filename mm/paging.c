@@ -370,7 +370,7 @@ void paging_enable_protected()
     asm volatile("movq %0 ,%%cr0" :: "r"(cr0));
 }
 
-uint64_t walk(struct pg_tbl *pg, uint64_t va)
+uint64_t *paging_walk(struct pg_tbl *pg, uint64_t va)
 {
 
     uint64_t virt_curr_addr = va;
@@ -397,11 +397,34 @@ uint64_t walk(struct pg_tbl *pg, uint64_t va)
         offset = VIRT_TO_PAGE_TAB(virt_curr_addr);
     
     //return pte;
-    return (uint64_t) &curr[offset];
+    return &curr[offset];
 
     error:
         return NULL;
 
+}
+
+bool paging_resolve_cow_fault(struct pg_tbl *pg, uint64_t va)
+{
+    uint64_t *pte = paging_walk(pg, va);
+    uint64_t old_phys;
+    uint64_t new_phys;
+
+    if (pte == NULL || (*pte & PAGE_COW) == 0)
+        return false;
+
+    old_phys = *pte & PHYS_ADDR_MASK;
+    if (pmem_page_refcount(old_phys) > 1) {
+        new_phys = (uint64_t)pmem_alloc_page();
+        memcpy64((uint64_t *)KERN_PHYS_TO_PVIRT(new_phys),
+                 (uint64_t *)KERN_PHYS_TO_PVIRT(old_phys), PAGE_SIZE);
+        pmem_free_block(old_phys);
+        *pte = new_phys | ((*pte & ~PHYS_ADDR_MASK & ~PAGE_COW) | READ_WRITE);
+    } else {
+        *pte = (*pte & ~PAGE_COW) | READ_WRITE;
+    }
+    asm volatile("invlpg (%0)" :: "r"(va));
+    return true;
 }
 
 
@@ -422,9 +445,12 @@ void pagefault(uint64_t *addr) {
         panic("fail");
     }a
 #endif
-    uint64_t *pte =(uint64_t *)walk(&(proc->mm->pagetable),cr2);
+    uint64_t *pte = paging_walk(&(proc->mm->pagetable),cr2);
     //kprintf("pte:%x\n",pte);
 
+    if (paging_resolve_cow_fault(&(proc->mm->pagetable), cr2)) {
+        return;
+    }
     if (pte) {
         *pte |= PAGE_PRESENT;
     }

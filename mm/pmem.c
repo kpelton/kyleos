@@ -12,6 +12,16 @@ extern unsigned long _kernel_end;
 static struct phys_mem_zone phys_mem_zones[MAX_PHYS_ZONES];
 static int phys_max_found_zone = -1;
 static int phys_first_region = -1;
+/* The allocator currently serves pages only from phys_first_region.  This
+ * table is carved out next to the existing allocation bitmaps during early
+ * memory setup, so it tracks exactly that region without inflating .bss. */
+static uint16_t *page_refs;
+static uint64_t page_ref_count;
+
+static uint64_t page_ref_index(uint64_t baddr)
+{
+    return (baddr - phys_mem_zones[phys_first_region].base_addr) / BLOCK_SIZE;
+}
 
 static uint64_t get_bit_in_map(uint64_t addr) 
 {
@@ -187,6 +197,8 @@ void *pmem_alloc_block(unsigned int size_in_pages) {
 
     if (addr != 0) {
         pmem_addr_set_region(addr,size_in_pages,phys_mem_zones[phys_first_region].bitmap);
+        for (uint64_t i = 0; i < size_in_pages; i++)
+            page_refs[page_ref_index(addr + phys_mem_zones[phys_first_region].base_addr + i * BLOCK_SIZE)] = 1;
     }
     //We need to add the base address here because all bitmaps start at 0
     return (void *)(addr +phys_mem_zones[phys_first_region].base_addr);
@@ -194,8 +206,26 @@ void *pmem_alloc_block(unsigned int size_in_pages) {
 }
 
 void pmem_free_block(uint64_t baddr) {
+    uint64_t index = page_ref_index(baddr);
     uint64_t diff = baddr - phys_mem_zones[phys_first_region].base_addr;
-    pmem_addr_free_block(diff,phys_mem_zones[phys_first_region].bitmap);
+    if (index >= page_ref_count || page_refs[index] == 0)
+        panic("pmem free of unreferenced page");
+    if (--page_refs[index] == 0)
+        pmem_addr_free_block(diff,phys_mem_zones[phys_first_region].bitmap);
+}
+
+void pmem_retain_page(uint64_t baddr) {
+    uint64_t index = page_ref_index(baddr);
+    if (index >= page_ref_count || page_refs[index] == 0 || page_refs[index] == 0xffff)
+        panic("pmem invalid page retain");
+    page_refs[index]++;
+}
+
+uint16_t pmem_page_refcount(uint64_t baddr) {
+    uint64_t index = page_ref_index(baddr);
+    if (index >= page_ref_count)
+        return 0;
+    return page_refs[index];
 }
 
 static uint64_t* zero_page(uint64_t *addr) {
@@ -208,6 +238,7 @@ void *pmem_alloc_page() {
 
     if (addr != 0) {
         pmem_addr_set_block(addr,phys_mem_zones[phys_first_region].bitmap);
+        page_refs[page_ref_index(addr + phys_mem_zones[phys_first_region].base_addr)] = 1;
     }
     //We need to add the base address here because all bitmaps start at 0
 #ifdef PMEM_DEBUG
@@ -243,6 +274,12 @@ void phys_mem_init() {
         alloc_location += size;                
         }
     }
+    page_ref_count = phys_mem_zones[phys_first_region].len / BLOCK_SIZE;
+    page_refs = (uint16_t *)alloc_location;
+    for (uint64_t i = 0; i < page_ref_count; i++)
+        page_refs[i] = 0;
+    alloc_location += (page_ref_count * sizeof(*page_refs) + sizeof(*alloc_location) - 1) /
+                      sizeof(*alloc_location);
     kprintf("Using %d K to store bitmaps\n",(alloc_location - initial_alloc_location)/1024);
 
     //alloc regions

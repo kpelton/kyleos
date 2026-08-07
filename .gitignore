@@ -17,3 +17,7 @@ cscope.*
 # Local machine configuration and proprietary game assets
 config.mk
 assets/
+extras/lua/src/*.o
+extras/lua/src/liblua.a
+extras/lua/src/lua
+extras/lua/src/luac

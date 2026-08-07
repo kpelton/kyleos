@@ -12,6 +12,8 @@ NEWLIB_BUILD ?= $(KERNEL_ROOT)/../../newlib-build
 SYSROOT ?= /tmp/z
 DOOM_BINARY ?= $(KERNEL_ROOT)/build/extras/doom/doom
 DOOM_WAD ?= $(KERNEL_ROOT)/assets/doom.wad
+LUA_SOURCE ?= $(KERNEL_ROOT)/extras/lua/src
+LUA_BINARY ?= $(KERNEL_ROOT)/build/extras/lua/lua
 ifneq (,$(wildcard config.mk))
 include config.mk
 endif
@@ -66,7 +68,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland doom doom-image image image-reset image-mount image-unmount image-copy
+.PHONY: toolchain userland doom doom-image lua image image-reset image-mount image-unmount image-copy
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -90,11 +92,17 @@ doom-image:
 	$(MAKE) doom
 	$(MAKE) image-reset
 
-image: userland
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) scripts/image-create.sh
+lua:
+	$(MAKE) -C $(LUA_SOURCE) clean
+	$(MAKE) -C $(LUA_SOURCE) lua SYSROOT=$(SYSROOT)
+	mkdir -p $(dir $(LUA_BINARY))
+	cp $(LUA_SOURCE)/lua $(LUA_BINARY)
 
-image-reset: userland
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) scripts/image-create.sh --reset
+image: userland lua
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) scripts/image-create.sh
+
+image-reset: userland lua
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) scripts/image-create.sh --reset
 
 image-mount:
 	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) scripts/image-mount.sh

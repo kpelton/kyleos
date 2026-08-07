@@ -17,6 +17,7 @@
 #define STACK_PAGES 256
 //#define DSHELL_EN
 #define SHELL "/bin/nushell"
+#define LEGACY_SHELL "nushell"
 static void idle_loop()
 {
     for(;;) {
@@ -34,6 +35,13 @@ static void kernel(void)
     int retval = -1;
     struct dnode *dptr = vfs_read_root_dir("/");
     struct inode *iptr = vfs_walk_path(SHELL, dptr);
+
+    /* Images made before the /bin layout used a root-level nushell.  Keep
+     * them bootable while new images use the standard path. */
+    if (iptr == NULL) {
+        dptr = vfs_read_root_dir("/");
+        iptr = vfs_walk_path(LEGACY_SHELL, dptr);
+    }
 
     if (iptr != NULL)
     {

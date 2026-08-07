@@ -8,6 +8,7 @@ stage_dir=${USERLAND_STAGE:-"$root/build/userland"}
 seed_dir="$root/image/rootfs"
 doom_binary=${DOOM_BINARY:-"$root/build/extras/doom/doom"}
 doom_wad=${DOOM_WAD:-"$root/assets/doom.wad"}
+lua_binary=${LUA_BINARY:-"$root/build/extras/lua/lua"}
 ready_file="$image.ready"
 fdisk_bin=${FDISK_BIN:-/sbin/fdisk}
 kpartx_bin=${KPARTX_BIN:-/sbin/kpartx}
@@ -101,6 +102,11 @@ if [[ -f $doom_binary ]]; then
     else
         echo "warning: Doom binary installed without a WAD; set DOOM_WAD=/path/to/doom.wad" >&2
     fi
+fi
+if [[ -f $lua_binary ]]; then
+    mkdir -p "$mount_dir/usr/bin" "$mount_dir/usr/share/lua"
+    cp "$lua_binary" "$mount_dir/usr/bin/lua"
+    cp "$root/extras/lua/examples"/*.lua "$mount_dir/usr/share/lua/"
 fi
 sync
 touch "$ready_file"

@@ -34,8 +34,6 @@ bool vmm_free(struct vmm_map *map)
         llist_free(map->vmm_areas[i], vmm_map_free_block);
     }
     paging_free_pg_tbl(&map->pagetable);
-    pmem_free_block(KERN_PVIRT_TO_PHYS(map->pagetable.pml4));
-
     kfree(map);
     return true;
 }
@@ -48,8 +46,8 @@ uint64_t vmm_get_page_count(struct vmm_map *map, enum vmm_block_type btype)
 void vmm_map_free_block(void *data)
 {
     struct vmm_block *block = data;
-    for (uint64_t i = 0; i < block->size; i++)
-        pmem_free_block((uint64_t)block->paddr + (i * PAGE_SIZE));
+    /* Leaf mappings own the physical-page references and release them while
+     * their page tables are torn down. */
     kfree(block);
 }
 
@@ -75,6 +73,58 @@ void *vmm_copy_block(void *data, void *user_data)
 bool vmm_copy_section(struct vmm_map *src, struct vmm_map *dst, enum vmm_block_type btype)
 {
     llist_copy(src->vmm_areas[btype], dst->vmm_areas[btype], vmm_copy_block, dst);
+    return true;
+}
+
+struct vmm_share_context {
+    struct vmm_map *src;
+    struct vmm_map *dst;
+};
+
+static void *vmm_share_block(void *data, void *user_data)
+{
+    struct vmm_block *block = (struct vmm_block *)data;
+    struct vmm_share_context *context = (struct vmm_share_context *)user_data;
+    struct vmm_map *dst = context->dst;
+    struct vmm_block *new_block;
+
+    new_block = kmalloc(sizeof(struct vmm_block));
+    if (!new_block)
+        return NULL;
+    *new_block = *block;
+
+    for (uint64_t i = 0; i < block->size; i++) {
+        uint64_t va = (uint64_t)block->vaddr + i * PAGE_SIZE;
+        uint64_t pa;
+        uint64_t *parent_pte = paging_walk(&context->src->pagetable, va);
+        uint64_t flags;
+
+        if (!parent_pte)
+            return NULL;
+        /* A prior COW fault may have replaced this one page, so block->paddr
+         * can no longer describe the live physical backing. */
+        pa = *parent_pte & 0xffffffffff000;
+        /* The block's original flags are not sufficient here: after one
+         * fork a writable page is already read-only+COW.  Preserve those
+         * live PTE flags when sharing it with another child. */
+        flags = *parent_pte & 0xfff;
+        if ((*parent_pte & READ_WRITE) != 0) {
+            *parent_pte = (*parent_pte & ~READ_WRITE) | PAGE_COW;
+            flags = (*parent_pte & 0xfff);
+            asm volatile("invlpg (%0)" :: "r"(va));
+        }
+        pmem_retain_page(pa);
+        if (!paging_map_range(&dst->pagetable, pa, va, 1, flags))
+            return NULL;
+    }
+    dst->total_pages += block->size;
+    return new_block;
+}
+
+bool vmm_share_section(struct vmm_map *src, struct vmm_map *dst, enum vmm_block_type btype)
+{
+    struct vmm_share_context context = { src, dst };
+    llist_copy(src->vmm_areas[btype], dst->vmm_areas[btype], vmm_share_block, &context);
     return true;
 }
 

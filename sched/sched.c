@@ -124,7 +124,6 @@ void sched_save_context(uint64_t rip, uint64_t rsp)
 
 int user_process_fork()
 {
-    // TODO:Change below to copy on write
     acquire_spinlock(&sched_spinlock);
     struct ktask *curr = get_current_process();
     struct ktask *t;
@@ -136,9 +135,9 @@ int user_process_fork()
     //TODO inc refcount on cwd;
     t->cwd = curr->cwd;
 
-    vmm_copy_section(curr->mm,t->mm,VMM_STACK);
-    vmm_copy_section(curr->mm,t->mm,VMM_TEXT);
-    vmm_copy_section(curr->mm,t->mm,VMM_DATA);
+    vmm_share_section(curr->mm,t->mm,VMM_STACK);
+    vmm_share_section(curr->mm,t->mm,VMM_TEXT);
+    vmm_share_section(curr->mm,t->mm,VMM_DATA);
 
 
     t->state = TASK_READY;
