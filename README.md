@@ -11,6 +11,8 @@ has a framebuffer-capable DoomGeneric port.
   corruption checks.
 - Preemptive round-robin scheduling with user processes, copy-on-write
   `fork`, `exec`, `wait`, file descriptors, and standard input/output/error.
+- A userspace `/sbin/init` running as PID 1, with orphan adoption, child
+  reaping, and automatic console-shell restart.
 - FAT32 root filesystem plus separate RAM filesystems at `/dev` and `/tmp`.
 - `/dev/console`, `/dev/null`, and `/dev/zero`.
 - Directories, file and empty-directory removal, 8.3-safe rename,
@@ -98,6 +100,8 @@ New generated images use this layout:
 │   ├── ls
 │   ├── grep
 │   └── ...
+├── sbin/
+│   └── init             # PID 1 and console supervisor
 ├── dev/                 # RAM filesystem
 │   ├── console
 │   ├── null
@@ -111,6 +115,18 @@ New generated images use this layout:
 `nushell` searches `/bin` and then `/usr/bin` for bare command names.  This
 is currently fixed lookup behavior, not a configurable environment `PATH`.
 Absolute paths begin at `/`; relative paths begin in the current directory.
+
+## Init and userspace boot
+
+The kernel starts `/sbin/init` as PID 1.  Init inherits the three console file
+descriptors, forks `/bin/nushell`, waits for it, and restarts it whenever it
+exits or is terminated by a userspace fault.  When another process exits, its
+live children are reparented to PID 1 so init can reap them.
+
+For compatibility with older disk images, the kernel falls back to
+`/bin/nushell` and then the legacy root-level `nushell` when `/sbin/init` is
+absent.  Run `make image-reset` once after upgrading to install the real init
+binary into an existing generated image.
 
 ## Managing the generated image
 
@@ -226,6 +242,8 @@ grep "Moses" /usr/share/text/bible.txt | grep "said"
 ## Current limitations
 
 - No multiuser model, permissions, signals, networking, or dynamic linker.
+- Init currently supervises one console shell; it does not yet parse service
+  configuration, manage dependencies, or provide shutdown/reboot targets.
 - The FAT implementation is intentionally small; rename targets must use
   conventional 8.3-compatible names.
 - No hard links, symlinks, full terminal/termios support, or configurable

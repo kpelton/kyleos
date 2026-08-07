@@ -16,6 +16,7 @@
 #include <sched/exec.h>
 #define STACK_PAGES 256
 //#define DSHELL_EN
+#define INIT "/sbin/init"
 #define SHELL "/bin/nushell"
 #define LEGACY_SHELL "nushell"
 static void idle_loop()
@@ -34,10 +35,13 @@ static void kernel(void)
 #else
     int retval = -1;
     struct dnode *dptr = vfs_read_root_dir("/");
-    struct inode *iptr = vfs_walk_path(SHELL, dptr);
+    struct inode *iptr = vfs_walk_path(INIT, dptr);
 
-    /* Images made before the /bin layout used a root-level nushell.  Keep
-     * them bootable while new images use the standard path. */
+    /* Keep older images bootable while new images use a userspace PID 1. */
+    if (iptr == NULL) {
+        dptr = vfs_read_root_dir("/");
+        iptr = vfs_walk_path(SHELL, dptr);
+    }
     if (iptr == NULL) {
         dptr = vfs_read_root_dir("/");
         iptr = vfs_walk_path(LEGACY_SHELL, dptr);
@@ -45,13 +49,13 @@ static void kernel(void)
 
     if (iptr != NULL)
     {
-        kprintf("Starting shell\n");
+        kprintf("Starting userspace\n");
         retval = exec_from_inode(iptr,false,NULL);
         if(retval <0) {
-            panic("Unable to start userspace shell");
+            panic("Unable to start userspace");
         }
     }else{
-        panic("Could not find Shell in rootfs");
+        panic("Could not find init or shell in rootfs");
     }
 #endif
     //Should never return after this point since scheduler will take over

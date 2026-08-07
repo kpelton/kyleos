@@ -87,7 +87,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland kedit rm rmdir fstest gpfault breakout doom doom-image image image-reset image-mount image-unmount image-copy
+.PHONY: toolchain userland userinit kedit rm rmdir fstest gpfault breakout doom doom-image image image-reset image-mount image-unmount image-copy
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -96,7 +96,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) kedit rm rmdir fstest gpfault breakout
+	$(MAKE) userinit kedit rm rmdir fstest gpfault breakout
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -109,6 +109,10 @@ userland:
 kedit: extras/kedit/kedit.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kedit
+
+userinit: extras/init/init.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/init
 
 rm: extras/rm/rm.c
 	mkdir -p $(USERLAND_STAGE)

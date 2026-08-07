@@ -337,6 +337,13 @@ bool sched_process_kill(int pid, bool cleanup, bool close_files)
             struct ktask *t;
             t = &ktasks[i];
 
+            /* PID 1 adopts live children when their parent exits, allowing
+             * userspace init to reap descendants left behind by a shell or
+             * service. */
+            for (j = 0; j < SCHED_MAX_TASKS; j++)
+                if (ktasks[j].pid != -1 && ktasks[j].parent == t->pid)
+                    ktasks[j].parent = INIT_PID;
+
             if (t->type == USER_PROCESS)
             {
                 vmm_free(ktasks[i].mm);

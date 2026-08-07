@@ -86,7 +86,7 @@ sudo mount -o "uid=$(id -u),gid=$(id -g),umask=022" "$device" "$mount_dir"
 mounted=1
 
 cp -a "$seed_dir"/. "$mount_dir"/
-mkdir -p "$mount_dir/bin"
+mkdir -p "$mount_dir/bin" "$mount_dir/sbin"
 while IFS= read -r program; do
     [[ -z $program || $program == \#* ]] && continue
     [[ -f $stage_dir/$program ]] || {
@@ -95,6 +95,11 @@ while IFS= read -r program; do
     }
     cp "$stage_dir/$program" "$mount_dir/bin/$program"
 done < "$root/image/manifest.txt"
+[[ -f $stage_dir/init ]] || {
+    echo "staged init missing: run 'make userland' first" >&2
+    exit 1
+}
+cp "$stage_dir/init" "$mount_dir/sbin/init"
 if [[ -f $doom_binary ]]; then
     mkdir -p "$mount_dir/usr/bin" "$mount_dir/usr/share/doom"
     cp "$doom_binary" "$mount_dir/usr/bin/doom"

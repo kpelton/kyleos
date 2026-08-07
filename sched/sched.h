@@ -15,6 +15,7 @@
 #define USER_HEAP_VADDR (uint64_t *) 0x600000000
 #define USER_HEAP_SIZE 1 // in pages
 #define IDLE_PID 0
+#define INIT_PID 1
 void kthread_add(void (*fptr)(),char * name);
 void schedule();
 void sched_stats();
