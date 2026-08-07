@@ -7,6 +7,7 @@
 #include <output/output.h>
 #define MAX_RAMFS 512
 #define CONSOLE_INO 1
+#define RAMFS_INSTANCE_COUNT 2
 struct ramfs_instance {
     struct ramfs_inode inodes[MAX_RAMFS];
     struct spinlock lock;
@@ -21,12 +22,18 @@ int ramfs_read_file (struct file * rfile,void *buf,uint32_t count);
 int ramfs_write_file (struct file * rfile,void *buf,uint32_t count);
 int ramfs_stat_file (struct file * rfile,struct stat *st);
 
-static struct ramfs_instance ramfs_instances[VFS_MAX_DEVICES];
+static struct ramfs_instance ramfs_instances[RAMFS_INSTANCE_COUNT];
+static int ramfs_mount_count;
+static int ramfs_device_nums[RAMFS_INSTANCE_COUNT];
 static struct vfs_ops ramfs_ops;
 
 static struct ramfs_instance *ramfs_for_device(struct vfs_device *dev)
 {
-    return &ramfs_instances[dev->devicenum];
+    for (int i = 0; i < ramfs_mount_count; i++)
+        if (ramfs_device_nums[i] == (int)dev->devicenum)
+            return &ramfs_instances[i];
+    panic("unknown ramfs device");
+    return NULL;
 }
 
 static int ramfs_alloc_inode(struct ramfs_instance *fs)
@@ -68,6 +75,9 @@ static int ramfs_mount(const char *path, const char *name, bool with_console)
     struct dnode *root = vfs_read_root_dir(ROOT);
     int device_num;
 
+    if (ramfs_mount_count >= RAMFS_INSTANCE_COUNT)
+        return -1;
+
     /* Create the FAT mount point on first boot, so no image preparation is
      * required for /dev or /tmp. */
     if (root == NULL)
@@ -81,6 +91,7 @@ static int ramfs_mount(const char *path, const char *name, bool with_console)
     memzero8((uint8_t *)&dev, sizeof(dev));
     dev.fstype = RAM_FS;
     dev.ops = &ramfs_ops;
+    int instance = ramfs_mount_count++;
     dev.rootfs = false;
     kstrcpy(dev.mountpoint, path);
     kstrcpy(dev.mountpoint_root, name);
@@ -88,12 +99,16 @@ static int ramfs_mount(const char *path, const char *name, bool with_console)
     device_num = vfs_register_device(dev);
     if (device_num < 0)
         return -1;
-    init_spinlock(&ramfs_instances[device_num].lock);
+    ramfs_device_nums[instance] = device_num;
+    init_spinlock(&ramfs_instances[instance].lock);
     create_root_dir(vfs_get_device(device_num), with_console);
     return 0;
 }
 
 int ramfs_init(void) {
+    ramfs_mount_count = 0;
+    for (int i = 0; i < RAMFS_INSTANCE_COUNT; i++)
+        ramfs_device_nums[i] = -1;
     memzero8((uint8_t *)&ramfs_ops, sizeof(ramfs_ops));
     ramfs_ops.read_root_dir = ramfs_read_root_dir;
     ramfs_ops.read_inode_dir= ramfs_read_inode_dir;
