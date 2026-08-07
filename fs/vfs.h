@@ -75,6 +75,8 @@ struct file {
     struct vfs_device* dev;
     uint64_t pos;
     uint32_t flags;
+    void *pipe;
+    bool pipe_writer;
 };
 
 struct file_table {
@@ -122,6 +124,7 @@ int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset
 int vfs_create_dir(struct inode* parent, char *name);
 struct inode* vfs_create_file(struct inode* parent, char *name,uint32_t flags);
 int vfs_unlink(struct inode *i_node);
+int vfs_create_pipe(struct file **reader, struct file **writer);
 
 struct file* vfs_open_file(struct inode * i_node,uint32_t flags);
 void vfs_close_file(struct file *ofile);

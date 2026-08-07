@@ -9,6 +9,7 @@ int user_process_close_fd(struct ktask *t,int fd);
 int user_process_read_fd(struct ktask *t,int fd, void *buf, int count);
 int user_process_write_fd(struct ktask *t, int fd, void *buf, int count);
 int user_process_seek_fd(struct ktask *t, int fd, long offset, int whence);
+int user_process_pipe(struct ktask *t, int pipefd[2]);
 void user_process_exit(struct ktask *t, int code);
 void *user_process_sbrk(struct ktask *t, uint64_t increment);
 int process_wait(int pid);

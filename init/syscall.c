@@ -225,6 +225,14 @@ static int lseek(int fd, long offset, int whence)
     return user_process_seek_fd(pid, fd, offset, whence);
 }
 
+static int pipe(int pipefd[2])
+{
+    struct ktask *pid = get_current_process();
+    if (pipefd == NULL || pipefd >= (int *)KERN_SPACE_BOUNDRY)
+        return -1;
+    return user_process_pipe(pid, pipefd);
+}
+
 static int framebuffer_present_syscall(void *pixels, uint32_t bytes)
 {
     if (pixels == NULL || pixels >= (void *)KERN_SPACE_BOUNDRY)
@@ -571,7 +579,8 @@ void *syscall_tbl[] = {
     (void *)&lseek,            // 22
     (void *)&framebuffer_present_syscall, // 23
     (void *)&key_poll_syscall,            // 24
-    (void *)&ticks_ms_syscall             // 25
+    (void *)&ticks_ms_syscall,            // 25
+    (void *)&pipe                         // 26
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

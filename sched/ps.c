@@ -65,10 +65,44 @@ int user_process_seek_fd(struct ktask *t, int fd, long offset, int whence)
     return -1;
 }
 
+int user_process_pipe(struct ktask *t, int pipefd[2])
+{
+    struct file *reader;
+    struct file *writer;
+    int readfd = -1;
+    int writefd = -1;
+
+    if (t == NULL || pipefd == NULL || vfs_create_pipe(&reader, &writer) < 0)
+        return -1;
+    for (int i = START_USER_FD; i < MAX_TASK_OPEN_FILES; i++)
+        if (t->open_fds[i] == NULL) {
+            readfd = i;
+            break;
+        }
+    for (int i = readfd + 1; i < MAX_TASK_OPEN_FILES; i++)
+        if (t->open_fds[i] == NULL) {
+            writefd = i;
+            break;
+        }
+    if (readfd < 0 || writefd < 0) {
+        vfs_close_file(reader);
+        vfs_close_file(writer);
+        return -1;
+    }
+    t->open_fds[readfd] = reader;
+    t->open_fds[writefd] = writer;
+    pipefd[0] = readfd;
+    pipefd[1] = writefd;
+    return 0;
+}
+
 void user_process_exit(struct ktask *t, int code)
 {
     //kprintf("Exit called");
     t->exit_code = code;
+    for (int i = 0; i < MAX_TASK_OPEN_FILES; i++)
+        if (t->open_fds[i] != NULL)
+            user_process_close_fd(t, i);
     sched_process_kill(t->pid,false,true);
     schedule();
 }

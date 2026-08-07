@@ -1,4 +1,5 @@
 #include <fs/vfs.h>
+#include <fs/pipe.h>
 #include <output/output.h>
 #include <mm/mm.h>
 struct vfs_device vfs_devices[VFS_MAX_DEVICES];
@@ -27,7 +28,8 @@ void vfs_init()
     {
         ftable.open_files[i].refcount = 0;
         ftable.open_files[i].dev = NULL;
-        ftable.open_files[i].flags = 0; 
+            ftable.open_files[i].flags = 0;
+            ftable.open_files[i].pipe = NULL;
     }
 
     release_spinlock(&ftable.lock);
@@ -195,6 +197,8 @@ static struct file *vfs_get_open_file(struct inode *i_node)
             ftable.open_files[i].dev = i_node->dev;
             vfs_copy_inode(&ftable.open_files[i].i_node,i_node);
             ftable.open_files[i].refcount++;
+            ftable.open_files[i].pipe = NULL;
+            ftable.open_files[i].pipe_writer = false;
             return &(ftable.open_files[i]);
         }
     }
@@ -224,9 +228,12 @@ void vfs_close_file(struct file *ofile)
         ofile->refcount--;
         if (ofile->refcount == 0)
         {
+            if (ofile->pipe != NULL)
+                pipe_close((struct pipe_data *)ofile->pipe, ofile->pipe_writer);
             ofile->dev = NULL;
             ofile->flags = 0;
             ofile->pos = 0;
+            ofile->pipe = NULL;
         }
     }
 }
@@ -368,6 +375,11 @@ struct inode * fs_is_mount_point(struct inode *ptr) {
 
 int vfs_read_file(struct file *rfile, void *buf, int count)
 {
+    if (rfile->pipe != NULL) {
+        if (rfile->pipe_writer)
+            return -1;
+        return pipe_read((struct pipe_data *)rfile->pipe, buf, count);
+    }
     int idev;
     idev = rfile->dev->devicenum;
     if (rfile->flags != O_RDONLY && rfile->flags != O_RDWR)
@@ -400,6 +412,8 @@ int vfs_seek_file(struct file *rfile, long offset, int whence)
 
     if (rfile == NULL)
         return -1;
+    if (rfile->pipe != NULL)
+        return -1;
     switch (whence) {
     case 0: base = 0; break;                 /* SEEK_SET */
     case 1: base = (long)rfile->pos; break; /* SEEK_CUR */
@@ -416,6 +430,11 @@ int vfs_seek_file(struct file *rfile, long offset, int whence)
 
 int vfs_write_file(struct file *rfile, void *buf, int count)
 {
+    if (rfile->pipe != NULL) {
+        if (!rfile->pipe_writer)
+            return -1;
+        return pipe_write((struct pipe_data *)rfile->pipe, buf, count);
+    }
     uint32_t access_mode = rfile->flags & MAX_FILE_FLAGS;
     /* Callers such as fopen("wb") retain create/truncate bits in flags. */
     if (count < 0 || (access_mode != O_WRONLY && access_mode != O_RDWR))
@@ -427,6 +446,53 @@ int vfs_write_file(struct file *rfile, void *buf, int count)
         rfile->pos += rcount;
     return rcount;
 
+}
+
+int vfs_create_pipe(struct file **reader, struct file **writer)
+{
+    struct pipe_data *pipe;
+    struct file *read_file = NULL;
+    struct file *write_file = NULL;
+
+    if (reader == NULL || writer == NULL)
+        return -1;
+    pipe = kmalloc(sizeof(*pipe));
+    if (pipe == NULL)
+        return -1;
+    memzero8((uint8_t *)pipe, sizeof(*pipe));
+    pipe->readers = 1;
+    pipe->writers = 1;
+    init_spinlock(&pipe->lock);
+
+    acquire_spinlock(&ftable.lock);
+    for (int i = 0; i < VFS_MAX_OPEN; i++) {
+        if (ftable.open_files[i].refcount == 0) {
+            if (read_file == NULL)
+                read_file = &ftable.open_files[i];
+            else {
+                write_file = &ftable.open_files[i];
+                break;
+            }
+        }
+    }
+    if (read_file == NULL || write_file == NULL) {
+        release_spinlock(&ftable.lock);
+        kfree(pipe);
+        return -1;
+    }
+    memzero8((uint8_t *)read_file, sizeof(*read_file));
+    memzero8((uint8_t *)write_file, sizeof(*write_file));
+    read_file->refcount = 1;
+    read_file->flags = O_RDONLY;
+    read_file->pipe = pipe;
+    write_file->refcount = 1;
+    write_file->flags = O_WRONLY;
+    write_file->pipe = pipe;
+    write_file->pipe_writer = true;
+    release_spinlock(&ftable.lock);
+    *reader = read_file;
+    *writer = write_file;
+    return 0;
 }
 
 char * vfs_strip_path(char *ptr) {
