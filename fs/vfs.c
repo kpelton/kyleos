@@ -487,5 +487,24 @@ int vfs_read_file_offset(struct file *rfile, void *buf, int count, uint32_t offs
 
 int vfs_create_dir(struct inode *parent, char *name)
 {
+    struct dnode *dir;
+    struct inode *existing;
+
+    if (parent == NULL || name == NULL || name[0] == '\0')
+        return -1;
+
+    /* mkdir is commonly used as an "ensure directory exists" operation by
+     * programs such as Doom.  Do not append another FAT entry every time the
+     * program starts. */
+    dir = vfs_read_inode_dir(parent);
+    if (dir == NULL)
+        return -1;
+    existing = vfs_find_file_in_dir(name, dir);
+    vfs_free_dnode(dir);
+    if (existing != NULL) {
+        int result = existing->i_type == I_DIR ? 0 : -1;
+        vfs_free_inode(existing);
+        return result;
+    }
     return vfs_devices[parent->dev->devicenum].ops->create_dir(parent, name);
 }

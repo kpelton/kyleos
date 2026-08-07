@@ -962,6 +962,19 @@ static void read_directory(struct dnode *dir, struct vfs_device *dev)
             }
             else
             {
+                /* The VFS supplies synthetic . and .. entries for the root
+                 * directory.  Never add any stray on-disk variants a damaged
+                 * image may contain to that listing. */
+                if (dir->root_inode->i_ino == dev->finfo.fat->root_cluster &&
+                    ((dir_ptr[0] == '.' && dir_ptr[1] == ' ') ||
+                     (dir_ptr[0] == '.' && dir_ptr[1] == '.')))
+                {
+                    using_lfname = 0;
+                    lbytes_written = 0;
+                    dir_ptr += FAT_DIR_RECORD_SIZE;
+                    k += 1;
+                    continue;
+                }
                 longfname[lbytes_written] = '\0';
                 tail = fat_read_std_fmt(tail, dir, dev, dir_ptr, using_lfname, longfname,
                                         clust, k * FAT_DIR_RECORD_SIZE);
