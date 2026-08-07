@@ -7,6 +7,8 @@
 #include <output/output.h>
 #define MAX_RAMFS 512
 #define CONSOLE_INO 1
+#define NULL_INO 2
+#define ZERO_INO 3
 #define RAMFS_INSTANCE_COUNT 2
 struct ramfs_instance {
     struct ramfs_inode inodes[MAX_RAMFS];
@@ -38,7 +40,8 @@ static struct ramfs_instance *ramfs_for_device(struct vfs_device *dev)
 
 static int ramfs_alloc_inode(struct ramfs_instance *fs)
 {
-    for (int i = 2; i < MAX_RAMFS; i++)
+    int first = fs->has_console ? 4 : 2;
+    for (int i = first; i < MAX_RAMFS; i++)
         if (fs->inodes[i].dev == NULL)
             return i;
     return -1;
@@ -52,7 +55,7 @@ static void create_root_dir(struct vfs_device *dev, bool with_console) {
     kstrcpy(fs->inodes[0].i_name, dev->mountpoint_root);
     fs->inodes[0].i_type=I_DIR;
     fs->inodes[0].i_ino = 0;
-    fs->inodes[0].last_child = with_console ? 1 : 0;
+    fs->inodes[0].last_child = with_console ? 3 : 0;
     fs->inodes[0].file_size = 0;
     fs->inodes[0].parent = -1;
     fs->inodes[0].blocks = NULL;
@@ -65,6 +68,18 @@ static void create_root_dir(struct vfs_device *dev, bool with_console) {
         fs->inodes[CONSOLE_INO].file_size = 0;
         fs->inodes[CONSOLE_INO].parent = 0;
         fs->inodes[CONSOLE_INO].blocks = NULL;
+        fs->inodes[0].children[1] = NULL_INO;
+        fs->inodes[NULL_INO].dev = dev;
+        kstrcpy(fs->inodes[NULL_INO].i_name, "null");
+        fs->inodes[NULL_INO].i_type = I_DEV;
+        fs->inodes[NULL_INO].i_ino = NULL_INO;
+        fs->inodes[NULL_INO].parent = 0;
+        fs->inodes[0].children[2] = ZERO_INO;
+        fs->inodes[ZERO_INO].dev = dev;
+        kstrcpy(fs->inodes[ZERO_INO].i_name, "zero");
+        fs->inodes[ZERO_INO].i_type = I_DEV;
+        fs->inodes[ZERO_INO].i_ino = ZERO_INO;
+        fs->inodes[ZERO_INO].parent = 0;
     }
 
 }
@@ -156,6 +171,12 @@ int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) {
     if (fs->has_console && rfile->i_node.i_ino == CONSOLE_INO) {
         return ramfs_read_console(buf,count);
     }
+    if (fs->has_console && rfile->i_node.i_ino == NULL_INO)
+        return 0;
+    if (fs->has_console && rfile->i_node.i_ino == ZERO_INO) {
+        memzero8((uint8_t *)buf, count);
+        return count;
+    }
     acquire_spinlock(&fs->lock);
     // Approaching the end of the file truncate read bytes
 #ifdef DEBUG_FS_RAMFS
@@ -196,6 +217,9 @@ int ramfs_write_file (struct file * rfile,void *buf,uint32_t count) {
     if (fs->has_console && rfile->i_node.i_ino == CONSOLE_INO) {
         return ramfs_write_console(buf,count);
     }
+    if (fs->has_console && (rfile->i_node.i_ino == NULL_INO ||
+                            rfile->i_node.i_ino == ZERO_INO))
+        return count;
  
     acquire_spinlock(&fs->lock);
     struct ramfs_block *r_block = fs->inodes[rfile->i_node.i_ino].blocks;
