@@ -6,6 +6,8 @@ image=${IMAGE_PATH:-"$root/build/image/test-hd.img"}
 mount_dir=${IMAGE_MOUNT:-"$root/build/image/mnt"}
 stage_dir=${USERLAND_STAGE:-"$root/build/userland"}
 seed_dir="$root/image/rootfs"
+doom_binary=${DOOM_BINARY:-"$root/build/extras/doom/doom"}
+doom_wad=${DOOM_WAD:-"$root/assets/doom.wad"}
 ready_file="$image.ready"
 fdisk_bin=${FDISK_BIN:-/sbin/fdisk}
 kpartx_bin=${KPARTX_BIN:-/sbin/kpartx}
@@ -91,6 +93,15 @@ while IFS= read -r program; do
     }
     cp "$stage_dir/$program" "$mount_dir/$program"
 done < "$root/image/manifest.txt"
+if [[ -f $doom_binary ]]; then
+    mkdir -p "$mount_dir/usr/bin" "$mount_dir/usr/share/doom"
+    cp "$doom_binary" "$mount_dir/usr/bin/doom"
+    if [[ -f $doom_wad ]]; then
+        cp "$doom_wad" "$mount_dir/usr/share/doom/doom.wad"
+    else
+        echo "warning: Doom binary installed without a WAD; set DOOM_WAD=/path/to/doom.wad" >&2
+    fi
+fi
 sync
 touch "$ready_file"
 completed=1

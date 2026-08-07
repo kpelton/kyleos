@@ -10,6 +10,8 @@ CORE_SRC ?= $(KERNEL_ROOT)/../../kyleos-userspace
 PROGS_SRC ?= $(KERNEL_ROOT)/../../newlib-progs
 NEWLIB_BUILD ?= $(KERNEL_ROOT)/../../newlib-build
 SYSROOT ?= /tmp/z
+DOOM_BINARY ?= $(KERNEL_ROOT)/build/extras/doom/doom
+DOOM_WAD ?= $(KERNEL_ROOT)/assets/doom.wad
 ifneq (,$(wildcard config.mk))
 include config.mk
 endif
@@ -63,7 +65,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland image image-reset image-mount image-unmount image-copy
+.PHONY: toolchain userland doom doom-image image image-reset image-mount image-unmount image-copy
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -80,11 +82,18 @@ userland:
 		else echo "missing userland program: $$program" >&2; exit 1; fi; \
 	done < image/manifest.txt
 
+doom:
+	SYSROOT=$(SYSROOT) scripts/build-doom.sh
+
+doom-image:
+	$(MAKE) doom
+	$(MAKE) image-reset
+
 image: userland
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) scripts/image-create.sh
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) scripts/image-create.sh
 
 image-reset: userland
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) scripts/image-create.sh --reset
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) scripts/image-create.sh --reset
 
 image-mount:
 	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) scripts/image-mount.sh

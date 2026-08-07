@@ -26,3 +26,18 @@ make image-unmount
 
 Copy `config.mk.example` to `config.mk` to override legacy source paths during
 the repository migration.  `config.mk` is local and ignored by Git.
+
+## Doom extra
+
+DoomGeneric is tracked as the `extras/doom` submodule.  The KyleOS backend and
+its build patch are kept in this repository, so the submodule remains pinned
+to a clean upstream revision.
+
+```bash
+make doom
+DOOM_WAD=/path/to/doom.wad make doom-image
+```
+
+`doom-image` recreates the generated image, installs the executable at
+`/usr/bin/doom`, and installs the supplied WAD at `/usr/share/doom/doom.wad`.
+The WAD is user-supplied and is never tracked by Git.
