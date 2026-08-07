@@ -7,6 +7,11 @@ static char input_buffer[MAX_CHARS] = {'\0'};
 static char internal_input_buffer[MAX_CHARS];
 static int input_current_place =0;
 static struct spinlock input_spinlock;
+#define KEY_QUEUE_SIZE 64
+struct key_event { uint8_t scancode; bool extended; bool pressed; };
+static struct key_event key_queue[KEY_QUEUE_SIZE];
+static int key_head;
+static int key_tail;
 
 void input_init() 
 {
@@ -71,4 +76,35 @@ void input_add_char(char in)
     output[1] = '\0';
     kprintf("%s",output);
 
+}
+
+void input_add_key(uint8_t scancode, bool extended, bool pressed)
+{
+    int next;
+    acquire_spinlock(&input_spinlock);
+    next = (key_head + 1) % KEY_QUEUE_SIZE;
+    if (next != key_tail) {
+        key_queue[key_head].scancode = scancode;
+        key_queue[key_head].extended = extended;
+        key_queue[key_head].pressed = pressed;
+        key_head = next;
+    }
+    release_spinlock(&input_spinlock);
+}
+
+int input_poll_key(int *pressed, uint8_t *scancode, bool *extended)
+{
+    if (pressed == NULL || scancode == NULL || extended == NULL)
+        return 0;
+    acquire_spinlock(&input_spinlock);
+    if (key_head == key_tail) {
+        release_spinlock(&input_spinlock);
+        return 0;
+    }
+    *scancode = key_queue[key_tail].scancode;
+    *extended = key_queue[key_tail].extended;
+    *pressed = key_queue[key_tail].pressed;
+    key_tail = (key_tail + 1) % KEY_QUEUE_SIZE;
+    release_spinlock(&input_spinlock);
+    return 1;
 }

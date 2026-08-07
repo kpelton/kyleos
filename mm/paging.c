@@ -91,10 +91,10 @@ void early_setup_paging()
                  : "r"(address));
 }
 
-bool paging_map_kernel_range(uint64_t start, uint64_t len)
+static bool paging_map_kernel_range_at(uint64_t start, uint64_t len,
+                                       uint64_t virt_start)
 {
-
-    uint64_t virt_curr_addr = KERN_PHYS_TO_VIRT(start);
+    uint64_t virt_curr_addr = virt_start;
     uint64_t phys_curr_addr = start;
     uint16_t offset;
     uint64_t *curr;
@@ -134,6 +134,18 @@ bool paging_map_kernel_range(uint64_t start, uint64_t len)
         virt_curr_addr += 0x1000;
     }
     return true;
+}
+
+bool paging_map_kernel_range(uint64_t start, uint64_t len)
+{
+    return paging_map_kernel_range_at(start, len, KERN_PHYS_TO_VIRT(start));
+}
+
+/* PCI BARs can live above the 2 GiB range covered by KERN_PHYS_TO_VIRT.
+ * Map them in the non-wrapping physical-memory window instead. */
+bool paging_map_physmap_range(uint64_t start, uint64_t len)
+{
+    return paging_map_kernel_range_at(start, len, KERN_PHYS_TO_PVIRT(start));
 }
 
 bool paging_map_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_start,

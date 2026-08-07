@@ -687,19 +687,30 @@ static struct inode_list *fat_read_std_fmt(struct inode_list *tail, struct dnode
     }
     else
     {
-        char *ptr = (char *)file->fname;
-        int i = 0;
-        // max 8 chars
-        while (*ptr != ' ' && i < FAT_MAX_STD_NAME)
-        {
-            ptr++;
-            i++;
+        int base_len = 0;
+        int ext_len = 0;
+        int name_len = 0;
+
+        /* FAT's short name has no terminator and stores its extension in
+         * bytes 8..10.  Preserve it so ordinary DOS 8.3 IWADs are visible. */
+        while (base_len < 8 && file->fname[base_len] != ' ' &&
+               file->fname[base_len] != 0)
+            base_len++;
+        while (ext_len < 3 && file->fname[8 + ext_len] != ' ' &&
+               file->fname[8 + ext_len] != 0)
+            ext_len++;
+        for (int i = 0; i < base_len; i++) {
+            char c = file->fname[i];
+            cur_inode->i_name[name_len++] = (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;
         }
-        *ptr = '\0';
-        kstrncpy(cur_inode->i_name, (const char *)file->fname, FAT_MAX_STD_NAME);
-        // copy over empty string past the 8 chars
-        kstrncpy(cur_inode->i_name + FAT_MAX_STD_NAME, "", 1);
-        // kprintf("blah 123 %s\n",file->fname);
+        if (ext_len > 0) {
+            cur_inode->i_name[name_len++] = '.';
+            for (int i = 0; i < ext_len; i++) {
+                char c = file->fname[8 + i];
+                cur_inode->i_name[name_len++] = (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;
+            }
+        }
+        cur_inode->i_name[name_len] = '\0';
     }
     cur_inode->i_ino = file->high_cluster << 16 | file->low_cluster;
     if (cur_inode->i_ino == 0 && (file->attribute & FAT_DIR) == FAT_DIR)
@@ -804,11 +815,35 @@ static void write_longfname(struct inode *parent, char *name)
 
 static int fat_setup_8_3_attr(const char *fname, struct std_fat_8_3_fmt *fptr, const int attr_type, uint32_t new_cluster)
 {
+    int base = 0;
+    int ext = 0;
+    const char *src = fname;
+
+    /* FAT short names are exactly eleven space-padded bytes.  Leaving the
+     * extension bytes from an old/free entry made entries such as .savegame
+     * appear as several bogus . and .saveg. names on the next directory read. */
+    memzero8((uint8_t *)fptr, sizeof(*fptr));
+    for (int i = 0; i < 11; i++)
+        fptr->fname[i] = ' ';
+    if (fname[0] == '.' && (fname[1] == '\0' ||
+        (fname[1] == '.' && fname[2] == '\0'))) {
+        fptr->fname[0] = '.';
+        if (fname[1] == '.')
+            fptr->fname[1] = '.';
+    } else {
+        while (*src && *src != '.' && base < 8)
+            fptr->fname[base++] = *src++;
+        while (*src && *src != '.')
+            src++;
+        if (*src == '.')
+            src++;
+        while (*src && ext < 3)
+            fptr->fname[8 + ext++] = *src++;
+    }
     fptr->attribute = attr_type;
     fptr->file_size = 0;
     fptr->low_cluster = 0xffff & new_cluster;
     fptr->high_cluster = (0x0fff0000 & new_cluster) >> 16;
-    kstrncpy((char *)fptr->fname, fname, FAT_MAX_STD_FNAME);
     return 0;
 }
 

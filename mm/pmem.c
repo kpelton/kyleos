@@ -119,24 +119,23 @@ uint64_t pmem_addr_find_first_free_block(uint64_t size,uint64_t *bitmap)
 
 uint64_t pmem_addr_find_first_chunk(uint64_t size,uint64_t chunk_size, uint64_t *bitmap)
 {
-    uint64_t i;
-    uint64_t addr=0;
-    uint64_t found_size=0;
-    for (i=0; i<get_block_count(size); i++) {
+    uint64_t page;
+    uint64_t run = 0;
+    uint64_t total_pages = size / BLOCK_SIZE;
 
-        if (bitmap[i] == 0x0){
-            found_size+=(BLOCK_SIZE*BIT_SIZE);
-            if(found_size >= chunk_size ) {
-
-#ifdef PMEM_DEBUG
-                kprintf("chunk at P:0x%x of at least %d pages\n",addr,chunk_size);
-#endif
-                return addr;
-            }
-        }else{
-            found_size = 0;
+    /* A run may start or end within a bitmap word.  The old implementation
+     * only considered completely empty 64-page words and returned the end of
+     * a run, so a multi-page allocation could overwrite pages already in use. */
+    for (page = 0; page < total_pages; page++) {
+        uint64_t word = get_block(page);
+        uint64_t bit = get_bit_in_block(page);
+        if ((bitmap[word] & (1UL << bit)) == 0) {
+            run++;
+            if (run == chunk_size)
+                return (page + 1 - chunk_size) * BLOCK_SIZE;
+        } else {
+            run = 0;
         }
-        addr+=BLOCK_SIZE*BIT_SIZE;
     }
     panic("WARNING could not find enough phys memory");
     return 0;

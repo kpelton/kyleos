@@ -256,7 +256,10 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     t->cwd = cwd;
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
     vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,READ_WRITE | SUPERVISOR | PAGE_PRESENT,true,true);
-    vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_HEAP_SIZE,READ_WRITE | SUPERVISOR,true,true);
+    /* User allocations are accessed immediately by libc/Doom.  Do not create
+     * the initial heap as non-present pages until the demand pager handles
+     * allocation and TLB invalidation correctly. */
+    vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_HEAP_SIZE,USER_PAGE,true,true);
     user_switch_paging(&(mm->pagetable));
 
     t->heap_size = USER_HEAP_SIZE;

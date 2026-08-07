@@ -432,14 +432,9 @@ panic_handler_14:
     push r14
     push r15
     pushfq
-    push rsi
-    push rax
-    ;save $rip
-    lea r14, [$+7]
-    call save_context_asm
-    pop rax
-    pop rsi
-    ;; first argument to page fault handler
+    ;; rax still holds the RIP saved by the CPU.  Do not call
+    ;; save_context_asm first: it invokes C and destroys caller-saved rax,
+    ;; which previously made faults appear to originate at address zero.
     mov rdi,rax
     call pagefault
     popfq

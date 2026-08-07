@@ -2,9 +2,11 @@
 #include <include/types.h>
 #include <mm/mm.h>
 #include <output/output.h>
+#include <output/input.h>
 #include <sched/exec.h>
 #include <sched/ps.h>
 #include <sched/sched.h>
+#include <timer/pit.h>
 typedef int (*sys_call)(void);
 
 static int sleep(int msec)
@@ -217,6 +219,34 @@ static int write(int fd, void *buf, int count)
     return countr;
 }
 
+static int lseek(int fd, long offset, int whence)
+{
+    struct ktask *pid = get_current_process();
+    return user_process_seek_fd(pid, fd, offset, whence);
+}
+
+static int framebuffer_present_syscall(void *pixels, uint32_t bytes)
+{
+    if (pixels == NULL || pixels >= (void *)KERN_SPACE_BOUNDRY)
+        return -1;
+    return framebuffer_present(pixels, bytes);
+}
+
+static int key_poll_syscall(int *pressed, uint8_t *scancode, bool *extended)
+{
+    if (pressed == NULL || scancode == NULL || extended == NULL ||
+        pressed >= (int *)KERN_SPACE_BOUNDRY ||
+        scancode >= (uint8_t *)KERN_SPACE_BOUNDRY ||
+        extended >= (bool *)KERN_SPACE_BOUNDRY)
+        return -1;
+    return input_poll_key(pressed, scancode, extended);
+}
+
+static uint32_t ticks_ms_syscall(void)
+{
+    return (read_jiffies() * 1000) / TICK_HZ;
+}
+
 static int fork()
 {
     return user_process_fork();
@@ -427,7 +457,32 @@ static int getdents(int fd, struct dirent *dir_arr, uint64_t count)
 static int mkdir(const char *pathname, int mode)
 {
     struct ktask *pid = get_current_process();
-    return vfs_create_dir(pid->cwd,pathname);
+    char *path;
+    char *name;
+    int len;
+    (void)mode;
+
+    if (pathname == NULL)
+        return -1;
+    len = kstrlen((char *)pathname);
+    if (len == 0)
+        return -1;
+    path = kmalloc(len + 1);
+    if (path == NULL)
+        return -1;
+    kstrncpy(path, pathname, len + 1);
+    name = basename(path); /* also removes a trailing slash */
+    if (name[0] == '\0') {
+        kfree(path);
+        return -1;
+    }
+
+    /* Doom creates ./savegame/.  Its parent is the current working
+     * directory; passing the full path to FAT used to create a malformed
+     * single directory entry instead. */
+    int result = vfs_create_dir(pid->cwd, name);
+    kfree(path);
+    return result;
 }
 
 static int unlink(char *path)
@@ -512,7 +567,11 @@ void *syscall_tbl[] = {
     (void *)&mkdir,            // 18
     (void *)&dup,              // 19
     (void *)&dup2,             // 20
-    (void *)&unlink            // 21
+    (void *)&unlink,           // 21
+    (void *)&lseek,            // 22
+    (void *)&framebuffer_present_syscall, // 23
+    (void *)&key_poll_syscall,            // 24
+    (void *)&ticks_ms_syscall             // 25
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

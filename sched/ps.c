@@ -58,6 +58,13 @@ int user_process_write_fd(struct ktask *t, int fd, void *buf, int count)
     return -1;
 }
 
+int user_process_seek_fd(struct ktask *t, int fd, long offset, int whence)
+{
+    if (fd >= 0 && fd < MAX_TASK_OPEN_FILES && t->open_fds[fd] != NULL)
+        return vfs_seek_file(t->open_fds[fd], offset, whence);
+    return -1;
+}
+
 void user_process_exit(struct ktask *t, int code)
 {
     //kprintf("Exit called");
@@ -91,7 +98,7 @@ void *user_process_sbrk(struct ktask *t, uint64_t increment)
         uint64_t end_heap = ((uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
         uint64_t pages = delta/PAGE_SIZE + 1;
 
-        vmm_add_new_mapping(t->mm,VMM_DATA,(uint64_t *)end_heap,pages,USER_PAGE & ~PAGE_PRESENT,false,true);
+        vmm_add_new_mapping(t->mm,VMM_DATA,(uint64_t *)end_heap,pages,USER_PAGE,true,true);
         t->heap_size += pages; 
     }
     //kprintf("sbrk returning %x\n",ret);

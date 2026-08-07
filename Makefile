@@ -41,7 +41,7 @@ mm: mm/mm.o mm/paging.o mm/pmem.o mm/vmm.o
 sched: sched/sched.o sched/exec.o sched/ps.o
 	$(MAKE) -C sched
 
-output: output/output.o output/vga.o output/uart.o output/keyboard.o output/input.o
+output: output/output.o output/vga.o output/uart.o output/keyboard.o output/input.o output/framebuffer.o
 	$(MAKE) -C output
 
 timer: timer/pit.o timer/timer.o timer/rtc.o
@@ -68,7 +68,7 @@ kernel.img: kernel.bin
 	objcopy   -I elf64-x86-64 -O elf32-i386   kernel.bin kernel32.bin
 
 test: kernel32.bin
-	qemu-system-x86_64 -m 64M -kernel kernel32.bin  -hda test-hd.img -serial stdio -rtc base=localtime
+	qemu-system-x86_64 -m 64M -vga std -kernel kernel32.bin  -hda test-hd.img -serial stdio -rtc base=localtime
 
 test-nox: kernel32.bin
 	qemu-system-x86_64 -m 4G -kernel kernel32.bin  -hda test-hd.img -display none -serial stdio -rtc base=localtime

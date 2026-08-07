@@ -116,6 +116,7 @@ int vfs_getdents(struct file * rfile,void *dirp,int count);
 int vfs_read_file(struct file * rfile,void *buf,int count);
 int vfs_write_file(struct file * rfile,void *buf,int count);
 int vfs_stat_file(struct file * rfile,struct stat *st);
+int vfs_seek_file(struct file *rfile, long offset, int whence);
 int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset);
 
 int vfs_create_dir(struct inode* parent, char *name);

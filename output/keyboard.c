@@ -9,6 +9,7 @@
 #define SC_MAX 57
 
 static struct spinlock kbd_spinlock;
+static bool extended_prefix;
 
 const char *sc_name[] = {"ERROR", "Esc", "1", "2", "3", "4", "5", "6",
                          "7", "8", "9", "0", "-", "=", "Backspace", "Tab", "Q", "W", "E",
@@ -27,11 +28,19 @@ static void keyboard_callback()
     /* The PIC leaves us the scancode in port 0x60 */
     uint8_t scancode = inb(0x60);
     char letter;
+    bool pressed;
 
-    if (scancode > SC_MAX){
+    if (scancode == 0xe0) {
+        extended_prefix = true;
         return;
     }
-    else if (scancode == ENTER) {
+    pressed = (scancode & 0x80) == 0;
+    scancode &= 0x7f;
+    input_add_key(scancode, extended_prefix, pressed);
+    extended_prefix = false;
+    if (!pressed || scancode > SC_MAX){
+        return;
+    } else if (scancode == ENTER) {
         letter = '\r';
     }
     else {

@@ -391,6 +391,28 @@ int vfs_stat_file(struct file *rfile, struct stat *st)
     return vfs_devices[idev].ops->stat_file(rfile, st);
 }
 
+/* Keep seeking in the VFS so every filesystem shares the same file-position
+ * semantics.  WAD readers make frequent absolute seeks into one file. */
+int vfs_seek_file(struct file *rfile, long offset, int whence)
+{
+    long base;
+    long position;
+
+    if (rfile == NULL)
+        return -1;
+    switch (whence) {
+    case 0: base = 0; break;                 /* SEEK_SET */
+    case 1: base = (long)rfile->pos; break; /* SEEK_CUR */
+    case 2: base = (long)rfile->i_node.file_size; break; /* SEEK_END */
+    default: return -1;
+    }
+    position = base + offset;
+    if (position < 0)
+        return -1;
+    rfile->pos = (uint64_t)position;
+    return (int)position;
+}
+
 
 int vfs_write_file(struct file *rfile, void *buf, int count)
 {

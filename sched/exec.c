@@ -94,6 +94,7 @@ if (hdr.magic == ELF_MAGIC)
             //kprintf("Calling add map 0x%x, %d\n",vaddr,size);
             block = vmm_add_new_mapping(map,VMM_TEXT,(uint64_t *)vaddr,size,page_ops,zero,true);
 
+
 #ifdef EXEC_DEBUG
             kprintf("Reading to %x \n",vaddr+offset_delta);
 #endif

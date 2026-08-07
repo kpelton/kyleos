@@ -30,8 +30,10 @@ struct RegDump{
 //Wrapped asm functions
 uint8_t inb( uint16_t port );
 uint16_t inw( uint16_t port );
+uint32_t inl( uint16_t port );
 void outb( uint16_t port, uint8_t val );
 void outw( uint16_t port,uint16_t val );
+void outl( uint16_t port,uint32_t val );
 void io_wait( void );
 struct RegDump dump_regs();
 uint32_t rdmsr(uint32_t msr_id);

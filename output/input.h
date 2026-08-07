@@ -4,4 +4,6 @@
 void input_read(char* dest);
 void input_add_char(char in);
 void input_init();
+void input_add_key(uint8_t scancode, bool extended, bool pressed);
+int input_poll_key(int *pressed, uint8_t *scancode, bool *extended);
 #endif

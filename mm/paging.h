@@ -19,6 +19,7 @@ struct pg_tbl {
 void early_setup_paging();
 bool setup_paging();
 bool paging_map_kernel_range(uint64_t start, uint64_t len);
+bool paging_map_physmap_range(uint64_t start, uint64_t len);
 bool paging_map_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_start,
                            uint64_t len, uint64_t page_ops);
 bool paging_free_pg_tbl(struct pg_tbl *pg);

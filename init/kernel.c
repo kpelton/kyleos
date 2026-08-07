@@ -67,6 +67,7 @@ static void kinit(void)
     kprintf("Phys mem init done\n");
     paging_enable_protected();
     mm_init();
+    framebuffer_init();
     kprintf("Allocating stack\n");
     uint64_t kernel_stack = KERN_PHYS_TO_VIRT(pmem_alloc_block(STACK_PAGES));
     paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_stack),STACK_PAGES);
@@ -96,6 +97,3 @@ void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
     phys_mem_early_init(mb_info);
     kinit();
 }
-
-
-

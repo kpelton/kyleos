@@ -1,6 +1,7 @@
 #ifndef OUTPUT_H
 #define OUTPUT_H
 #include <include/types.h>
+#include <output/framebuffer.h>
 
 void print_regs(unsigned long exception,unsigned long rip);
 char * itoa( unsigned long value, char * str, int base );
