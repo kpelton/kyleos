@@ -594,6 +594,9 @@ static int fat_rename_file(struct inode *i_node, struct inode *new_parent,
     uint8_t *new_dir;
     struct std_fat_8_3_fmt saved;
     struct std_fat_8_3_fmt renamed;
+    int base_length = 0;
+    int extension_length = 0;
+    int dots = 0;
 
     if (i_node->dir_cluster < 2 || i_node->dir_offset >= cluster_size ||
         new_parent->dev != i_node->dev || new_name[0] == '\0')
@@ -601,7 +604,17 @@ static int fat_rename_file(struct inode *i_node, struct inode *new_parent,
     /* Moving a directory would also require rewriting its internal "..". */
     if (i_node->i_type == I_DIR && i_node->dir_cluster != new_parent->i_ino)
         return -1;
-    if (kstrlen(new_name) > 12)
+    for (int i = 0; new_name[i] != '\0'; i++) {
+        if (new_name[i] == '.') {
+            if (++dots > 1)
+                return -1;
+        } else if (dots == 0) {
+            base_length++;
+        } else {
+            extension_length++;
+        }
+    }
+    if (base_length == 0 || base_length > 8 || extension_length > 3)
         return -1;
 
     created = fat_create_file(new_parent, new_name);
