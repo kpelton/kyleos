@@ -3,6 +3,8 @@
 #include <fs/vfs.h>
 #include <sched/sched.h>
 #include <output/input.h>
+
+static int ramfs_truncate_file(struct file *rfile);
 #include <locks/spinlock.h>
 #include <output/output.h>
 #define MAX_RAMFS 512
@@ -132,6 +134,7 @@ int ramfs_init(void) {
     ramfs_ops.remove_file = ramfs_remove_file;
     ramfs_ops.read_file = ramfs_read_file;
     ramfs_ops.write_file = ramfs_write_file;
+    ramfs_ops.truncate_file = ramfs_truncate_file;
     ramfs_ops.stat_file = ramfs_stat_file;
 #ifdef DEBUG_RAMFS
     kprintf("RAMFS: mounting /dev and /tmp\n");
@@ -249,6 +252,27 @@ int ramfs_write_file (struct file * rfile,void *buf,uint32_t count) {
     release_spinlock(&fs->lock);
 
     return count ;
+}
+
+static int ramfs_truncate_file(struct file *rfile)
+{
+    struct ramfs_instance *fs = ramfs_for_device(rfile->dev);
+    struct ramfs_block *block;
+
+    if (rfile->i_node.i_type != I_FILE ||
+        (fs->has_console && rfile->i_node.i_ino <= ZERO_INO))
+        return -1;
+    acquire_spinlock(&fs->lock);
+    block = fs->inodes[rfile->i_node.i_ino].blocks;
+    if (block != NULL && block->block != NULL) {
+        kfree(block->block);
+        block->block = NULL;
+    }
+    fs->inodes[rfile->i_node.i_ino].file_size = 0;
+    rfile->i_node.file_size = 0;
+    rfile->pos = 0;
+    release_spinlock(&fs->lock);
+    return 0;
 }
 
 struct inode* ramfs_create_file(struct inode *parent, char *name) 

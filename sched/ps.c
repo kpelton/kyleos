@@ -14,6 +14,10 @@ int user_process_open_fd(struct ktask *t, struct inode *iptr, uint32_t flags)
         kprintf("fail in user_process_open_fd\n");
         goto done;
     }
+    if ((flags & O_TRUNC) != 0 && vfs_truncate_file(fptr) < 0) {
+        vfs_close_file(fptr);
+        return -1;
+    }
     for (int j = START_USER_FD; j < MAX_TASK_OPEN_FILES; j++)
     {
 

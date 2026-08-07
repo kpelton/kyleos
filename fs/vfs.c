@@ -487,6 +487,21 @@ int vfs_write_file(struct file *rfile, void *buf, int count)
 
 }
 
+int vfs_truncate_file(struct file *rfile)
+{
+    int idev;
+
+    if (rfile == NULL || rfile->pipe != NULL)
+        return -1;
+    if ((rfile->flags & MAX_FILE_FLAGS) != O_WRONLY &&
+        (rfile->flags & MAX_FILE_FLAGS) != O_RDWR)
+        return -1;
+    idev = rfile->dev->devicenum;
+    if (vfs_devices[idev].ops->truncate_file == NULL)
+        return -1;
+    return vfs_devices[idev].ops->truncate_file(rfile);
+}
+
 int vfs_create_pipe(struct file **reader, struct file **writer)
 {
     struct pipe_data *pipe;

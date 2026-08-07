@@ -12,6 +12,7 @@ static inline uint32_t clust2sec(uint32_t cluster, struct fatFS *fs);
 static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector);
 static void write_directory(struct inode *parent, char *name);
 static int fat_write_file(struct file *rfile, void *buf, uint32_t count);
+static int fat_truncate_file(struct file *rfile);
 static struct inode* fat_create_file (struct inode* parent, char *name);
 static int fat_remove_file(struct inode *i_node);
 static int fat_setup_8_3_attr(const char *fname, struct std_fat_8_3_fmt *fptr, const int attr_type, uint32_t new_cluster);
@@ -124,6 +125,7 @@ int fat_init(struct mbr_info mbr_entry)
     vfs_ops->remove_file = &fat_remove_file;
     vfs_ops->stat_file = &fat_stat_file;
     vfs_ops->write_file = &fat_write_file;
+    vfs_ops->truncate_file = &fat_truncate_file;
     vfs_dev.ops = vfs_ops;
     vfs_dev.finfo.fat = fs;
     vfs_dev.rootfs = true;
@@ -479,6 +481,54 @@ static int fat_write_file(struct file *rfile, void *buf, uint32_t count) {
     }
     release_mutex(&fat_lock);
     return written;
+}
+
+/* FAT has no separate inode table: size and first cluster live in the
+ * directory entry.  A truncate therefore releases the complete cluster
+ * chain, then updates that entry atomically while holding fat_lock. */
+static int fat_truncate_file(struct file *rfile)
+{
+    struct fatFS *fs = rfile->dev->finfo.fat;
+    uint32_t cluster = rfile->i_node.i_ino;
+    uint32_t cluster_size = fat_cluster_size(fs);
+    uint8_t *directory;
+
+    if (rfile->i_node.i_type != I_FILE || rfile->i_node.dir_cluster < 2 ||
+        rfile->i_node.dir_offset >= cluster_size)
+        return -1;
+    directory = kmalloc(cluster_size);
+    if (directory == NULL)
+        return -1;
+
+    acquire_mutex(&fat_lock);
+    while (cluster >= 2 && cluster < fs->cluster_count && !fat_is_eoc(cluster)) {
+        uint32_t next = fs->fat_ptr[cluster];
+        if (write_fat_ptr(cluster, 0, fs) < 0) {
+            release_mutex(&fat_lock);
+            kfree(directory);
+            return -1;
+        }
+        cluster = next;
+    }
+    read_cluster(clust2sec(rfile->i_node.dir_cluster, fs),
+                 fs->fat_boot.sectors_per_cluster, directory);
+    struct std_fat_8_3_fmt *entry =
+        (struct std_fat_8_3_fmt *)(directory + rfile->i_node.dir_offset);
+    entry->low_cluster = 0;
+    entry->high_cluster = 0;
+    entry->file_size = 0;
+    if (write_cluster(clust2sec(rfile->i_node.dir_cluster, fs),
+                      fs->fat_boot.sectors_per_cluster, directory) < 0) {
+        release_mutex(&fat_lock);
+        kfree(directory);
+        return -1;
+    }
+    rfile->i_node.i_ino = 0;
+    rfile->i_node.file_size = 0;
+    rfile->pos = 0;
+    release_mutex(&fat_lock);
+    kfree(directory);
+    return 0;
 }
 
 static int fat_remove_file(struct inode *i_node)

@@ -22,6 +22,7 @@
 #define O_RDONLY 0x0
 #define O_WRONLY 0x1
 #define O_RDWR   0x2
+#define O_TRUNC  0x0400
 #define MAX_FILE_FLAGS (O_RDONLY | O_WRONLY | O_RDWR)
 #define VFS_MAX_OPEN 1024
 
@@ -98,6 +99,7 @@ struct vfs_ops {
     void (*cat_inode_file)(struct inode* i_node);
     int (*read_file)(struct file * rfile,void *buf,uint32_t count);
     int (*write_file)(struct file * rfile,void *buf,uint32_t count);
+    int (*truncate_file)(struct file *rfile);
     int (*create_dir)(struct inode* parent, char *name);
     struct inode* (*create_file)(struct inode* parent, char *name);
     int (*remove_file)(struct inode *i_node);
@@ -117,6 +119,7 @@ struct vfs_device *vfs_get_device(int num);
 int vfs_getdents(struct file * rfile,void *dirp,int count);
 int vfs_read_file(struct file * rfile,void *buf,int count);
 int vfs_write_file(struct file * rfile,void *buf,int count);
+int vfs_truncate_file(struct file *rfile);
 int vfs_stat_file(struct file * rfile,struct stat *st);
 int vfs_seek_file(struct file *rfile, long offset, int whence);
 int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset);
