@@ -153,6 +153,11 @@ lua /usr/share/lua/adven.lua
 `life.lua` accepts an optional generation count, for example
 `lua /usr/share/lua/life.lua 50`.
 
+The image also includes serial-friendly terminal games: `rogue.lua`,
+`snake.lua`, `hunt.lua`, `lander.lua`, `invaders.lua`, `empire.lua`,
+`maze.lua`, and `shquest.lua`. They use line commands, so they work over the
+serial console without raw terminal support.
+
 ## Current limitations
 
 - No multiuser model, permissions, signals, networking, or dynamic linker.
