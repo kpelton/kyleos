@@ -121,7 +121,6 @@ int read_sec(uint32_t sec, void *buffer)
     // outb(PRIMARY + CYL_LOW_REG,10);
     outb(PRIMARY + CYL_HI_REG, (sec & 0xff0000) >> 16);
     outb(PRIMARY + COMMAND_REG, CMD_READ_SECTORS);
-    outb(PRIMARY + COMMAND_REG, CMD_CACHE_FLUSH);
 
     status = read_status();
 

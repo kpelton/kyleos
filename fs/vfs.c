@@ -63,6 +63,7 @@ int vfs_getdents(struct file * rfile,void *dirp,int count) {
     {
         dir_arr[read_count].i_no = ptr->current->i_ino;
         dir_arr[read_count].i_type = ptr->current->i_type;
+        dir_arr[read_count].i_size = ptr->current->file_size;
         kstrncpy(dir_arr[read_count].i_name, ptr->current->i_name,VFS_MAX_FNAME);
         ptr = ptr->next;
         read_count++;

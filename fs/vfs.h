@@ -90,6 +90,7 @@ struct dirent {
     uint64_t i_no;
     char i_name[VFS_MAX_FNAME];
     int i_type;
+    uint64_t i_size;
 };
 
 struct vfs_ops {
