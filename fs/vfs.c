@@ -111,7 +111,9 @@ int vfs_register_device(struct vfs_device newdev)
         struct dnode *root = vfs_devices[0].ops->read_root_dir(&vfs_devices[0]);
         top_root_inode=root->root_inode;
     }
-    kprintf("VFS Device registered %d at %s\n", dev->devicenum,dev->mountpoint);
+#ifdef DEBUG_VFS
+    kprintf("VFS Device registered %d at %s\n", dev->devicenum, dev->mountpoint);
+#endif
     current_device += 1;
     return dev->devicenum;
 }
@@ -287,7 +289,9 @@ struct inode *vfs_walk_path(char *path, struct dnode *pwd)
                 if (end > 0) {
                     struct inode *mnt = fs_is_mount_point(ptr->current);
                     if (mnt){
+#ifdef DEBUG_VFS
                         kprintf("mount\n");
+#endif
                         dptr = vfs_read_inode_dir(mnt);
                         vfs_free_inode(mnt);
                         ptr = dptr->head;
@@ -361,12 +365,16 @@ static bool vfs_compare_inode(struct inode *src, struct inode *dst)
 struct inode * fs_is_mount_point(struct inode *ptr) {
     for (int i=0; i<current_device; i++){
         if (! vfs_devices[i].rootfs && vfs_compare_inode(ptr,vfs_devices[i].mnt_node)) {
-            kprintf("reading dev %d\n",i);
+#ifdef DEBUG_VFS
+            kprintf("reading dev %d\n", i);
+#endif
             struct dnode *dnode = vfs_devices[i].ops->read_root_dir(&vfs_devices[i]);
             struct inode *iptr = kmalloc(sizeof(struct inode));
             vfs_copy_inode(iptr,dnode->root_inode);
             vfs_free_dnode(dnode);
-            kprintf("return %x\n",iptr);
+#ifdef DEBUG_VFS
+            kprintf("return %x\n", iptr);
+#endif
             return(iptr);
         }
     }
@@ -513,7 +521,9 @@ char * vfs_strip_path(char *ptr) {
         if(*check_ptr == '/')
             ret_ptr = check_ptr+1;
     }
-    kprintf("returning %s\n",ret_ptr);
+#ifdef DEBUG_VFS
+    kprintf("returning %s\n", ret_ptr);
+#endif
     return ret_ptr;
 }
 

@@ -116,7 +116,9 @@ static int open(char *path, uint32_t flags)
     int fd = -1;
     //    if (flags > MAX_FILE_FLAGS)
     //        goto done;
-     kprintf("open %s\n",path);
+#ifdef DEBUG_SYSCALL
+    kprintf("open %s\n", path);
+#endif
     struct dnode *dptr;
     struct ktask *pid = get_current_process();
     struct inode *iptr = NULL;
@@ -142,7 +144,9 @@ static int open(char *path, uint32_t flags)
     }else{
         iptr = dptr->root_inode;
     }
-    kprintf("iptr val %x\n",iptr);
+#ifdef DEBUG_SYSCALL
+    kprintf("iptr val %x\n", iptr);
+#endif
     if (iptr != NULL)
     {
         fd = user_process_open_fd(pid, iptr, flags);
@@ -159,7 +163,9 @@ static int open(char *path, uint32_t flags)
         } else {
             dptr = vfs_read_inode_dir(pid->cwd);
         }
-        kprintf("last_dir%s\n",last_dir);    
+#ifdef DEBUG_SYSCALL
+        kprintf("last_dir%s\n", last_dir);
+#endif
         // get parent node
         if (kstrcmp(path,ROOT) != 0 && kstrcmp (path,".") != 0 && kstrcmp(last_dir,".") != 0 ) {
             iptr = vfs_walk_path(last_dir, dptr);
@@ -169,7 +175,9 @@ static int open(char *path, uint32_t flags)
             vfs_free_dnode(dptr);
         }
 
-        kprintf("iptr2 val %x\n",iptr);
+#ifdef DEBUG_SYSCALL
+        kprintf("iptr2 val %x\n", iptr);
+#endif
         // if this  is a valid directory
         if (iptr && iptr->i_type == I_DIR )
         {
@@ -182,7 +190,9 @@ static int open(char *path, uint32_t flags)
             }
         }
     }
-    kprintf("Returning %d for  path %s\n",fd,path);
+#ifdef DEBUG_SYSCALL
+    kprintf("Returning %d for path %s\n", fd, path);
+#endif
     return fd;
 }
 
@@ -516,7 +526,9 @@ static int unlink(char *path)
 
 static int dup(const int oldfd)
 {
+#ifdef DEBUG_SYSCALL
     kprintf("DUP\n");
+#endif
     //TODO broken
     return oldfd;
 }
@@ -524,7 +536,9 @@ static int dup(const int oldfd)
 static int dup2(const int oldfd,const int newfd)
 {
 
-    kprintf("DUP2 old:%d  newfd:%d \n",oldfd,newfd);
+#ifdef DEBUG_SYSCALL
+    kprintf("DUP2 old:%d newfd:%d\n", oldfd, newfd);
+#endif
     if (oldfd >= MAX_TASK_OPEN_FILES || oldfd < 0)
         return -1;
 
@@ -549,7 +563,9 @@ static int dup2(const int oldfd,const int newfd)
     //TODO lock fd    
     t->open_fds[newfd] = t->open_fds[oldfd];
     t->open_fds[newfd]->refcount++;
-    kprintf("%x newfd\n",newfd);
+#ifdef DEBUG_SYSCALL
+    kprintf("%x newfd\n", newfd);
+#endif
     return newfd;
 }
 

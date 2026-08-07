@@ -118,7 +118,9 @@ int ramfs_init(void) {
     ramfs_ops.read_file = ramfs_read_file;
     ramfs_ops.write_file = ramfs_write_file;
     ramfs_ops.stat_file = ramfs_stat_file;
+#ifdef DEBUG_RAMFS
     kprintf("RAMFS: mounting /dev and /tmp\n");
+#endif
     if (ramfs_mount("/dev", "dev", true) < 0 ||
         ramfs_mount("/tmp", "tmp", false) < 0)
         return -1;
