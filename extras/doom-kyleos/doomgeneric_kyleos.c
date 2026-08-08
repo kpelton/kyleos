@@ -3,8 +3,11 @@
 #include "doomgeneric.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+static int tty_raw_enabled;
 
 static unsigned char convert_to_doom_key(unsigned int key)
 {
@@ -61,13 +64,35 @@ static uint32_t syscall_ticks_ms(void)
     return (uint32_t)rax;
 }
 
+static void syscall_tty_raw(int enabled)
+{
+    register long rax asm("rax") = 27;
+    asm volatile("int $0x80" : "+a"(rax) : "D"((long)enabled) : "memory");
+}
+
+static void restore_tty_mode(void)
+{
+    if (!tty_raw_enabled)
+        return;
+
+    syscall_tty_raw(0);
+    tty_raw_enabled = 0;
+}
+
 static void syscall_sleep_ms(uint32_t ms)
 {
     register long rax asm("rax") = 0;
     asm volatile("int $0x80" : "+a"(rax) : "D"((long)ms) : "memory");
 }
 
-void DG_Init(void) {}
+void DG_Init(void)
+{
+    /* Doom consumes scancodes directly.  Keep them out of the shell/VGA
+     * line editor so gameplay keys, especially Enter, are not echoed. */
+    atexit(restore_tty_mode);
+    syscall_tty_raw(1);
+    tty_raw_enabled = 1;
+}
 
 void DG_DrawFrame(void)
 {
