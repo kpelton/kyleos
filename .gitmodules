@@ -1,3 +1,6 @@
 [submodule "extras/doom"]
 	path = extras/doom
 	url = https://github.com/ozkl/doomgeneric.git
+[submodule "extras/tinycc"]
+	path = extras/tinycc
+	url = https://github.com/Tiny-C-Compiler/tinycc-mirror-repository.git

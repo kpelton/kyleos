@@ -15,7 +15,8 @@ has a framebuffer-capable DoomGeneric port.
 - A userspace `/sbin/init` running as PID 1, with orphan adoption, child
   reaping, and automatic console-shell restart.
 - FAT32 root filesystem plus separate RAM filesystems at `/dev` and `/tmp`.
-- `/dev/console`, `/dev/null`, and `/dev/zero`.
+- `/dev/console`, `/dev/null`, `/dev/zero`, and a writable 64 KiB kernel-log
+  ring at `/dev/kmsg` with monotonic timestamps.
 - Directories, file and empty-directory removal, 8.3-safe rename,
   truncate-on-open, seek, file sizes, and a simple VFS.
 - Pipes and shell redirection, including chained pipelines, repeat loops,
@@ -32,6 +33,8 @@ has a framebuffer-capable DoomGeneric port.
   `q` quits), with input/render timing independent from ball movement.
 - DoomGeneric as an optional extra, installed at `/usr/bin/doom`.
 - Lua 5.4.4 as an optional Newlib-built extra, installed at `/usr/bin/lua`.
+- A native x86-64 TinyCC at `/bin/cc`, including headers, static Newlib,
+  compiler sources, and a tested stage-2/stage-3 self-bootstrap path.
 
 ## Prerequisites
 
@@ -108,11 +111,15 @@ New generated images use this layout:
 ├── dev/                 # RAM filesystem
 │   ├── console
 │   ├── null
-│   └── zero
+│   ├── zero
+│   └── kmsg
 ├── tmp/                 # writable RAM filesystem
 └── usr/
     ├── bin/             # optional extras
-    └── share/
+    ├── include/         # Newlib headers for native compilation
+    ├── lib/             # static libc, libm, crt0, and libtcc1
+    ├── share/
+    └── src/             # TinyCC and its KyleOS port overlay
 ```
 
 `nushell` searches `/bin` and then `/usr/bin` for bare command names.  This
@@ -214,6 +221,42 @@ nushell < /tests/all.sh
 The integrated runner ends with `ALL-TESTS-COMPLETE`.  It requires the Bible
 text installed by `make image` or `make image-reset` for the heap-copy phase.
 
+## Native C compiler and bootstrap
+
+TinyCC is pinned as the clean `extras/tinycc` submodule. KyleOS-specific
+configuration, compatibility functions, CRT, and the upstream patch live in
+`extras/tinycc-kyleos`; the build applies that patch only to a disposable copy
+under `build/`, so the submodule stays clean.
+
+Build the native compiler and its runtime payload, then recreate the image:
+
+```bash
+make bootstrap-cc
+make image-reset
+```
+
+Compile and run a C program inside KyleOS:
+
+```sh
+cc /tests/hello.c -o /tmp/hello
+/tmp/hello
+```
+
+The complete self-hosting check builds TinyCC stage 2 with the host-built
+KyleOS compiler, builds stage 3 with stage 2, and uses both native stages to
+compile and run hello world:
+
+```sh
+nushell < /tests/cc-bootstrap.sh
+```
+
+Kernel messages can be read repeatedly or injected from userspace:
+
+```sh
+cat /dev/kmsg
+echo "userspace diagnostic" > /dev/kmsg
+```
+
 `doom-image` recreates the generated image, installs Doom at `/usr/bin/doom`,
 and installs the supplied WAD as `/usr/share/doom/doom.wad`.  The WAD is
 user-supplied, ignored by Git, and never distributed with KyleOS.  Inside
@@ -268,6 +311,6 @@ grep "Moses" /usr/share/text/bible.txt | grep "said"
 - The scheduler wait path is polling-based; it is tuned for responsiveness,
   not yet a full wait-queue implementation.
 - Copy-on-write currently uses full TLB flushes at process switches and has no
-  demand paging, swap, shared-memory mappings, or copy-on-write page cache.
+  swap, shared-memory mappings, or copy-on-write page cache.
 - The userspace and Newlib source relocation described above is still in
   progress.

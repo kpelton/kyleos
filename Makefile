@@ -87,7 +87,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout doom doom-image image image-reset image-mount image-unmount image-copy
+.PHONY: toolchain userland userinit kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc bootstrap-cc doom doom-image image image-reset image-mount image-unmount image-copy
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -96,7 +96,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout
+	$(MAKE) userinit kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -146,6 +146,15 @@ breakout: extras/breakout/breakout.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/breakout
 
+cc:
+	HOST_CC=$(CC) SYSROOT=$(SYSROOT) TCC_BINARY=$(USERLAND_STAGE)/cc scripts/build-tinycc.sh
+
+bootstrap-cc: cc
+	@test -f build/extras/tinycc/src/tcc.c
+	@test -f build/extras/tinycc/src/tccdefs_.h
+	@test -f extras/tinycc-kyleos/compat.c
+	@echo "TinyCC bootstrap compiler and sources are ready for make image-reset"
+
 doom:
 	SYSROOT=$(SYSROOT) scripts/build-doom.sh
 
@@ -162,10 +171,10 @@ $(LUA_BINARY): $(LUA_INPUTS)
 	cp $(LUA_SOURCE)/lua $(LUA_BINARY)
 
 image: userland lua
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) scripts/image-create.sh
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh
 
 image-reset: userland lua
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) scripts/image-create.sh --reset
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh --reset
 
 image-mount:
 	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) scripts/image-mount.sh

@@ -10,6 +10,9 @@ doom_binary=${DOOM_BINARY:-"$root/build/extras/doom/doom"}
 doom_wad=${DOOM_WAD:-"$root/assets/doom.wad"}
 lua_binary=${LUA_BINARY:-"$root/build/extras/lua/lua"}
 bible_text=${BIBLE_TEXT:-"$root/assets/bible.txt"}
+tcc_runtime=${TCC_RUNTIME:-"$root/build/extras/tinycc/root"}
+tcc_source=${TCC_SOURCE:-"$root/build/extras/tinycc/src"}
+tcc_port=${TCC_PORT:-"$root/build/extras/tinycc/tinycc-kyleos"}
 ready_file="$image.ready"
 fdisk_bin=${FDISK_BIN:-/sbin/fdisk}
 kpartx_bin=${KPARTX_BIN:-/sbin/kpartx}
@@ -100,6 +103,21 @@ done < "$root/image/manifest.txt"
     exit 1
 }
 cp "$stage_dir/init" "$mount_dir/sbin/init"
+if [[ -d $tcc_runtime/usr ]]; then
+    mkdir -p "$mount_dir/usr"
+    cp -R "$tcc_runtime/usr"/. "$mount_dir/usr/"
+fi
+if [[ -f $tcc_source/tcc.c && -f $tcc_source/tccdefs_.h ]]; then
+    mkdir -p "$mount_dir/usr/src/tinycc/include" \
+             "$mount_dir/usr/src/tinycc-kyleos"
+    for source_file in "$tcc_source"/*.c "$tcc_source"/*.h \
+                       "$tcc_source"/*.def; do
+        [[ -f $source_file ]] && cp "$source_file" "$mount_dir/usr/src/tinycc/"
+    done
+    cp -R "$tcc_source/include"/. "$mount_dir/usr/src/tinycc/include/"
+    cp "$tcc_port"/*.c "$tcc_port"/*.h \
+       "$mount_dir/usr/src/tinycc-kyleos/"
+fi
 if [[ -f $doom_binary ]]; then
     mkdir -p "$mount_dir/usr/bin" "$mount_dir/usr/share/doom"
     cp "$doom_binary" "$mount_dir/usr/bin/doom"

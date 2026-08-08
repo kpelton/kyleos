@@ -1,0 +1,40 @@
+diff --git a/tcc.h b/tcc.h
+index ce9b518..80d1bc6 100644
+--- a/tcc.h
++++ b/tcc.h
+@@ -24 +24,3 @@
+-#define _GNU_SOURCE
++#ifndef CONFIG_KYLEOS
++# define _GNU_SOURCE
++#endif
+@@ -26 +28,5 @@
+-#include "config.h"
++#ifdef CONFIG_KYLEOS
++# include "../tinycc-kyleos/config.h"
++#else
++# include "config.h"
++#endif
+@@ -189 +195 @@
+-#if defined _WIN32 == defined TCC_TARGET_PE \
++#if !defined(CONFIG_KYLEOS) && defined _WIN32 == defined TCC_TARGET_PE \
+@@ -203,0 +210,5 @@
++#ifdef CONFIG_KYLEOS
++# undef ldexpl
++# define ldexpl ldexp
++#endif
++
+diff --git a/tccelf.c b/tccelf.c
+index f2c6714..f776f2c 100644
+--- a/tccelf.c
++++ b/tccelf.c
+@@ -1763 +1763,4 @@
+-#if TARGETOS_OpenBSD
++#if defined CONFIG_KYLEOS
++    if (s1->output_type != TCC_OUTPUT_DLL)
++        tcc_add_crt(s1, "crt0.o");
++#elif TARGETOS_OpenBSD
+@@ -1798 +1801,3 @@
+-#if TARGETOS_OpenBSD
++#if defined CONFIG_KYLEOS
++    (void)s1;
++#elif TARGETOS_OpenBSD
