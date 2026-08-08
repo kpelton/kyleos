@@ -5,7 +5,7 @@
 #include <mm/paging.h>
 #include <mm/vmm.h>
 #include <fs/vfs.h>
-#define MAX_TASK_OPEN_FILES 8
+#define MAX_TASK_OPEN_FILES 64
 #define SCHED_MAX_TASKS 1024
 #define SCHED_MAX_NAME 32
 #define KTHREAD_STACK_SIZE 4096*8

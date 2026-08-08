@@ -29,7 +29,6 @@ int user_process_open_fd(struct ktask *t, struct inode *iptr, uint32_t flags)
         }
     }
 done:
-    panic("unable to open file");
     return -1;
 }
 
