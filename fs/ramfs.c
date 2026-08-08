@@ -13,6 +13,7 @@ static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
 #define CONSOLE_INO 1
 #define NULL_INO 2
 #define ZERO_INO 3
+#define KMSG_INO 4
 #define RAMFS_INSTANCE_COUNT 2
 struct ramfs_instance {
     struct ramfs_inode inodes[MAX_RAMFS];
@@ -44,7 +45,7 @@ static struct ramfs_instance *ramfs_for_device(struct vfs_device *dev)
 
 static int ramfs_alloc_inode(struct ramfs_instance *fs)
 {
-    int first = fs->has_console ? 4 : 2;
+    int first = fs->has_console ? 5 : 2;
     for (int i = first; i < MAX_RAMFS; i++)
         if (fs->inodes[i].dev == NULL)
             return i;
@@ -59,7 +60,7 @@ static void create_root_dir(struct vfs_device *dev, bool with_console) {
     kstrcpy(fs->inodes[0].i_name, dev->mountpoint_root);
     fs->inodes[0].i_type=I_DIR;
     fs->inodes[0].i_ino = 0;
-    fs->inodes[0].last_child = with_console ? 3 : 0;
+    fs->inodes[0].last_child = with_console ? 4 : 0;
     fs->inodes[0].file_size = 0;
     fs->inodes[0].parent = -1;
     fs->inodes[0].blocks = NULL;
@@ -84,6 +85,12 @@ static void create_root_dir(struct vfs_device *dev, bool with_console) {
         fs->inodes[ZERO_INO].i_type = I_DEV;
         fs->inodes[ZERO_INO].i_ino = ZERO_INO;
         fs->inodes[ZERO_INO].parent = 0;
+        fs->inodes[0].children[3] = KMSG_INO;
+        fs->inodes[KMSG_INO].dev = dev;
+        kstrcpy(fs->inodes[KMSG_INO].i_name, "kmsg");
+        fs->inodes[KMSG_INO].i_type = I_DEV;
+        fs->inodes[KMSG_INO].i_ino = KMSG_INO;
+        fs->inodes[KMSG_INO].parent = 0;
     }
 
 }
@@ -184,6 +191,8 @@ int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) {
         memzero8((uint8_t *)buf, count);
         return count;
     }
+    if (fs->has_console && rfile->i_node.i_ino == KMSG_INO)
+        return kmsg_read(buf, count, rfile->pos);
     acquire_spinlock(&fs->lock);
     // Approaching the end of the file truncate read bytes
 #ifdef DEBUG_FS_RAMFS
@@ -209,7 +218,8 @@ int ramfs_stat_file (struct file * rfile,struct stat *st) {
     st->st_dev = rfile->dev->devicenum;
     st->st_ino = rfile->i_node.i_ino;
     st->st_mode = fs->inodes[rfile->i_node.i_ino].i_type;
-    st->st_size = fs->inodes[rfile->i_node.i_ino].file_size;
+    st->st_size = (fs->has_console && rfile->i_node.i_ino == KMSG_INO) ?
+                  kmsg_size() : fs->inodes[rfile->i_node.i_ino].file_size;
 
 
    release_spinlock(&fs->lock);
@@ -227,6 +237,8 @@ int ramfs_write_file (struct file * rfile,void *buf,uint32_t count) {
     if (fs->has_console && (rfile->i_node.i_ino == NULL_INO ||
                             rfile->i_node.i_ino == ZERO_INO))
         return count;
+    if (fs->has_console && rfile->i_node.i_ino == KMSG_INO)
+        return kmsg_write(buf, count);
  
     acquire_spinlock(&fs->lock);
     struct ramfs_block *r_block = fs->inodes[rfile->i_node.i_ino].blocks;
@@ -267,7 +279,7 @@ static int ramfs_truncate_file(struct file *rfile)
      * Character devices have no stored contents, so truncating one is a
      * successful no-op rather than an error. */
     if (fs->has_console && rfile->i_node.i_type == I_DEV &&
-        rfile->i_node.i_ino <= ZERO_INO) {
+        rfile->i_node.i_ino <= KMSG_INO) {
         rfile->pos = 0;
         return 0;
     }
@@ -406,7 +418,7 @@ static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
     if (inode_num < 2 || inode_num >= MAX_RAMFS || new_name[0] == '\0' ||
         new_parent->dev != i_node->dev || new_parent->i_type != I_DIR)
         return -1;
-    if (fs->has_console && inode_num <= ZERO_INO)
+    if (fs->has_console && inode_num <= KMSG_INO)
         return -1;
     acquire_spinlock(&fs->lock);
     if (fs->inodes[inode_num].dev == NULL ||

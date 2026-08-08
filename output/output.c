@@ -5,6 +5,7 @@
 #include <asm/asm.h>
 #include <include/stdarg.h>
 #include <include/types.h>
+#include <timer/pit.h>
 
 void output_init() {
     vga_init();
@@ -256,7 +257,52 @@ void print_regs(unsigned long exception,unsigned long rip) {
 }
 
 
+#define KMSG_BUFFER_SIZE (64 * 1024)
+
+static char kmsg_buffer[KMSG_BUFFER_SIZE];
+static uint32_t kmsg_start;
+static uint32_t kmsg_count;
+static bool kmsg_capture;
+
+static void kmsg_putc(char c)
+{
+    uint32_t index;
+
+    if (kmsg_count < KMSG_BUFFER_SIZE) {
+        index = (kmsg_start + kmsg_count) % KMSG_BUFFER_SIZE;
+        kmsg_count++;
+    } else {
+        index = kmsg_start;
+        kmsg_start = (kmsg_start + 1) % KMSG_BUFFER_SIZE;
+    }
+    kmsg_buffer[index] = c;
+}
+
+uint32_t kmsg_size(void)
+{
+    return kmsg_count;
+}
+
+int kmsg_read(void *buf, uint32_t count, uint64_t offset)
+{
+    char *destination = buf;
+    uint32_t available;
+
+    if (buf == NULL || offset >= kmsg_count)
+        return 0;
+    available = kmsg_count - (uint32_t)offset;
+    if (count > available)
+        count = available;
+    for (uint32_t i = 0; i < count; i++)
+        destination[i] = kmsg_buffer[(kmsg_start + (uint32_t)offset + i) %
+                                     KMSG_BUFFER_SIZE];
+    return (int)count;
+}
+
 static void puts( char *str) {
+    if (kmsg_capture)
+        for (char *ptr = str; *ptr != '\0'; ptr++)
+            kmsg_putc(*ptr);
     vga_kprintf(str);
     serial_kprintf(str);
 }
@@ -265,19 +311,19 @@ static void putc( char c) {
     char buffer[2] = {'\0'};
     buffer[0] = c;
 
+    if (kmsg_capture)
+        kmsg_putc(c);
     vga_kprintf(buffer);
     serial_kprintf(buffer);
 
 }
 
-void kprintf(char *format, ...)
+static void kvprintf(char *format, va_list arguments)
 {
     char *ptr = format;
     unsigned long x;
     char * str_ptr;
     char buffer[20];
-    va_list arguments;
-    va_start(arguments, format);
     while(*ptr != '\0') {
         if (*ptr == '%') {
             ptr++;
@@ -304,7 +350,59 @@ void kprintf(char *format, ...)
         }
         ptr++;
     }
+}
+
+void kprintf(char *format, ...)
+{
+    va_list arguments;
+
+    va_start(arguments, format);
+    kvprintf(format, arguments);
     va_end(arguments);
+}
+
+static void klog_prefix(void)
+{
+    uint32_t ticks = read_jiffies();
+    uint64_t tick_hz = TICK_HZ ? TICK_HZ : 1;
+    uint64_t seconds = ticks / tick_hz;
+    uint64_t milliseconds = ((ticks % tick_hz) * 1000) / tick_hz;
+
+    kmsg_capture = true;
+    kprintf("[%d.", seconds);
+    if (milliseconds < 100)
+        putc('0');
+    if (milliseconds < 10)
+        putc('0');
+    kprintf("%d] ", milliseconds);
+}
+
+void klog(char *format, ...)
+{
+    va_list arguments;
+
+    klog_prefix();
+
+    va_start(arguments, format);
+    kvprintf(format, arguments);
+    va_end(arguments);
+    kmsg_capture = false;
+}
+
+int kmsg_write(const void *buf, uint32_t count)
+{
+    const char *message = buf;
+
+    if (buf == NULL)
+        return -1;
+    klog_prefix();
+    puts("userspace: ");
+    for (uint32_t i = 0; i < count; i++)
+        putc(message[i]);
+    if (count == 0 || message[count - 1] != '\n')
+        putc('\n');
+    kmsg_capture = false;
+    return (int)count;
 }
 
 void read_input(char * dest) {

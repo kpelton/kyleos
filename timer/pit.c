@@ -19,10 +19,10 @@ void pit_init(void) {
     init_spinlock(&spinlock_time);
 
     uint64_t PIT_DIVIDER_VAL = PIT_FREQ/TICK_HZ;
-    kprintf("PIT init\n");
-    kprintf("PIT divider:%d\n",PIT_DIVIDER_VAL);
-    kprintf("Sched Tick interval:%d HZ\n",HZ);
-    kprintf("Timer interrupt interval:%d HZ\n",TICK_HZ);
+    klog("PIT init\n");
+    klog("PIT divider:%d\n",PIT_DIVIDER_VAL);
+    klog("Sched Tick interval:%d HZ\n",HZ);
+    klog("Timer interrupt interval:%d HZ\n",TICK_HZ);
     outb(PIT_CMD_REG,PIT_RATE_LO_HI_ACCESS);
     outb(PIT_DATA_PORT_0,PIT_DIVIDER_VAL &0xff);
     outb(PIT_DATA_PORT_0,PIT_DIVIDER_VAL>>8);

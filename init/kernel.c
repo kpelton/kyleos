@@ -28,7 +28,7 @@ static void idle_loop()
 
 static void kernel(void)
 {
-    kprintf("Kyle OS has booted\n");
+    klog("Kyle OS has booted\n");
     kthread_add(idle_loop, "Idle loop");
 #ifdef DSHELL_EN    
     kthread_add(start_dshell,"D Shell");
@@ -49,7 +49,7 @@ static void kernel(void)
 
     if (iptr != NULL)
     {
-        kprintf("Starting userspace\n");
+        klog("Starting userspace\n");
         retval = exec_from_inode(iptr,false,NULL);
         if(retval <0) {
             panic("Unable to start userspace");
@@ -65,29 +65,29 @@ static void kernel(void)
 
 static void kinit(void)
 {
-    kprintf("Booting.......\n");
-    kprintf("Kyle OS.......\n");
-    kprintf("Copyright:Kyle Pelton 2020-2025 all rights reserved\n");
-    kprintf("Install GDT\n");
+    klog("Booting.......\n");
+    klog("Kyle OS.......\n");
+    klog("Copyright:Kyle Pelton 2020-2026 all rights reserved\n");
+    klog("Install GDT\n");
     gdt_install();
     tss_flush();
     idt_install();
-    kprintf("interrupts init done\n");
+    klog("interrupts init done\n");
     early_setup_paging();
-    kprintf("Early page init done\n");
+    klog("Early page init done\n");
     phys_mem_init();
-    kprintf("Phys mem init done\n");
+    klog("Phys mem init done\n");
     paging_enable_protected();
     mm_init();
     framebuffer_init();
-    kprintf("Allocating stack\n");
+    klog("Allocating stack\n");
     uint64_t kernel_stack = KERN_PHYS_TO_VIRT(pmem_alloc_block(STACK_PAGES));
     paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_stack),STACK_PAGES);
-    kprintf("Stack start %x Stack %x\n",kernel_stack,kernel_stack+4096*STACK_PAGES);
+    klog("Stack start %x Stack %x\n",kernel_stack,kernel_stack+4096*STACK_PAGES);
     asm volatile("movq %0,%%rsp " : : "r"(kernel_stack+4096*STACK_PAGES));
-    kprintf("MM init done\n");
+    klog("MM init done\n");
     PIC_init();
-    kprintf("PIC init done\n");
+    klog("PIC init done\n");
     ata_init();
     timer_system_init();
     exec_init();
@@ -101,7 +101,7 @@ void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
 {
     //First c code
     output_init();
-    kprintf("Multiboot header_loc:%x magic:%x\n",mb_info,multiboot_magic);
+    klog("Multiboot header_loc:%x magic:%x\n",mb_info,multiboot_magic);
 
     if (multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC)
         panic("MULTIBOOT_BOOTLOADER_MAGIC was not passed to kernel correctly");
