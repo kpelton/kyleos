@@ -1,5 +1,5 @@
 echo ALL-TESTS-START
-fstest
+if fstest then echo FS-SUITE-COMPLETE else exit 1
 echo FS-SUITE-COMPLETE
 echo HEAP-COPY-1
 cp /usr/share/text/bible.txt /tmp/bible-a
@@ -23,12 +23,13 @@ echo WAIT-ABI-START
 waittest
 echo WAIT-ABI-COMPLETE
 echo DEMAND-PAGING-START
-demandtest
+if demandtest then echo DEMAND-PAGING-FUNCTIONAL-COMPLETE else exit 1
 echo DEMAND-PAGING-FUNCTIONAL-COMPLETE
-oomtest
+if oomtest then exit 1 else echo PASS-DEMAND-OOM-ISOLATION
 echo PASS-DEMAND-OOM-ISOLATION
 echo DEMAND-PAGING-PASS
 echo EXEC-STRESS-START
-repeat 200 ls > /dev/null
+if repeat 200 ls > /dev/null then echo EXEC-STRESS-PASS else exit 1
 echo EXEC-STRESS-PASS
 echo ALL-TESTS-COMPLETE
+exit 0
