@@ -165,9 +165,10 @@ bool paging_map_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_start,
 
         //Add checks here if we are out of the user range
         if ((curr[offset] & PAGE_PRESENT) == 0) {
-               //     kprintf("Writing to %x\n",curr+offset);
-
-            curr[offset] = (uint64_t)pmem_alloc_zero_page()| USER_PAGE;
+            uint64_t table = (uint64_t)pmem_try_alloc_zero_page();
+            if (table == 0)
+                return false;
+            curr[offset] = table | USER_PAGE;
             //kprintf("new pagedirtab %x %x\n",curr[offset],offset);
         }
         curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & PHYS_ADDR_MASK));
@@ -176,18 +177,20 @@ bool paging_map_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_start,
 
 
         if ((curr[offset] & PAGE_PRESENT) == 0) {
-                    //kprintf("Writing to %x\n",curr+offset);
-
-            curr[offset] = (uint64_t)pmem_alloc_zero_page() | USER_PAGE ;
+            uint64_t table = (uint64_t)pmem_try_alloc_zero_page();
+            if (table == 0)
+                return false;
+            curr[offset] = table | USER_PAGE;
         }
         curr = (uint64_t *) KERN_PHYS_TO_PVIRT((curr[offset] & PHYS_ADDR_MASK));
         offset = VIRT_TO_PAGE_DIR(virt_curr_addr);
        /// kprintf("page_dir %x %x %x\n",curr,curr[offset],offset);
         //        kprintf("done1\n");
         if ((curr[offset] & PAGE_PRESENT) == 0) {
-       //                     kprintf("done2\n");
-      //  kprintf("Writing to %x\n",curr+offset);
-            curr[offset] = (uint64_t)pmem_alloc_zero_page() | USER_PAGE ;
+            uint64_t table = (uint64_t)pmem_try_alloc_zero_page();
+            if (table == 0)
+                return false;
+            curr[offset] = table | USER_PAGE;
         }
            //     kprintf("done\n");
 
@@ -424,7 +427,9 @@ bool paging_resolve_cow_fault(struct pg_tbl *pg, uint64_t va)
 
     old_phys = *pte & PHYS_ADDR_MASK;
     if (pmem_page_refcount(old_phys) > 1) {
-        new_phys = (uint64_t)pmem_alloc_page();
+        new_phys = (uint64_t)pmem_try_alloc_page();
+        if (new_phys == 0)
+            return false;
         memcpy64((uint64_t *)KERN_PHYS_TO_PVIRT(new_phys),
                  (uint64_t *)KERN_PHYS_TO_PVIRT(old_phys), PAGE_SIZE);
         pmem_free_block(old_phys);
@@ -438,7 +443,7 @@ bool paging_resolve_cow_fault(struct pg_tbl *pg, uint64_t va)
 
 
 
-void pagefault(uint64_t *addr) {
+void pagefault(uint64_t *addr, uint64_t error_code) {
     uint64_t cr2;
     struct ktask *proc = get_current_process();
     asm volatile("movq %%cr2 ,%0" : "=r"(cr2));
@@ -454,21 +459,28 @@ void pagefault(uint64_t *addr) {
         panic("fail");
     }a
 #endif
-    uint64_t *pte = paging_walk(&(proc->mm->pagetable),cr2);
-    //kprintf("pte:%x\n",pte);
-
-    if (paging_resolve_cow_fault(&(proc->mm->pagetable), cr2)) {
+    if (proc != NULL && proc->type == USER_PROCESS &&
+        (error_code & PF_PRESENT) != 0 &&
+        (error_code & PF_WRITE) != 0 &&
+        paging_resolve_cow_fault(&(proc->mm->pagetable), cr2)) {
         return;
     }
-    if (pte) {
-        *pte |= PAGE_PRESENT;
-    }
-    else{
-
-        kprintf("Segfault %d on addr 0x%x\n",proc->pid,addr);
-        sched_process_kill(proc->pid,true,true);
-        schedule();
-    }
+    /* A syscall may legitimately touch a not-yet-resident userspace buffer
+     * while CPL 0 is active (for example getdents filling malloc storage).
+     * Such a fault lacks PF_USER even though the address belongs to the
+     * current process.  Let the VMM validate the address and permissions;
+     * invalid kernel addresses still fall through to the panic below. */
+    if (proc != NULL && proc->type == USER_PROCESS &&
+        vmm_handle_page_fault(proc->mm, cr2, error_code))
+        return;
+    if (proc == NULL || proc->type != USER_PROCESS ||
+        (error_code & PF_USER) == 0)
+        panic("kernel page fault");
+    kprintf("Segfault %d on addr 0x%x at rip 0x%x error 0x%x\n",
+            proc->pid, cr2, addr, error_code);
+    proc->exit_code = 128 + 11;
+    sched_process_kill(proc->pid,false,true);
+    schedule();
 }
 
 /* #GP is commonly raised by invalid privileged instructions or malformed
@@ -482,6 +494,7 @@ void general_protection_fault(uint64_t *addr)
         panic("kernel general protection fault");
 
     kprintf("Segfault %d on addr 0x%x\n", proc->pid, addr);
-    sched_process_kill(proc->pid, true, true);
+    proc->exit_code = 128 + 11;
+    sched_process_kill(proc->pid, false, true);
     schedule();
 }

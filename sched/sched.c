@@ -254,11 +254,13 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     }
     t->cwd = cwd;
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
-    vmm_add_new_mapping(mm,VMM_STACK,USER_STACK_VADDR,USER_STACK_SIZE,READ_WRITE | SUPERVISOR | PAGE_PRESENT,true,true);
-    /* User allocations are accessed immediately by libc/Doom.  Do not create
-     * the initial heap as non-present pages until the demand pager handles
-     * allocation and TLB invalidation correctly. */
-    vmm_add_new_mapping(mm,VMM_DATA,USER_HEAP_VADDR,USER_HEAP_SIZE,USER_PAGE,true,true);
+    if (vmm_reserve_mapping(mm, VMM_STACK, USER_STACK_VADDR,
+                            USER_STACK_SIZE, READ_WRITE | SUPERVISOR) == NULL ||
+        !vmm_populate_page(mm, (uint64_t)USER_STACK_VADDR +
+                          (USER_STACK_SIZE - 1) * PAGE_SIZE) ||
+        vmm_reserve_mapping(mm, VMM_DATA, USER_HEAP_VADDR,
+                            USER_HEAP_SIZE, READ_WRITE | SUPERVISOR) == NULL)
+        panic("unable to create initial user address space");
     user_switch_paging(&(mm->pagetable));
 
     t->heap_size = USER_HEAP_SIZE;
@@ -388,6 +390,37 @@ done:
     release_spinlock(&sched_spinlock);
 
     return true;
+}
+
+/* Return the reaped PID, 0 when matching children still run, or -1 when the
+ * caller has no matching child.  Keeping the scan and reap under the
+ * scheduler lock prevents a task slot from being reused between the two. */
+int sched_reap_child(int parent_pid, int requested_pid, int *exit_code)
+{
+    int i;
+    bool found = false;
+
+    acquire_spinlock(&sched_spinlock);
+    for (i = 0; i < SCHED_MAX_TASKS; i++) {
+        struct ktask *child = &ktasks[i];
+        int reaped_pid;
+
+        if (child->pid == -1 || child->parent != parent_pid)
+            continue;
+        if (requested_pid != -1 && child->pid != requested_pid)
+            continue;
+        found = true;
+        if (child->state != TASK_DONE)
+            continue;
+        reaped_pid = child->pid;
+        if (exit_code != NULL)
+            *exit_code = child->exit_code;
+        child->pid = -1;
+        release_spinlock(&sched_spinlock);
+        return reaped_pid;
+    }
+    release_spinlock(&sched_spinlock);
+    return found ? 0 : -1;
 }
 
 

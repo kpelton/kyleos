@@ -6,7 +6,8 @@ has a framebuffer-capable DoomGeneric port.
 
 ## Features
 
-- x86-64 long mode, paging, physical-memory allocation, and a 16-byte-aligned
+- x86-64 long mode, demand-zero heap and stack paging, physical-memory
+  allocation, and a 16-byte-aligned
   first-fit kernel heap with block splitting, adjacent-block coalescing, and
   corruption checks.
 - Preemptive round-robin scheduling with user processes, copy-on-write
@@ -17,7 +18,9 @@ has a framebuffer-capable DoomGeneric port.
 - `/dev/console`, `/dev/null`, and `/dev/zero`.
 - Directories, file and empty-directory removal, 8.3-safe rename,
   truncate-on-open, seek, file sizes, and a simple VFS.
-- Pipes and shell redirection, including chained pipelines.
+- Pipes and shell redirection, including chained pipelines, repeat loops,
+  `*`/`?` wildcard expansion, and `$?` reporting for the previous foreground
+  command.
 - In-image filesystem, heap, and user-fault regression suites, plus a single
   integrated runner: `nushell < /tests/all.sh`.
 - User-mode page and general-protection faults terminate only the offending
@@ -192,6 +195,14 @@ shell:
 
 ```sh
 nushell < /tests/gp-fault.sh
+```
+
+The demand-paging regression reserves a sparse heap, grows the stack, checks
+zero-filled pages and copy-on-write isolation, and then exhausts userspace
+memory to verify that the kernel kills only the allocating process:
+
+```sh
+nushell < /tests/demand-paging.sh
 ```
 
 Run every in-image regression in sequence with:

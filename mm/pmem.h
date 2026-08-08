@@ -38,6 +38,8 @@ void pmem_retain_page(uint64_t baddr);
 uint16_t pmem_page_refcount(uint64_t baddr);
 void *pmem_alloc_zero_page();
 void *pmem_alloc_page();
+void *pmem_try_alloc_zero_page(void);
+void *pmem_try_alloc_page(void);
 void phys_mem_print_usage();
 void phys_mem_init();
 

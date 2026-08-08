@@ -110,53 +110,53 @@ void user_process_exit(struct ktask *t, int code)
 
 void *user_process_sbrk(struct ktask *t, uint64_t increment) 
 {
-    void *ret = NULL;
-    uint64_t inc;
+    uint64_t old_break = (uint64_t)t->user_heap_loc;
+    uint64_t new_break;
+    uint64_t required_pages;
 #ifdef DEBUG_SYSCALL_SBRK
     kprintf("Sbrk called with %x %x\n", increment,t->user_heap_loc);
 #endif
-    if (increment == 0){
-        ret = t->user_heap_loc;
-
-    }else if (increment > 0) {
-        //return previous break
-        ret = t->user_heap_loc;
-        inc = ((uint64_t) t->user_heap_loc) + increment;
-        t->user_heap_loc = (uint64_t *) inc;
+    if (increment == 0)
+        return (void *)old_break;
+    new_break = old_break + increment;
+    if (new_break < old_break)
+        return (void *)-1;
+    required_pages = (new_break - (uint64_t)t->user_start_heap +
+                      PAGE_SIZE - 1) / PAGE_SIZE;
+    if (required_pages > t->heap_size) {
+        uint64_t pages = required_pages - t->heap_size;
+        uint64_t start = (uint64_t)t->user_start_heap +
+                         t->heap_size * PAGE_SIZE;
+        if (vmm_reserve_mapping(t->mm, VMM_DATA, (uint64_t *)start,
+                                pages, READ_WRITE | SUPERVISOR) == NULL)
+            return (void *)-1;
+        t->heap_size = required_pages;
     }
-    else{
-        panic("can't handle negative sbrk");
-    }
-    //kprintf("%x %x\n",(uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE,t->user_heap_loc);
-    if((uint64_t)t->user_heap_loc >= (uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE){
-        uint64_t delta = (uint64_t)t->user_heap_loc - ((uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
-        uint64_t end_heap = ((uint64_t)t->user_start_heap + t->heap_size*PAGE_SIZE);
-        uint64_t pages = delta/PAGE_SIZE + 1;
-
-        vmm_add_new_mapping(t->mm,VMM_DATA,(uint64_t *)end_heap,pages,USER_PAGE,true,true);
-        t->heap_size += pages; 
-    }
-    //kprintf("sbrk returning %x\n",ret);
-    return ret;
+    t->user_heap_loc = (uint64_t *)new_break;
+    return (void *)old_break;
 }
 
-int process_wait(int pid)
+int process_wait(int pid, int *status, int options)
 {
-    struct ktask *child;
-    while(1) {
+    struct ktask *current = get_current_process();
 
-        child = sched_get_process(pid);
-        if (child == NULL)
-            return -1;
-        if(child->state == TASK_DONE){
-            //TODO: Move this to sched.c
-            //Reap child
-            child->pid = -1;
-            return child->exit_code;
-        }
+    /* KyleOS currently implements only the POSIX WNOHANG option. */
+    if (pid == 0 || pid < -1 || (options & ~1) != 0)
+        return -1;
+    while (1) {
+        int exit_code = 0;
+        int result = sched_reap_child(current->pid, pid, &exit_code);
+
+        if (result != 0)
+            {
+                if (result > 0 && status != NULL)
+                    *status = (exit_code & 0xff) << 8;
+                return result;
+            }
+        if (options & 1)
+            return 0;
         /* The shell waits here after every foreground command.  A 100 ms
          * polling interval made even a cached `ls` feel delayed. */
         ksleepm(10);
     }
-    return 0;
 }

@@ -26,6 +26,7 @@ struct vmm_block {
     uint64_t page_ops;
     enum vmm_block_type type;
     bool free;
+    bool demand;
 };
 
 //create new vmm_map
@@ -34,6 +35,13 @@ struct vmm_map *vmm_map_new();
 bool vmm_init();
 struct vmm_block* vmm_add_new_mapping(struct vmm_map* map,enum vmm_block_type  block_type ,
                                       uint64_t *vaddr,uint64_t size, uint64_t page_ops,bool zero,bool add_to_list);
+struct vmm_block *vmm_reserve_mapping(struct vmm_map *map,
+                                      enum vmm_block_type block_type,
+                                      uint64_t *vaddr, uint64_t size,
+                                      uint64_t page_ops);
+bool vmm_handle_page_fault(struct vmm_map *map, uint64_t address,
+                           uint64_t error_code);
+bool vmm_populate_page(struct vmm_map *map, uint64_t address);
 bool vmm_free(struct vmm_map* map);
 bool vmm_copy_section(struct vmm_map* src,struct vmm_map* dst,enum vmm_block_type btype);
 bool vmm_share_section(struct vmm_map* src,struct vmm_map* dst,enum vmm_block_type btype);

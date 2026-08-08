@@ -294,9 +294,9 @@ static void exit(int code)
     user_process_exit(pid, code);
 }
 
-static int wait(int pid)
+static int wait(int pid, int *status, int options)
 {
-    return process_wait(pid);
+    return process_wait(pid, status, options);
 }
 
 static int debugprint(char *msg)

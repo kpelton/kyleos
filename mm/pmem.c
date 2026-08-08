@@ -106,24 +106,12 @@ void pmem_addr_set_region(uint64_t addr, uint64_t size, uint64_t *bitmap)
 
 uint64_t pmem_addr_find_first_free_block(uint64_t size,uint64_t *bitmap)
 {
-    uint64_t i;
-    uint64_t addr=0;
-    uint64_t val;
-    for (i=0; i<get_block_count(size); i++) {
-        if (bitmap[i] < 0xffffffffffffffff){
-            val = bitmap[i];
-            //find where the bit is set
-            while (val & 1)  {
-                addr+=BLOCK_SIZE;
-                val>>=1;
-            }
-            //kprintf("found free page at %x\n",addr);
-            return addr;
-        }
+    uint64_t total_pages = size / BLOCK_SIZE;
 
-        addr+=BLOCK_SIZE*BIT_SIZE;
-    }
-    panic("WARNING could not find enough phys memory");
+    for (uint64_t page = 0; page < total_pages; page++)
+        if ((bitmap[get_block(page)] &
+             (1UL << get_bit_in_block(page))) == 0)
+            return page * BLOCK_SIZE;
     return 0;
 }
 
@@ -147,7 +135,6 @@ uint64_t pmem_addr_find_first_chunk(uint64_t size,uint64_t chunk_size, uint64_t 
             run = 0;
         }
     }
-    panic("WARNING could not find enough phys memory");
     return 0;
 }
 
@@ -195,11 +182,11 @@ void *pmem_alloc_block(unsigned int size_in_pages) {
     uint64_t addr = pmem_addr_find_first_chunk(phys_mem_zones[phys_first_region].len,
                                             size_in_pages,phys_mem_zones[phys_first_region].bitmap);
 
-    if (addr != 0) {
-        pmem_addr_set_region(addr,size_in_pages,phys_mem_zones[phys_first_region].bitmap);
-        for (uint64_t i = 0; i < size_in_pages; i++)
-            page_refs[page_ref_index(addr + phys_mem_zones[phys_first_region].base_addr + i * BLOCK_SIZE)] = 1;
-    }
+    if (addr == 0)
+        panic("WARNING could not find enough contiguous phys memory");
+    pmem_addr_set_region(addr,size_in_pages,phys_mem_zones[phys_first_region].bitmap);
+    for (uint64_t i = 0; i < size_in_pages; i++)
+        page_refs[page_ref_index(addr + phys_mem_zones[phys_first_region].base_addr + i * BLOCK_SIZE)] = 1;
     //We need to add the base address here because all bitmaps start at 0
     return (void *)(addr +phys_mem_zones[phys_first_region].base_addr);
 
@@ -233,13 +220,13 @@ static uint64_t* zero_page(uint64_t *addr) {
     return addr;
 }
 
-void *pmem_alloc_page() {
+void *pmem_try_alloc_page(void) {
     uint64_t addr = pmem_addr_find_first_free_block(phys_mem_zones[phys_first_region].len,phys_mem_zones[phys_first_region].bitmap);
 
-    if (addr != 0) {
-        pmem_addr_set_block(addr,phys_mem_zones[phys_first_region].bitmap);
-        page_refs[page_ref_index(addr + phys_mem_zones[phys_first_region].base_addr)] = 1;
-    }
+    if (addr == 0)
+        return NULL;
+    pmem_addr_set_block(addr,phys_mem_zones[phys_first_region].bitmap);
+    page_refs[page_ref_index(addr + phys_mem_zones[phys_first_region].base_addr)] = 1;
     //We need to add the base address here because all bitmaps start at 0
 #ifdef PMEM_DEBUG
     kprintf("Alloc 0x%x\n",addr +phys_mem_zones[phys_first_region].base_addr);
@@ -248,8 +235,28 @@ void *pmem_alloc_page() {
 
 }
 
-void *pmem_alloc_zero_page() {
-    return zero_page(pmem_alloc_page());
+void *pmem_alloc_page(void)
+{
+    void *page = pmem_try_alloc_page();
+    if (page == NULL)
+        panic("WARNING could not find enough phys memory");
+    return page;
+}
+
+void *pmem_try_alloc_zero_page(void)
+{
+    void *page = pmem_try_alloc_page();
+    if (page != NULL)
+        zero_page(page);
+    return page;
+}
+
+void *pmem_alloc_zero_page(void)
+{
+    void *page = pmem_try_alloc_zero_page();
+    if (page == NULL)
+        panic("WARNING could not find enough phys memory");
+    return page;
 }
 
 void phys_mem_init() {

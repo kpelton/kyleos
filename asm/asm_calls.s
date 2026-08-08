@@ -458,10 +458,7 @@ panic_handler_13:
 [global panic_handler_14] ;
 panic_handler_14:
     cli
-    add rsp,8 ;error code
     push rax
-    ;; copy over failing rip to rax
-    mov rax,[rsp+8]
     push rbx
     push rcx
     push rdx
@@ -477,10 +474,10 @@ panic_handler_14:
     push r14
     push r15
     pushfq
-    ;; rax still holds the RIP saved by the CPU.  Do not call
-    ;; save_context_asm first: it invokes C and destroys caller-saved rax,
-    ;; which previously made faults appear to originate at address zero.
-    mov rdi,rax
+    ;; The 16 saved qwords are followed by the CPU error code and RIP.
+    ;; Load arguments only after preserving every interrupted register.
+    mov rdi,[rsp+136]
+    mov rsi,[rsp+128]
     call pagefault
     popfq
     pop r15
@@ -498,6 +495,7 @@ panic_handler_14:
     pop rcx
     pop rbx
     pop rax
+    add rsp,8 ;discard the page-fault error code
     iretq
     
 [global panic_handler_15] ;

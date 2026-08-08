@@ -8,9 +8,11 @@ cat
 constest
 cp
 donut
+demandtest
 echo
 fstest
 gpfault
+waittest
 ed
 grep
 head
@@ -19,6 +21,7 @@ ls
 mkdir
 mv
 nushell
+oomtest
 rdwr
 rm
 rmdir

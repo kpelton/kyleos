@@ -87,6 +87,7 @@ static void *vmm_share_block(void *data, void *user_data)
     struct vmm_share_context *context = (struct vmm_share_context *)user_data;
     struct vmm_map *dst = context->dst;
     struct vmm_block *new_block;
+    uint64_t shared_pages = 0;
 
     new_block = kmalloc(sizeof(struct vmm_block));
     if (!new_block)
@@ -99,8 +100,12 @@ static void *vmm_share_block(void *data, void *user_data)
         uint64_t *parent_pte = paging_walk(&context->src->pagetable, va);
         uint64_t flags;
 
-        if (!parent_pte)
+        if (!parent_pte || (*parent_pte & PAGE_PRESENT) == 0) {
+            if (block->demand)
+                continue;
+            kfree(new_block);
             return NULL;
+        }
         /* A prior COW fault may have replaced this one page, so block->paddr
          * can no longer describe the live physical backing. */
         pa = *parent_pte & 0xffffffffff000;
@@ -116,8 +121,9 @@ static void *vmm_share_block(void *data, void *user_data)
         pmem_retain_page(pa);
         if (!paging_map_range(&dst->pagetable, pa, va, 1, flags))
             return NULL;
+        shared_pages++;
     }
-    dst->total_pages += block->size;
+    dst->total_pages += shared_pages;
     return new_block;
 }
 
@@ -140,6 +146,7 @@ struct vmm_block *vmm_add_new_mapping(struct vmm_map *map, enum vmm_block_type b
     block->page_ops = page_ops;
     block->free = false;
     block->type = block_type;
+    block->demand = false;
 
     if (size > 1)
         block->paddr = pmem_alloc_block(size);
@@ -161,4 +168,83 @@ struct vmm_block *vmm_add_new_mapping(struct vmm_map *map, enum vmm_block_type b
     // kprintf("vmm returning 0x%x\n",block->paddr);
     map->total_pages += size;
     return block;
+}
+
+struct vmm_block *vmm_reserve_mapping(struct vmm_map *map,
+                                      enum vmm_block_type block_type,
+                                      uint64_t *vaddr, uint64_t size,
+                                      uint64_t page_ops)
+{
+    struct vmm_block *block;
+
+    if (map == NULL || block_type >= VMM_SECTION_CNT || size == 0)
+        return NULL;
+    block = kmalloc(sizeof(*block));
+    if (block == NULL)
+        return NULL;
+    block->vaddr = vaddr;
+    block->paddr = NULL;
+    block->size = size;
+    block->page_ops = page_ops & ~PAGE_PRESENT;
+    block->type = block_type;
+    block->free = false;
+    block->demand = true;
+    if (llist_append(map->vmm_areas[block_type], block) == NULL) {
+        kfree(block);
+        return NULL;
+    }
+    return block;
+}
+
+static struct vmm_block *vmm_find_block(struct vmm_map *map, uint64_t address)
+{
+    for (int section = 0; section < VMM_SECTION_CNT; section++) {
+        struct llist_node *node = map->vmm_areas[section]->head;
+        while (node != NULL) {
+            struct vmm_block *block = node->data;
+            uint64_t start = (uint64_t)block->vaddr;
+            uint64_t end = start + block->size * PAGE_SIZE;
+            if (address >= start && address < end)
+                return block;
+            node = node->next;
+        }
+    }
+    return NULL;
+}
+
+bool vmm_handle_page_fault(struct vmm_map *map, uint64_t address,
+                           uint64_t error_code)
+{
+    struct vmm_block *block;
+    uint64_t page = address & ~(PAGE_SIZE - 1);
+    uint64_t physical;
+    uint64_t *pte;
+
+    if (map == NULL || (error_code & PF_PRESENT) != 0)
+        return false;
+    block = vmm_find_block(map, page);
+    if (block == NULL || !block->demand)
+        return false;
+    if ((error_code & PF_WRITE) != 0 &&
+        (block->page_ops & READ_WRITE) == 0)
+        return false;
+    pte = paging_walk(&map->pagetable, page);
+    if (pte != NULL && (*pte & PAGE_PRESENT) != 0)
+        return false;
+    physical = (uint64_t)pmem_try_alloc_zero_page();
+    if (physical == 0)
+        return false;
+    if (!paging_map_range(&map->pagetable, physical, page, 1,
+                          block->page_ops | PAGE_PRESENT)) {
+        pmem_free_block(physical);
+        return false;
+    }
+    map->total_pages++;
+    asm volatile("invlpg (%0)" :: "r"(page));
+    return true;
+}
+
+bool vmm_populate_page(struct vmm_map *map, uint64_t address)
+{
+    return vmm_handle_page_fault(map, address, PF_USER | PF_WRITE);
 }

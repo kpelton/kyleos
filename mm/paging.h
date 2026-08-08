@@ -8,6 +8,9 @@
 #define READ_WRITE (1ULL << 1)
 #define SUPERVISOR (1ULL << 2)
 #define PAGE_COW (1ULL << 9)
+#define PF_PRESENT (1ULL << 0)
+#define PF_WRITE (1ULL << 1)
+#define PF_USER (1ULL << 2)
 #define PAGE_SIZE 4096
 #define KERNEL_PAGE PAGE_PRESENT | READ_WRITE
 #define KERNEL_PAGE_RO PAGE_PRESENT
@@ -29,7 +32,7 @@ bool paging_free_pg_tbl(struct pg_tbl *pg);
 void user_switch_paging(struct pg_tbl *pg);
 void kernel_switch_paging();
 void paging_enable_protected();
-void pagefault(uint64_t *addr);
+void pagefault(uint64_t *addr, uint64_t error_code);
 void general_protection_fault(uint64_t *addr);
 extern uint64_t *kernel_pml4;
 

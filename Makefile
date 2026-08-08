@@ -1,6 +1,6 @@
 CC	?= gcc
 .DEFAULT_GOAL := all
-OP ?= -O0
+OPT ?= -O0
 AS = nasm
 ASFLAGS = -f elf64
 KERNEL_ROOT=$(shell pwd)
@@ -87,7 +87,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit kedit rm rmdir fstest gpfault breakout doom doom-image image image-reset image-mount image-unmount image-copy
+.PHONY: toolchain userland userinit kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout doom doom-image image image-reset image-mount image-unmount image-copy
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -96,13 +96,13 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit kedit rm rmdir fstest gpfault breakout
+	$(MAKE) userinit kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
-		if [ -f $(USERLAND_STAGE)/$$program ]; then :; \
-		elif [ -f $(CORE_SRC)/$$program ]; then cp $(CORE_SRC)/$$program $(USERLAND_STAGE)/$$program; \
+		if [ -f $(CORE_SRC)/$$program ]; then cp $(CORE_SRC)/$$program $(USERLAND_STAGE)/$$program; \
 		elif [ -f $(PROGS_SRC)/progs/$$program ]; then cp $(PROGS_SRC)/progs/$$program $(USERLAND_STAGE)/$$program; \
+		elif [ -f $(USERLAND_STAGE)/$$program ]; then :; \
 		else echo "missing userland program: $$program" >&2; exit 1; fi; \
 	done < image/manifest.txt
 
@@ -129,6 +129,18 @@ fstest: extras/fstest/fstest.c
 gpfault: extras/gpfault/gpfault.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/gpfault
+
+waittest: extras/waittest/waittest.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/waittest
+
+demandtest: extras/demandtest/demandtest.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/demandtest
+
+oomtest: extras/oomtest/oomtest.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/oomtest
 
 breakout: extras/breakout/breakout.c
 	mkdir -p $(USERLAND_STAGE)

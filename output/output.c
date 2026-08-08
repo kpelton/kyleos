@@ -322,9 +322,8 @@ int kstrlen(char *str) {
 
 void panic(char *msg)
 {
-    uint64_t rip;
-    //Copy return address to rip variable
-    asm volatile("movq 8(%%rbp) ,%0" : "=r"(rip));
+    uint64_t rip = (uint64_t)__builtin_return_address(0);
+
     kprintf(msg);
     print_regs(0xdeadbeef,rip);
     asm("cli");

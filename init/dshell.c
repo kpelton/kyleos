@@ -451,7 +451,7 @@ for(;;) {
             if(itmp != NULL) {
                 int pid = exec_from_inode(itmp,false,(char **) &strings);
                 if(pid >= 0)
-                    process_wait(pid);
+                    process_wait(pid, NULL, 0);
 
             }else
             {
