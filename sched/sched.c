@@ -245,8 +245,16 @@ int user_process_fork()
     clear_fd_table(t);
     t->stack_alloc = (uint64_t *)kmalloc(KTHREAD_STACK_SIZE);
     t->mm = vmm_map_new();
-    //TODO inc refcount on cwd;
-    t->cwd = curr->cwd;
+    /* cwd is mutable process state.  Sharing this allocation lets a child's
+     * chdir free the parent's cwd, leaving init with a dangling pointer when
+     * it later restarts the console shell. */
+    t->cwd = NULL;
+    if (curr->cwd != NULL) {
+        t->cwd = kmalloc(sizeof(struct inode));
+        if (t->cwd == NULL)
+            panic("unable to duplicate cwd");
+        vfs_copy_inode(t->cwd, curr->cwd);
+    }
 
     vmm_share_section(curr->mm,t->mm,VMM_STACK);
     vmm_share_section(curr->mm,t->mm,VMM_TEXT);
@@ -485,6 +493,10 @@ bool sched_process_kill(int pid, bool cleanup, bool close_files)
                         vfs_close_file(t->open_fds[j]);
                         t->open_fds[j] = NULL;
                     }
+                if (t->cwd != NULL) {
+                    vfs_free_inode(t->cwd);
+                    t->cwd = NULL;
+                }
             }
             t->state = TASK_DONE;
             for (j = 0; j < SCHED_MAX_TASKS; j++)
