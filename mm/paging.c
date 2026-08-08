@@ -204,6 +204,13 @@ bool paging_map_range(struct pg_tbl *pg, uint64_t start, uint64_t virt_start,
 
 }
 
+static void paging_free_leaf_table(uint64_t *page_table)
+{
+    for (int i = 0; i < 512; i++)
+        if ((page_table[i] & PAGE_PRESENT) != 0)
+            pmem_free_block(page_table[i] & PHYS_ADDR_MASK);
+}
+
 static void paging_free_page_dir(uint64_t* pgdir_addr) {
     int i;
 
@@ -212,6 +219,8 @@ static void paging_free_page_dir(uint64_t* pgdir_addr) {
 #ifdef PAGING_DEBUG
             kprintf("free pgdir %x\n",pgdir_addr[i] & PHYS_ADDR_MASK );
 #endif
+            paging_free_leaf_table((uint64_t *)KERN_PHYS_TO_PVIRT(
+                (pgdir_addr[i] & PHYS_ADDR_MASK)));
             pmem_free_block(pgdir_addr[i] & PHYS_ADDR_MASK);
         } 
     }

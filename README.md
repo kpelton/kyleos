@@ -115,6 +115,12 @@ New generated images use this layout:
 `nushell` searches `/bin` and then `/usr/bin` for bare command names.  This
 is currently fixed lookup behavior, not a configurable environment `PATH`.
 Absolute paths begin at `/`; relative paths begin in the current directory.
+The `repeat` builtin runs a command a fixed number of times and supports the
+shell's normal input and output redirection:
+
+```sh
+repeat 200 ls > /dev/null
+```
 
 ## Init and userspace boot
 

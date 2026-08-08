@@ -378,7 +378,7 @@ static int exec_args(char *path, char *argv[])
 
         if (i > 0)
         {
-            user_argv = kmalloc(sizeof(uint64_t *) * i + 1);
+            user_argv = kmalloc(sizeof(*user_argv) * (i + 1));
             for (j = 0; j < i; j++)
             {
                 user_argv[j] = kmalloc(kstrlen(argv[j]) + 1);

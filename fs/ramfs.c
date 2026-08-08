@@ -263,8 +263,15 @@ static int ramfs_truncate_file(struct file *rfile)
     struct ramfs_instance *fs = ramfs_for_device(rfile->dev);
     struct ramfs_block *block;
 
-    if (rfile->i_node.i_type != I_FILE ||
-        (fs->has_console && rfile->i_node.i_ino <= ZERO_INO))
+    /* Output redirection conventionally opens its target with O_TRUNC.
+     * Character devices have no stored contents, so truncating one is a
+     * successful no-op rather than an error. */
+    if (fs->has_console && rfile->i_node.i_type == I_DEV &&
+        rfile->i_node.i_ino <= ZERO_INO) {
+        rfile->pos = 0;
+        return 0;
+    }
+    if (rfile->i_node.i_type != I_FILE)
         return -1;
     acquire_spinlock(&fs->lock);
     block = fs->inodes[rfile->i_node.i_ino].blocks;

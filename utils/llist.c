@@ -61,12 +61,13 @@ void llist_free(struct llist *list, void (*free_func)(void *data))
 
     while(n_ptr != NULL)
     {
+        struct llist_node *next = n_ptr->next;
         free_func(n_ptr->data);
         kfree(n_ptr);
-        n_ptr = n_ptr->next;
+        n_ptr = next;
     }
-    kfree(list);
     release_mutex(&(list->mutex));
+    kfree(list);
 
     //kprintf("llist done\n");
 }

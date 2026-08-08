@@ -140,11 +140,17 @@ int main(void)
             all_zero = 0;
     check("/dev/zero", count == (int)sizeof(zeros) && all_zero);
 
-    fd = open("/dev/null", O_WRONLY);
+    fd = open("/dev/null", O_WRONLY | O_TRUNC);
     count = fd < 0 ? -1 : write(fd, "x", 1);
     if (fd >= 0)
         close(fd);
-    check("/dev/null", count == 1);
+    check("/dev/null redirect write", count == 1);
+
+    fd = open("/dev/null", O_RDONLY);
+    count = fd < 0 ? -1 : read(fd, zeros, sizeof(zeros));
+    if (fd >= 0)
+        close(fd);
+    check("/dev/null read EOF", count == 0);
 
     printf("FS REPORT: %d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
