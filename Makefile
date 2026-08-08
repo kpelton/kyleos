@@ -17,10 +17,14 @@ LUA_SOURCE ?= $(KERNEL_ROOT)/extras/lua/src
 LUA_BINARY ?= $(KERNEL_ROOT)/build/extras/lua/lua
 LUA_INPUTS := $(wildcard $(LUA_SOURCE)/*.[ch]) $(LUA_SOURCE)/Makefile
 BIBLE_TEXT ?= $(KERNEL_ROOT)/assets/bible.txt
+SERIAL_OUTPUT ?= 1
 ifneq (,$(wildcard config.mk))
 include config.mk
 endif
 CFLAGS	= -m64 $(OPT) -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2  -I $(KERNEL_ROOT)  -g 
+ifeq ($(SERIAL_OUTPUT),0)
+CFLAGS += -DKYLEOS_DISABLE_SERIAL_OUTPUT
+endif
 LD	= ld  -m elf_x86_64 
 export CFLAGS 
 export CC
@@ -147,7 +151,7 @@ breakout: extras/breakout/breakout.c
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/breakout
 
 cc:
-	HOST_CC=$(CC) SYSROOT=$(SYSROOT) TCC_BINARY=$(USERLAND_STAGE)/cc scripts/build-tinycc.sh
+	HOST_CC=$(CC) SYSROOT=$(SYSROOT) TCC_BINARY=$(USERLAND_STAGE)/cc MAKEFLAGS='$(MAKEFLAGS)' scripts/build-tinycc.sh
 
 bootstrap-cc: cc
 	@test -f build/extras/tinycc/src/tcc.c
@@ -171,10 +175,10 @@ $(LUA_BINARY): $(LUA_INPUTS)
 	cp $(LUA_SOURCE)/lua $(LUA_BINARY)
 
 image: userland lua
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh
 
 image-reset: userland lua
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh --reset
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh --reset
 
 image-mount:
 	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) scripts/image-mount.sh

@@ -13,6 +13,8 @@ bible_text=${BIBLE_TEXT:-"$root/assets/bible.txt"}
 tcc_runtime=${TCC_RUNTIME:-"$root/build/extras/tinycc/root"}
 tcc_source=${TCC_SOURCE:-"$root/build/extras/tinycc/src"}
 tcc_port=${TCC_PORT:-"$root/build/extras/tinycc/tinycc-kyleos"}
+core_source=${CORE_SRC:-"$root/../../kyleos-userspace"}
+progs_source=${PROGS_SRC:-"$root/../../newlib-progs"}
 ready_file="$image.ready"
 fdisk_bin=${FDISK_BIN:-/sbin/fdisk}
 kpartx_bin=${KPARTX_BIN:-/sbin/kpartx}
@@ -117,6 +119,16 @@ if [[ -f $tcc_source/tcc.c && -f $tcc_source/tccdefs_.h ]]; then
     cp -R "$tcc_source/include"/. "$mount_dir/usr/src/tinycc/include/"
     cp "$tcc_port"/*.c "$tcc_port"/*.h \
        "$mount_dir/usr/src/tinycc-kyleos/"
+fi
+if [[ -d $core_source || -d $progs_source ]]; then
+    mkdir -p "$mount_dir/usr/src/kyleos-userland/core" \
+             "$mount_dir/usr/src/kyleos-userland/progs"
+    if [[ -d $core_source ]]; then
+        cp "$core_source"/*.c "$mount_dir/usr/src/kyleos-userland/core/" 2>/dev/null || true
+    fi
+    if [[ -d $progs_source ]]; then
+        cp "$progs_source"/*.c "$mount_dir/usr/src/kyleos-userland/progs/" 2>/dev/null || true
+    fi
 fi
 if [[ -f $doom_binary ]]; then
     mkdir -p "$mount_dir/usr/bin" "$mount_dir/usr/share/doom"

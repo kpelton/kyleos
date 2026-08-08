@@ -39,7 +39,9 @@ void serial_init()
    outb(PORT + 1, 0x1);    // IRQs enabled, RTS/DSR set
       release_spinlock(&uart_spinlock);
 
+#ifndef KYLEOS_DISABLE_SERIAL_OUTPUT
    serial_kprintf("\033c");
+#endif
 }
 
 void serial_irq()
@@ -53,5 +55,4 @@ void serial_irq()
     PIC_sendEOI(1);
     release_spinlock(&uart_spinlock);
 }
-
 

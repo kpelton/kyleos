@@ -33,10 +33,36 @@ static int PRIMARY = 0;
 #define STAT_PIO_READY 0x8
 //#define ATA_DEBUG
 
+/* Small read-through cache.  FAT metadata and directory sectors are read
+ * repeatedly, so avoiding another PIO transaction is a substantial win. */
+#define ATA_READ_CACHE_ENTRIES 512
+struct ata_cache_entry {
+    uint32_t sector;
+    uint8_t valid;
+    uint8_t data[ATA_SECTOR_SIZE];
+};
+static struct ata_cache_entry ata_read_cache[ATA_READ_CACHE_ENTRIES];
+static uint32_t ata_cache_next;
+
 
 struct mbr_info fs1;
 static struct mutex ata_mutex;
 static bool ata_init_port();
+
+static void ata_cache_reset(void)
+{
+    for (uint32_t i = 0; i < ATA_READ_CACHE_ENTRIES; i++)
+        ata_read_cache[i].valid = 0;
+    ata_cache_next = 0;
+}
+
+static void ata_cache_invalidate(uint32_t sector)
+{
+    for (uint32_t i = 0; i < ATA_READ_CACHE_ENTRIES; i++) {
+        if (ata_read_cache[i].valid && ata_read_cache[i].sector == sector)
+            ata_read_cache[i].valid = 0;
+    }
+}
 
 uint8_t read_status(void)
 {
@@ -56,6 +82,7 @@ int write_sec(uint32_t sec, void *buffer)
     int i;
     data = buffer;
     acquire_mutex(&ata_mutex);
+    ata_cache_invalidate(sec);
 #ifdef ATA_DEBUG
     print_drive_status();
 #endif
@@ -112,6 +139,14 @@ int read_sec(uint32_t sec, void *buffer)
 #endif
     acquire_mutex(&ata_mutex);
 
+    for (i = 0; i < ATA_READ_CACHE_ENTRIES; i++) {
+        if (ata_read_cache[i].valid && ata_read_cache[i].sector == sec) {
+            memcpy(buffer, ata_read_cache[i].data, ATA_SECTOR_SIZE);
+            release_mutex(&ata_mutex);
+            return 0;
+        }
+    }
+
     outb(PRIMARY + DRIVE_HEAD_REG, 0xE0);
     outb(PRIMARY + ERROR_REG, 0x00);
     // read 1 sectors =0x200
@@ -146,6 +181,12 @@ int read_sec(uint32_t sec, void *buffer)
 #endif
     }
     status = read_status();
+
+    i = (int)ata_cache_next;
+    ata_cache_next = (ata_cache_next + 1) % ATA_READ_CACHE_ENTRIES;
+    ata_read_cache[i].sector = sec;
+    memcpy(ata_read_cache[i].data, buffer, ATA_SECTOR_SIZE);
+    ata_read_cache[i].valid = 1;
     release_mutex(&ata_mutex);
 
     return 0;
@@ -172,6 +213,7 @@ static bool ata_init_port()
     uint16_t part_type;
     bool passed = false;
     char mbr[512];
+    ata_cache_reset();
     kprintf("ATA init\n");
     read_sec(0, mbr);
     part_start = mbr[0x1c6] | mbr[0x1c7] << 8 | mbr[0x1c8] << 16 | mbr[0x1c9] << 24;

@@ -304,7 +304,9 @@ static void puts( char *str) {
         for (char *ptr = str; *ptr != '\0'; ptr++)
             kmsg_putc(*ptr);
     vga_kprintf(str);
+#ifndef KYLEOS_DISABLE_SERIAL_OUTPUT
     serial_kprintf(str);
+#endif
 }
 
 static void putc( char c) {
@@ -314,7 +316,9 @@ static void putc( char c) {
     if (kmsg_capture)
         kmsg_putc(c);
     vga_kprintf(buffer);
+#ifndef KYLEOS_DISABLE_SERIAL_OUTPUT
     serial_kprintf(buffer);
+#endif
 
 }
 

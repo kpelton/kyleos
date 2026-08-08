@@ -10,6 +10,20 @@ output=${TCC_BINARY:-"$root/build/userland/cc"}
 runtime=${TCC_RUNTIME:-"$root/build/extras/tinycc/root"}
 host_cc=${HOST_CC:-gcc}
 
+# The compiler itself is one translation unit (tcc.c), but the target-side
+# runtime objects are independent and can use the parent's make -j setting.
+tcc_jobs=${TCC_JOBS:-}
+if [[ -z $tcc_jobs ]]; then
+    for make_flag in ${MAKEFLAGS:-}; do
+        case $make_flag in
+            --jobs=*[0-9]) tcc_jobs=${make_flag#*=} ;;
+            -j[0-9]*) tcc_jobs=${make_flag#-j} ;;
+            -j|--jobs) tcc_jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1) ;;
+        esac
+    done
+fi
+[[ ${tcc_jobs:-} =~ ^[1-9][0-9]*$ ]] || tcc_jobs=1
+
 [[ -f $source_dir/tcc.c ]] || {
     echo "missing TinyCC source: $source_dir" >&2
     exit 1
@@ -50,12 +64,34 @@ cp -R "$patched_source/include"/. "$runtime/usr/lib/tcc/include/"
 cp -R "$sysroot/include"/. "$runtime/usr/include/"
 cp "$sysroot/lib/libc.a" "$runtime/usr/lib/libc.a"
 cp "$sysroot/lib/libm.a" "$runtime/usr/lib/libm.a"
-"$host_cc" -m64 -O1 -c -ffreestanding -fno-stack-protector \
-    -I "$sysroot/include" "$root/extras/tinycc-kyleos/crt0.c" \
-    -o "$runtime/usr/lib/crt0.o"
-"$host_cc" -m64 -O1 -c -ffreestanding -fno-builtin -fno-stack-protector \
-    "$patched_source/lib/libtcc1.c" -o "$runtime/usr/lib/tcc/libtcc1.o"
-"$host_cc" -m64 -O1 -c -ffreestanding -fno-builtin -fno-stack-protector \
-    "$patched_source/lib/va_list.c" -o "$runtime/usr/lib/tcc/va_list.o"
+build_crt0()
+{
+    "$host_cc" -m64 -O1 -c -ffreestanding -fno-stack-protector \
+        -I "$sysroot/include" "$root/extras/tinycc-kyleos/crt0.c" \
+        -o "$runtime/usr/lib/crt0.o"
+}
+
+build_libtcc1()
+{
+    "$host_cc" -m64 -O1 -c -ffreestanding -fno-builtin -fno-stack-protector \
+        "$patched_source/lib/libtcc1.c" -o "$runtime/usr/lib/tcc/libtcc1.o"
+}
+
+build_va_list()
+{
+    "$host_cc" -m64 -O1 -c -ffreestanding -fno-builtin -fno-stack-protector \
+        "$patched_source/lib/va_list.c" -o "$runtime/usr/lib/tcc/va_list.o"
+}
+
+if (( tcc_jobs > 1 )); then
+    build_crt0 & pid_crt0=$!
+    build_libtcc1 & pid_libtcc1=$!
+    build_va_list & pid_va_list=$!
+    wait "$pid_crt0" "$pid_libtcc1" "$pid_va_list"
+else
+    build_crt0
+    build_libtcc1
+    build_va_list
+fi
 ar rcs "$runtime/usr/lib/tcc/libtcc1.a" \
     "$runtime/usr/lib/tcc/libtcc1.o" "$runtime/usr/lib/tcc/va_list.o"
