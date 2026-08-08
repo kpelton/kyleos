@@ -277,6 +277,7 @@ struct inode *vfs_walk_path(const char *path, struct dnode *pwd)
     // if this a a relative path in local dir
    if (kstrstr(path, ROOT) < 0  ) {
         iptr_ret = vfs_find_file_in_dir(path,dptr);
+        vfs_free_dnode(dptr);
         return iptr_ret;
     }
 
