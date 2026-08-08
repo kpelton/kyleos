@@ -3,6 +3,7 @@
 #include <mm/pmem.h>
 #include <utils/llist.h>
 #include <output/output.h>
+#include <fs/vfs.h>
 
 bool vmm_init()
 {
@@ -24,6 +25,7 @@ struct vmm_map *vmm_map_new()
         new_map->vmm_areas[i] = llist_new();
 
     new_map->total_pages = 0;
+    new_map->backing_file = NULL;
     return new_map;
 }
 
@@ -34,6 +36,8 @@ bool vmm_free(struct vmm_map *map)
         llist_free(map->vmm_areas[i], vmm_map_free_block);
     }
     paging_free_pg_tbl(&map->pagetable);
+    if (map->backing_file != NULL)
+        vfs_close_file(map->backing_file);
     kfree(map);
     return true;
 }
@@ -130,6 +134,12 @@ static void *vmm_share_block(void *data, void *user_data)
 bool vmm_share_section(struct vmm_map *src, struct vmm_map *dst, enum vmm_block_type btype)
 {
     struct vmm_share_context context = { src, dst };
+
+    if (src->backing_file != NULL && dst->backing_file == NULL) {
+        dst->backing_file = vfs_clone_file(src->backing_file);
+        if (dst->backing_file == NULL)
+            return false;
+    }
     llist_copy(src->vmm_areas[btype], dst->vmm_areas[btype], vmm_share_block, &context);
     return true;
 }
@@ -147,6 +157,10 @@ struct vmm_block *vmm_add_new_mapping(struct vmm_map *map, enum vmm_block_type b
     block->free = false;
     block->type = block_type;
     block->demand = false;
+    block->backing_type = VMM_BACKING_ANON;
+    block->file_offset = 0;
+    block->file_vaddr = 0;
+    block->file_size = 0;
 
     if (size > 1)
         block->paddr = pmem_alloc_block(size);
@@ -189,6 +203,75 @@ struct vmm_block *vmm_reserve_mapping(struct vmm_map *map,
     block->type = block_type;
     block->free = false;
     block->demand = true;
+    block->backing_type = VMM_BACKING_ANON;
+    block->file_offset = 0;
+    block->file_vaddr = 0;
+    block->file_size = 0;
+    if (llist_append(map->vmm_areas[block_type], block) == NULL) {
+        kfree(block);
+        return NULL;
+    }
+    return block;
+}
+
+bool vmm_set_backing_file(struct vmm_map *map, struct file *file)
+{
+    if (map == NULL || file == NULL || map->backing_file != NULL)
+        return false;
+    map->backing_file = file;
+    return true;
+}
+
+static bool vmm_range_overlaps(struct vmm_map *map, uint64_t start,
+                               uint64_t size)
+{
+    uint64_t end = start + size * PAGE_SIZE;
+
+    if (end < start)
+        return true;
+    for (int section = 0; section < VMM_SECTION_CNT; section++) {
+        struct llist_node *node = map->vmm_areas[section]->head;
+        while (node != NULL) {
+            struct vmm_block *block = node->data;
+            uint64_t block_start = (uint64_t)block->vaddr;
+            uint64_t block_end = block_start + block->size * PAGE_SIZE;
+            if (start < block_end && block_start < end)
+                return true;
+            node = node->next;
+        }
+    }
+    return false;
+}
+
+struct vmm_block *vmm_reserve_file_mapping(struct vmm_map *map,
+                                           enum vmm_block_type block_type,
+                                           uint64_t *vaddr, uint64_t size,
+                                           uint64_t page_ops,
+                                           uint64_t file_vaddr,
+                                           uint64_t file_offset,
+                                           uint64_t file_size)
+{
+    struct vmm_block *block;
+    uint64_t start = (uint64_t)vaddr;
+
+    if (map == NULL || map->backing_file == NULL ||
+        block_type >= VMM_SECTION_CNT || size == 0 ||
+        vmm_range_overlaps(map, start, size))
+        return NULL;
+    block = kmalloc(sizeof(*block));
+    if (block == NULL)
+        return NULL;
+    block->vaddr = vaddr;
+    block->paddr = NULL;
+    block->size = size;
+    block->page_ops = page_ops & ~PAGE_PRESENT;
+    block->type = block_type;
+    block->free = false;
+    block->demand = true;
+    block->backing_type = VMM_BACKING_FILE;
+    block->file_offset = file_offset;
+    block->file_vaddr = file_vaddr;
+    block->file_size = file_size;
     if (llist_append(map->vmm_areas[block_type], block) == NULL) {
         kfree(block);
         return NULL;
@@ -234,6 +317,31 @@ bool vmm_handle_page_fault(struct vmm_map *map, uint64_t address,
     physical = (uint64_t)pmem_try_alloc_zero_page();
     if (physical == 0)
         return false;
+    if (block->backing_type == VMM_BACKING_FILE) {
+        uint64_t page_end = page + PAGE_SIZE;
+        uint64_t file_start = block->file_vaddr;
+        uint64_t file_end = file_start + block->file_size;
+        uint64_t copy_start = page > file_start ? page : file_start;
+        uint64_t copy_end = page_end < file_end ? page_end : file_end;
+
+        if (map->backing_file == NULL || file_end < file_start) {
+            pmem_free_block(physical);
+            return false;
+        }
+        if (copy_start < copy_end) {
+            uint64_t offset = block->file_offset + copy_start - file_start;
+            uint64_t count = copy_end - copy_start;
+            void *destination = (void *)(KERN_PHYS_TO_PVIRT(physical) +
+                                         copy_start - page);
+            if (offset > 0xffffffffULL ||
+                vfs_read_file_offset(map->backing_file, destination,
+                                     (int)count, (uint32_t)offset) !=
+                    (int)count) {
+                pmem_free_block(physical);
+                return false;
+            }
+        }
+    }
     if (!paging_map_range(&map->pagetable, physical, page, 1,
                           block->page_ops | PAGE_PRESENT)) {
         pmem_free_block(physical);

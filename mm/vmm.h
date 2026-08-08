@@ -5,6 +5,8 @@
 #include <utils/llist.h>
 #include <mm/paging.h>
 
+struct file;
+
 enum vmm_block_type {
     VMM_STACK,
     VMM_TEXT,
@@ -17,6 +19,12 @@ struct vmm_map {
     struct llist *vmm_areas[VMM_SECTION_CNT];
     uint64_t total_pages;
     struct pg_tbl pagetable;
+    struct file *backing_file;
+};
+
+enum vmm_backing_type {
+    VMM_BACKING_ANON,
+    VMM_BACKING_FILE
 };
 
 struct vmm_block {
@@ -27,6 +35,10 @@ struct vmm_block {
     enum vmm_block_type type;
     bool free;
     bool demand;
+    enum vmm_backing_type backing_type;
+    uint64_t file_offset;
+    uint64_t file_vaddr;
+    uint64_t file_size;
 };
 
 //create new vmm_map
@@ -39,6 +51,14 @@ struct vmm_block *vmm_reserve_mapping(struct vmm_map *map,
                                       enum vmm_block_type block_type,
                                       uint64_t *vaddr, uint64_t size,
                                       uint64_t page_ops);
+bool vmm_set_backing_file(struct vmm_map *map, struct file *file);
+struct vmm_block *vmm_reserve_file_mapping(struct vmm_map *map,
+                                           enum vmm_block_type block_type,
+                                           uint64_t *vaddr, uint64_t size,
+                                           uint64_t page_ops,
+                                           uint64_t file_vaddr,
+                                           uint64_t file_offset,
+                                           uint64_t file_size);
 bool vmm_handle_page_fault(struct vmm_map *map, uint64_t address,
                            uint64_t error_code);
 bool vmm_populate_page(struct vmm_map *map, uint64_t address);

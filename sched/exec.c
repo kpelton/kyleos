@@ -20,26 +20,27 @@ void exec_init(){
 int exec_from_inode(struct inode *ifile,bool replace,char **argv)
 {
     acquire_spinlock(&exec_spinlock);
-    //int bytes = 0;
     int i;
     struct elfhdr hdr;
     struct proghdr phdr;
     int retval = -1;
-    uint32_t size = 0;
-    uint64_t vaddr;
-    struct vmm_block *block;
-    uint32_t offset_delta = 0;
     uint64_t page_ops;
     struct vmm_map *map = NULL;
     char name[VFS_MAX_FNAME];
-    bool zero;
+    bool entry_valid = false;
     struct file *rfile = NULL;
 
     rfile = vfs_open_file(ifile,O_RDONLY);
-    vfs_read_file(rfile, &hdr, sizeof(struct elfhdr));
-
-if (hdr.magic == ELF_MAGIC)
-    {
+    if (rfile == NULL ||
+        vfs_read_file(rfile, &hdr, sizeof(struct elfhdr)) != sizeof(struct elfhdr) ||
+        hdr.magic != ELF_MAGIC || hdr.phentsize != sizeof(struct proghdr) ||
+        hdr.phoff > ifile->file_size ||
+        hdr.phnum > (ifile->file_size - hdr.phoff) / sizeof(struct proghdr) ||
+        hdr.phoff + (uint64_t)hdr.phnum * sizeof(struct proghdr) >
+            0x100000000ULL) {
+        kprintf("Not a valid ELF executable!\n");
+        goto out;
+    }
 #ifdef EXEC_DEBUG
         kprintf("Elf ph offset: 0x%x\n", hdr.phoff);
         kprintf("Elf ph count: 0x%x\n", hdr.phnum);
@@ -47,20 +48,26 @@ if (hdr.magic == ELF_MAGIC)
         kprintf("Elf entry offset: 0x%x\n", hdr.entry);
 #endif
     map = vmm_map_new();
+    if (map == NULL || !vmm_set_backing_file(map, rfile))
+        goto fail;
+    /* The address space now owns this reference and releases it in vmm_free. */
+    rfile = NULL;
         for (i = 0; i < hdr.phnum; i++)
         {
-                //acquire_spinlock(&exec_spinlock);
+            uint64_t segment_end;
+            uint64_t map_start;
+            uint64_t map_end;
+            uint64_t file_end;
+            uint64_t pages;
 
-            vfs_read_file_offset(rfile, &phdr, sizeof(struct proghdr), 
-                                         hdr.phoff + (sizeof(struct proghdr) * i));
+            if (vfs_read_file_offset(map->backing_file, &phdr,
+                                     sizeof(struct proghdr),
+                                     hdr.phoff + sizeof(struct proghdr) * i) !=
+                sizeof(struct proghdr))
+                goto fail;
 
-            if (phdr.type != ELF_PROG_LOAD) {
-
-               // r
+            if (phdr.type != ELF_PROG_LOAD)
                 continue;
-            }
-            offset_delta = 0;
-            size = 0;
 #ifdef EXEC_DEBUG
             kprintf("-- %d --\n", i);
             kprintf("  Elf phdr type: 0x%x\n", phdr.type);
@@ -72,63 +79,61 @@ if (hdr.magic == ELF_MAGIC)
             kprintf("  Elf phdr memsz: 0x%x\n", phdr.memsz);
             kprintf("  Elf phdr filesz: 0x%x\n", phdr.filesz);
 #endif
-            if (((phdr.vaddr) & 0x0000000000000fff) != 0UL) {
-                vaddr = phdr.vaddr & 0xfffffffffffff000;
-                offset_delta += phdr.vaddr &0xfff;
-           //     kprintf("not paged aligned\n");
-                size++;
-            }else{
-                vaddr = phdr.vaddr;
-            }
-            size += phdr.memsz/PAGE_SIZE;
-            if (phdr.memsz % PAGE_SIZE != 0)
-                size++;
+            if (phdr.filesz > phdr.memsz || phdr.memsz == 0 ||
+                phdr.vaddr + phdr.memsz < phdr.vaddr ||
+                phdr.off + phdr.filesz < phdr.off)
+                goto fail;
+            segment_end = phdr.vaddr + phdr.memsz;
+            file_end = phdr.off + phdr.filesz;
+            if (file_end > map->backing_file->i_node.file_size ||
+                file_end > 0x100000000ULL ||
+                phdr.vaddr >= KERN_SPACE_BOUNDRY ||
+                segment_end > KERN_SPACE_BOUNDRY)
+                goto fail;
+            if (phdr.align > 1 &&
+                ((phdr.align & (phdr.align - 1)) != 0 ||
+                 ((phdr.vaddr - phdr.off) & (phdr.align - 1)) != 0))
+                goto fail;
+
+            map_start = phdr.vaddr & ~(PAGE_SIZE - 1);
+            if (segment_end > ~0ULL - (PAGE_SIZE - 1))
+                goto fail;
+            map_end = (segment_end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+            pages = (map_end - map_start) / PAGE_SIZE;
             
-            //track pages allocated for program image in stack linked list
             page_ops = USER_PAGE;
-            if ((phdr.flags  & ELF_PROG_FLAG_WRITE) == 0) {
-                //kprintf("Setting phdr.vaddr:%x %d  RO\n",phdr.vaddr,i);
+            if ((phdr.flags & ELF_PROG_FLAG_WRITE) == 0)
                 page_ops = USER_PAGE_RO;
-            }
-            zero = phdr.memsz != phdr.filesz;
-            //kprintf("Calling add map 0x%x, %d\n",vaddr,size);
-            block = vmm_add_new_mapping(map,VMM_TEXT,(uint64_t *)vaddr,size,page_ops,zero,true);
-
-
-#ifdef EXEC_DEBUG
-            kprintf("Reading to %x \n",vaddr+offset_delta);
-#endif
-            vfs_read_file_offset(rfile, (void *)KERN_PHYS_TO_PVIRT((uint8_t*)block->paddr+offset_delta),phdr.filesz,phdr.off);
-#ifdef EXEC_DEBUG
-            kprintf("%x\n", KERN_PHYS_TO_PVIRT(block));
-            kprintf("%x\n", *(uint64_t *)KERN_PHYS_TO_PVIRT(block));
-            kprintf("mapping %x\n",size);
-#endif
-
+            if (vmm_reserve_file_mapping(map, VMM_TEXT,
+                                         (uint64_t *)map_start, pages,
+                                         page_ops, phdr.vaddr, phdr.off,
+                                         phdr.filesz) == NULL)
+                goto fail;
+            if ((phdr.flags & ELF_PROG_FLAG_EXEC) != 0 &&
+                hdr.entry >= phdr.vaddr && hdr.entry < segment_end)
+                entry_valid = true;
         }
-        if (map != NULL){
-
-            if (replace == false){
+        if (!entry_valid)
+            goto fail;
+        if (replace == false){
                retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true,argv,NULL,vfs_get_root_inode(),true);
-//               retval = user_process_add_exec(hdr.entry,ifile->i_name,map,true,argv,NULL,NULL);
-            }else{
+        }else{
                 struct ktask *t = get_current_process();
                 kstrcpy(name,ifile->i_name);
                 vfs_free_inode(ifile);
                 release_spinlock(&exec_spinlock);
                 retval = user_process_replace_exec(t,hdr.entry,name,map,argv,t->cwd);
-            }
+                return retval;
         }
-        release_spinlock(&exec_spinlock);
-    }
-            
-    else
-    {
-        kprintf("Not an ELF executable!\n");
-        release_spinlock(&exec_spinlock);
+        map = NULL;
+        goto out;
 
-    }
-    vfs_close_file(rfile);
-
+fail:
+    if (map != NULL)
+        vmm_free(map);
+out:
+    if (rfile != NULL)
+        vfs_close_file(rfile);
+    release_spinlock(&exec_spinlock);
     return retval;
 }

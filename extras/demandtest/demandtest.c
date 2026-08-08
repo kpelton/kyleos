@@ -8,6 +8,25 @@
 #define HEAP_PAGES 256
 #define STACK_PAGES 12
 
+static const unsigned char file_backed_data[PAGE_SIZE * 3] = {
+    [0] = 0x19,
+    [PAGE_SIZE] = 0x42,
+    [PAGE_SIZE * 3 - 1] = 0xa7,
+};
+static volatile unsigned char demand_bss[PAGE_SIZE * 2];
+
+static int test_exec_pages(void)
+{
+    if (file_backed_data[0] != 0x19 ||
+        file_backed_data[PAGE_SIZE] != 0x42 ||
+        file_backed_data[PAGE_SIZE * 3 - 1] != 0xa7)
+        return -1;
+    if (demand_bss[0] != 0 || demand_bss[PAGE_SIZE * 2 - 1] != 0)
+        return -1;
+    demand_bss[PAGE_SIZE * 2 - 1] = 0x5c;
+    return demand_bss[PAGE_SIZE * 2 - 1] == 0x5c ? 0 : -1;
+}
+
 static int test_stack(void)
 {
     volatile unsigned char stack[STACK_PAGES * PAGE_SIZE];
@@ -25,6 +44,11 @@ int main(void)
     unsigned char *heap = sbrk(HEAP_PAGES * PAGE_SIZE);
     pid_t child;
     int status = 0;
+
+    if (test_exec_pages() < 0) {
+        puts("FAIL demand exec pages");
+        return 1;
+    }
 
     if (heap == (void *)-1) {
         puts("FAIL demand heap reserve");
