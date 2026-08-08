@@ -18,6 +18,12 @@ LUA_BINARY ?= $(KERNEL_ROOT)/build/extras/lua/lua
 LUA_INPUTS := $(wildcard $(LUA_SOURCE)/*.[ch]) $(LUA_SOURCE)/Makefile
 BIBLE_TEXT ?= $(KERNEL_ROOT)/assets/bible.txt
 SERIAL_OUTPUT ?= 1
+GRUB_ISO_DIR := $(KERNEL_ROOT)/build/grub-iso
+GRUB_CFG := $(KERNEL_ROOT)/boot/grub/grub.cfg
+
+GRUB_ISO_DIR := $(KERNEL_ROOT)/boot/grub-iso
+GRUB_CFG := $(KERNEL_ROOT)/boot/grub.cfg
+
 ifneq (,$(wildcard config.mk))
 include config.mk
 endif
@@ -38,7 +44,7 @@ OBJ_FILES = asm/asm.o asm/asm_calls.o \
 	init/kernel.o init/tables.o init/dshell.o init/loader.o init/syscall.o \
 	irq/irq.o \
 	locks/spinlock.o locks/mutex.o \
-	mm/paging.o mm/mm.o mm/pmem.o mm/vmm.o \
+	mm/paging.o mm/mm.o mm/pmem.o mm/vmm.o mm/mtrr.o \
 	output/keyboard.o output/uart.o output/vga.o output/framebuffer.o \
 	output/output.o output/input.o \
 	sched/sched.o sched/ps.o sched/exec.o \
@@ -91,7 +97,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc bootstrap-cc doom doom-image image image-reset image-mount image-unmount image-copy
+.PHONY: toolchain userland userinit kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc bootstrap-cc doom doom-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -224,10 +230,20 @@ debug-nox: kernel32.bin
 
 gdb: kernel.bin
 	gdb -ex "target remote localhost:1234" kernel.bin
-iso: kernel.bin
-	cp kernel.bin iso
-	grub-mkrescue -o bootable.iso iso
-iso-test: bootable.iso
-	qemu-system-x86_64 -m 60M -cdrom bootable.iso  -serial stdio
+
+
+iso: kernel.bin $(GRUB_CFG)
+	rm -rf $(GRUB_ISO_DIR)
+	mkdir -p $(GRUB_ISO_DIR)/boot/grub
+	cp kernel.bin $(GRUB_ISO_DIR)/boot/kernel.bin
+	cp $(GRUB_CFG) $(GRUB_ISO_DIR)/boot/grub/grub.cfg
+	grub-mkrescue -o bootable.iso $(GRUB_ISO_DIR)
+
+iso-test: iso
+	qemu-system-x86_64 \
+		-m 60M \
+		-cdrom bootable.iso \
+		-serial stdio
+
 test-suite:kernel.bin
 	bash test.sh 2>/dev/null

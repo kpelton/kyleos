@@ -21,7 +21,14 @@
 #define SILVER_PRIMARY 0x30c8
 //qemu
 #define QEMU_PRIMARY 0x1f0
-uint16_t ATA_PORTS[] = {PINK_PRIMARY,SILVER_PRIMARY,QEMU_PRIMARY};
+uint16_t ATA_PORTS[] = {
+    0x9060,
+    0x9068,
+    0x9070,
+    0x9078,
+    0x1f0,
+    0x170,
+};
 //Global to control hdd
 static int PRIMARY = 0;
 

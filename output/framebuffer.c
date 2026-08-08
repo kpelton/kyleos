@@ -3,6 +3,8 @@
 #include <mm/paging.h>
 #include <output/output.h>
 #include <output/vga.h>
+#include <include/multiboot.h>
+#include <mm/mtrr.h>
 
 /* QEMU's std VGA exposes the Bochs VBE extension on these ports. */
 #define BGA_INDEX_PORT  0x1ce
@@ -65,9 +67,65 @@ static uint32_t find_vga_framebuffer(void)
     }
     return 0;
 }
-
-void framebuffer_init(void)
+void *f_memcpy(void *dest, const void *src, int n)
 {
+    void *ret = dest;
+
+    __asm__ volatile (
+        "rep movsb"
+        : "+D"(dest),
+          "+S"(src),
+          "+c"(n)
+        :
+        : "memory"
+    );
+
+    return ret;
+}
+
+void framebuffer_init(uint64_t mb_info)
+{
+    multiboot_info_t *mb = (multiboot_info_t *)mb_info;
+
+    if (mb->flags & MULTIBOOT_INFO_FRAMEBUFFER_INFO) {
+        uint64_t phys = mb->framebuffer_addr;
+
+        fb_width  = mb->framebuffer_width;
+        fb_height = mb->framebuffer_height;
+        fb_pitch  = mb->framebuffer_pitch;
+        fb_size   = fb_pitch * fb_height;
+
+        kprintf("GRUB framebuffer\n");
+        kprintf("addr=%x\n", phys);
+        kprintf("%dx%d bpp=%d pitch=%d\n",
+                fb_width,
+                fb_height,
+                mb->framebuffer_bpp,
+                fb_pitch);
+
+        if (mb->framebuffer_bpp != 32) {
+            kprintf("unsupported framebuffer bpp\n");
+            return;
+        }
+        // setup WC MTRR to speed up FB
+        fb_size = fb_pitch * fb_height;
+
+        if (!mtrr_set_write_combining(phys, fb_size))
+            kprintf("Framebuffer: unable to enable MTRR WC\n");
+
+        uint32_t pages =
+            (fb_size + PAGE_SIZE - 1) / PAGE_SIZE;
+
+        paging_map_physmap_range(phys, pages);
+
+        framebuffer =
+            (uint8_t *)KERN_PHYS_TO_PVIRT(phys);
+        framebuffer_clear(0x00000000);
+        vga_framebuffer_ready();
+
+        return;
+    }
+
     uint32_t phys_base;
     uint32_t pages;
     uint16_t bga_id = bga_read(BGA_ID);
@@ -125,12 +183,76 @@ void framebuffer_fill_rect(uint32_t x, uint32_t y, uint32_t width,
 
 int framebuffer_present(const void *pixels, uint32_t bytes)
 {
-    if (framebuffer == NULL || pixels == NULL || bytes < fb_size)
+    const uint32_t src_width  = 640;
+    const uint32_t src_height = 400;
+    const uint32_t src_pitch  = src_width * 4;
+    const uint32_t src_size   = src_pitch * src_height;
+
+    if (framebuffer == NULL || pixels == NULL)
         return -1;
-    memcpy(framebuffer, pixels, fb_size);
+
+    if (bytes < src_size)
+        return -1;
+
+    uint32_t copy_width =
+        src_width < fb_width ? src_width : fb_width;
+
+    uint32_t copy_height =
+        src_height < fb_height ? src_height : fb_height;
+
+    uint32_t xoff =
+        fb_width > copy_width
+            ? (fb_width - copy_width) / 2
+            : 0;
+
+    uint32_t yoff =
+        fb_height > copy_height
+            ? (fb_height - copy_height) / 2
+            : 0;
+
+    uint8_t *dst =
+        framebuffer +
+        yoff * fb_pitch +
+        xoff * 4;
+
+    const uint8_t *src =
+        (const uint8_t *)pixels;
+
+    uint32_t bytes_per_row = copy_width * 4;
+
+    /*
+     * Fast path:
+     *
+     * If the source and destination rows have the same pitch,
+     * copy the entire image in one operation.
+     */
+    if (fb_pitch == src_pitch &&
+        xoff == 0 &&
+        copy_width == src_width &&
+        copy_height == src_height) {
+
+        f_memcpy(dst,
+               src,
+               src_pitch * src_height);
+
+        return 0;
+    }
+
+    /*
+     * General path for a framebuffer with a different pitch
+     * or a centered Doom image.
+     */
+    for (uint32_t y = 0; y < copy_height; y++) {
+        f_memcpy(dst,
+               src,
+               bytes_per_row);
+
+        dst += fb_pitch;
+        src += src_pitch;
+    }
+
     return 0;
 }
-
 uint32_t framebuffer_width(void) { return fb_width; }
 uint32_t framebuffer_height(void) { return fb_height; }
 uint32_t framebuffer_pitch(void) { return fb_pitch; }

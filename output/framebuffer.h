@@ -4,7 +4,7 @@
 #include <include/types.h>
 
 /* Called after paging is fully initialized. */
-void framebuffer_init(void);
+void framebuffer_init(uint64_t mb_info);
 int framebuffer_present(const void *pixels, uint32_t bytes);
 uint32_t framebuffer_width(void);
 uint32_t framebuffer_height(void);

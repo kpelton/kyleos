@@ -32,16 +32,34 @@ void outb( uint16_t port, uint8_t val ) {
 void outl( uint16_t port, uint32_t val ) {
     asm volatile( "outl %0, %1" : : "a"(val), "Nd"(port) );
 }
-inline void wrmsr(uint32_t msr_id, uint32_t msr_value)
+
+void wrmsr(uint32_t msr_id, uint64_t value)
 {
-    asm volatile ( "wrmsr" : : "c" (msr_id), "A" (msr_value) );
+    uint32_t low = (uint32_t)value;
+    uint32_t high = (uint32_t)(value >> 32);
+
+    asm volatile(
+        "wrmsr"
+        :
+        : "c"(msr_id), "a"(low), "d"(high)
+        : "memory"
+    );
 }
-inline uint32_t rdmsr(uint32_t msr_id)
+
+uint64_t rdmsr(uint32_t msr_id)
 {
-    uint32_t msr_value;
-    asm volatile ( "rdmsr" : "=A" (msr_value) : "c" (msr_id) );
-    return msr_value;
+    uint32_t low;
+    uint32_t high;
+
+    asm volatile(
+        "rdmsr"
+        : "=a"(low), "=d"(high)
+        : "c"(msr_id)
+    );
+
+    return ((uint64_t)high << 32) | low;
 }
+
 
 void io_wait( void ) {
 

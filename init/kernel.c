@@ -14,11 +14,15 @@
 #include <include/multiboot.h>
 #include <include/types.h>
 #include <sched/exec.h>
+#include <mm/mtrr.h>
 #define STACK_PAGES 256
 //#define DSHELL_EN
 #define INIT "/sbin/init"
 #define SHELL "/bin/nushell"
 #define LEGACY_SHELL "nushell"
+
+//copy before switching paging mode
+static multiboot_info_t boot_info;
 static void idle_loop()
 {
     for(;;) {
@@ -63,7 +67,7 @@ static void kernel(void)
         asm("sti;hlt");
 }
 
-static void kinit(void)
+static void kinit(uint64_t mb_info)
 {
     klog("Booting.......\n");
     klog("Kyle OS.......\n");
@@ -79,7 +83,7 @@ static void kinit(void)
     klog("Phys mem init done\n");
     paging_enable_protected();
     mm_init();
-    framebuffer_init();
+    framebuffer_init(mb_info);
     klog("Allocating stack\n");
     uint64_t kernel_stack = KERN_PHYS_TO_VIRT(pmem_alloc_block(STACK_PAGES));
     paging_map_kernel_range(KERN_VIRT_TO_PHYS(kernel_stack),STACK_PAGES);
@@ -94,6 +98,7 @@ static void kinit(void)
     sched_init();
     fpu_init();
     ramfs_init();
+    mtrr_dump();
     kernel();
 }
 
@@ -105,7 +110,7 @@ void kmain(uint64_t  mb_info, uint64_t multiboot_magic)
 
     if (multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC)
         panic("MULTIBOOT_BOOTLOADER_MAGIC was not passed to kernel correctly");
-
+    boot_info = *(multiboot_info_t *)mb_info;
     phys_mem_early_init(mb_info);
-    kinit();
+    kinit((uint64_t)&boot_info);
 }

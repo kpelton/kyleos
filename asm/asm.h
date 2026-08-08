@@ -36,7 +36,6 @@ void outw( uint16_t port,uint16_t val );
 void outl( uint16_t port,uint32_t val );
 void io_wait( void );
 struct RegDump dump_regs();
-uint32_t rdmsr(uint32_t msr_id);
 void tss_flush();
 void jump_usermode();
 void fpu_init();
@@ -45,5 +44,7 @@ void fpu_restore_context(uint64_t *ptr);
 
 uint64_t get_flags_reg();
 
-void wrmsr (uint32_t msr_id, uint32_t msr_value);
+
+uint64_t rdmsr(uint32_t msr_id);
+void wrmsr(uint32_t msr_id, uint64_t msr_value);
 #endif

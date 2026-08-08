@@ -5,23 +5,35 @@ BITS 32
 extern kmain                            ; kmain is defined in kmain.cpp
 
 section .multiboot.data
-; Declare constants for the multiboot header.
-MBALIGN  equ  1<<0              ; align loaded modules on page boundaries
-MEMINFO  equ  1<<1              ; provide memory map
-FLAGS    equ  MBALIGN | MEMINFO ; this is the Multiboot 'flag' field
-MAGIC    equ  0x1BADB002        ; 'magic number' lets bootloader find the header
-CHECKSUM equ -(MAGIC + FLAGS)   ; checksum of above, to prove we are multiboot
- 
-; Declare a multiboot header that marks the program as a kernel. These are magic
-; values that are documented in the multiboot standard. The bootloader will
-; search for this signature in the first 8 KiB of the kernel file, aligned at a
-; 32-bit boundary. The signature is in its own section so the header can be
-; forced to be within the first 8 KiB of the kernel file.
+
+MBALIGN  equ 1<<0
+MEMINFO  equ 1<<1
+VIDEO    equ 1<<2
+
+FLAGS    equ MBALIGN | MEMINFO | VIDEO
+MAGIC    equ 0x1BADB002
+CHECKSUM equ -(MAGIC + FLAGS)
+
 align 4
     dd MAGIC
     dd FLAGS
     dd CHECKSUM
- 
+
+    ; Address fields.
+    ; Required to occupy these positions in the Multiboot header even
+    ; though MULTIBOOT_AOUT_KLUDGE is NOT enabled.
+    dd 0                    ; header_addr
+    dd 0                    ; load_addr
+    dd 0                    ; load_end_addr
+    dd 0                    ; bss_end_addr
+    dd 0                    ; entry_addr
+
+    ; Video mode request
+    dd 0                    ; mode_type: 0 = graphics
+    dd 640                 ; width
+    dd 480                  ; height
+    dd 32                   ; depth
+
 section .multiboot.text
 align 4
 ; reserve initial kernel stack space
