@@ -20,9 +20,14 @@ void kthread_add(void (*fptr)(),char * name);
 void schedule();
 void sched_stats();
 void ksleepm(uint32_t ms);
+void sched_sleep_on(void *channel);
+bool sched_sleep_on_if(void *channel, volatile int *condition);
+void sched_wakeup(void *channel);
+void sched_wakeup_one(void *channel);
 struct ktask* get_current_process();
 struct ktask *sched_get_process(int pid);
 int sched_reap_child(int parent_pid, int requested_pid, int *exit_code);
+int sched_wait_child(int parent_pid, int requested_pid, int *exit_code);
 bool sched_process_kill(int pid,bool cleanup,bool closefiles);
 int user_process_fork();
 void sched_save_context(uint64_t rip, uint64_t rsp);
@@ -71,6 +76,7 @@ struct ktask{
     struct file *open_fds[MAX_TASK_OPEN_FILES];
     uint64_t fxsave_region[FXSAVE_SIZE/sizeof(uint64_t)] __attribute__((aligned(16)));
     struct inode *cwd;
+    void *wait_channel;
 
 };
 

@@ -144,7 +144,9 @@ int process_wait(int pid, int *status, int options)
         return -1;
     while (1) {
         int exit_code = 0;
-        int result = sched_reap_child(current->pid, pid, &exit_code);
+        int result = (options & 1)
+                   ? sched_reap_child(current->pid, pid, &exit_code)
+                   : sched_wait_child(current->pid, pid, &exit_code);
 
         if (result != 0)
             {
@@ -154,8 +156,5 @@ int process_wait(int pid, int *status, int options)
             }
         if (options & 1)
             return 0;
-        /* The shell waits here after every foreground command.  A 100 ms
-         * polling interval made even a cached `ls` feel delayed. */
-        ksleepm(10);
     }
 }

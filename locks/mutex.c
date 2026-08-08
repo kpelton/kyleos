@@ -5,17 +5,17 @@
 #include <sched/sched.h>
 int acquire_mutex(struct mutex *s)
 {
-    while (__sync_val_compare_and_swap (&(s->lock), 0, 1) != 0)
-    {
-        ksleepm(1);
+    while (__sync_val_compare_and_swap (&(s->lock), 0, 1) != 0) {
+        if (!sched_sleep_on_if(s, &(s->lock)))
+            asm volatile("pause");
     }
-
-        return 0;
+    return 0;
 }
 
 int release_mutex(struct mutex *s)
 {
     __sync_val_compare_and_swap (&(s->lock), 1, 0);
+    sched_wakeup_one(s);
     return 0;
 }
 

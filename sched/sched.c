@@ -35,6 +35,70 @@ void ksleepm(uint32_t ms)
     // asm("sti");
 }
 
+void sched_sleep_on(void *channel)
+{
+    struct ktask *process = get_current_process();
+    if (process == NULL || channel == NULL)
+        return;
+    acquire_spinlock(&sched_spinlock);
+    process->wait_channel = channel;
+    process->state = TASK_BLOCKED;
+    release_spinlock(&sched_spinlock);
+    schedule();
+    process->wait_channel = NULL;
+}
+
+void sched_wakeup(void *channel)
+{
+    if (channel == NULL)
+        return;
+    acquire_spinlock(&sched_spinlock);
+    for (int i = 0; i < SCHED_MAX_TASKS; i++)
+        if (ktasks[i].pid != -1 && ktasks[i].state == TASK_BLOCKED &&
+            ktasks[i].wait_channel == channel) {
+            ktasks[i].wait_channel = NULL;
+            ktasks[i].state = TASK_READY;
+        }
+    release_spinlock(&sched_spinlock);
+}
+
+bool sched_sleep_on_if(void *channel, volatile int *condition)
+{
+    struct ktask *process = get_current_process();
+    if (process == NULL || channel == NULL)
+        return false;
+    /* Never try to reacquire the scheduler lock from a context that is
+     * already inside scheduler-locked teardown (or another CPU's critical
+     * section).  The caller can safely retry; this is the mutex fast-spin
+     * fallback and avoids a self-deadlock. */
+    if (__sync_val_compare_and_swap(&sched_spinlock.lock, 0, 0) != 0)
+        return false;
+    acquire_spinlock(&sched_spinlock);
+    if (condition != NULL && *condition == 0) {
+        release_spinlock(&sched_spinlock);
+        return false;
+    }
+    process->wait_channel = channel;
+    process->state = TASK_BLOCKED;
+    release_spinlock(&sched_spinlock);
+    schedule();
+    process->wait_channel = NULL;
+    return true;
+}
+
+void sched_wakeup_one(void *channel)
+{
+    if (channel == NULL)
+        return;
+    for (int i = 0; i < SCHED_MAX_TASKS; i++)
+        if (ktasks[i].pid != -1 && ktasks[i].state == TASK_BLOCKED &&
+            ktasks[i].wait_channel == channel) {
+            ktasks[i].wait_channel = NULL;
+            ktasks[i].state = TASK_READY;
+            break;
+        }
+}
+
 void sched_init()
 {
     int i;
@@ -68,6 +132,21 @@ static void clear_fd_table(struct ktask *t)
         t->open_fds[j] = NULL;
 }
 
+static void init_fpu_context(struct ktask *t)
+{
+    uint8_t *state = (uint8_t *)t->fxsave_region;
+
+    for (int i = 0; i < FXSAVE_SIZE; i++)
+        state[i] = 0;
+
+    /* Architectural reset state: mask all x87/SSE exceptions and use
+     * round-to-nearest.  fxrstor on a zeroed MXCSR would unmask every SIMD
+     * exception, causing ordinary floating-point code to raise #XM. */
+    *(uint16_t *)(state + 0) = 0x037f;  /* x87 control word */
+    *(uint32_t *)(state + 24) = 0x1f80; /* MXCSR */
+    *(uint32_t *)(state + 28) = 0xffff; /* MXCSR_MASK */
+}
+
 void kthread_add(void (*fptr)(), char *name)
 {
     struct ktask *t;
@@ -85,6 +164,7 @@ void kthread_add(void (*fptr)(), char *name)
     t->pid = pid;
     t->type = KERNEL_PROCESS;
     t->timer.state = TIMER_UNUSED;
+    t->wait_channel = NULL;
     kstrcpy(t->name, name);
     t->context_switches = 0;
     t->parent = -1;
@@ -93,9 +173,7 @@ void kthread_add(void (*fptr)(), char *name)
 
 struct ktask *get_current_process()
 {
-    struct ktask *val;
-    val = &ktasks[prev_task];
-    return val;
+    return &ktasks[prev_task];
 }
 
 struct ktask *sched_get_process(int pid)
@@ -143,6 +221,7 @@ int user_process_fork()
     t->state = TASK_READY;
     t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
+    t->wait_channel = NULL;
     t->start_stack = (uint64_t *)((uint64_t)t->stack_alloc + KTHREAD_STACK_SIZE) - 8;
     t->user_start_stack = curr->user_start_stack;
     t->pid = pid;
@@ -152,6 +231,8 @@ int user_process_fork()
     t->user_heap_loc = curr->user_heap_loc;
     t->heap_size = curr->heap_size;
     kstrcpy(t->name, curr->name);
+    for (int j = 0; j < FXSAVE_SIZE / (int)sizeof(uint64_t); j++)
+        t->fxsave_region[j] = curr->fxsave_region[j];
 
     t->s_rbp = (uint64_t *)curr->s_rbp;
     t->s_rsp = (uint64_t *)t->start_stack;
@@ -273,6 +354,8 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     t->s_rbp = t->user_start_stack;
     t->type = USER_PROCESS;
     t->timer.state = TIMER_UNUSED;
+    t->wait_channel = NULL;
+    init_fpu_context(t);
     kstrcpy(t->name, name);
     if (update_pid)
     {
@@ -369,6 +452,12 @@ bool sched_process_kill(int pid, bool cleanup, bool close_files)
                     }
             }
             t->state = TASK_DONE;
+            for (j = 0; j < SCHED_MAX_TASKS; j++)
+                if (ktasks[j].pid == t->parent &&
+                    ktasks[j].wait_channel == &ktasks[j]) {
+                    ktasks[j].wait_channel = NULL;
+                    ktasks[j].state = TASK_READY;
+                }
             // TODO: have init process handle reaping all pids and update children PIDs
             if (cleanup == true || t->parent <= 0)
                 t->pid = -1;
@@ -423,6 +512,38 @@ int sched_reap_child(int parent_pid, int requested_pid, int *exit_code)
     return found ? 0 : -1;
 }
 
+int sched_wait_child(int parent_pid, int requested_pid, int *exit_code)
+{
+    struct ktask *parent = get_current_process();
+    bool found = false;
+    acquire_spinlock(&sched_spinlock);
+    for (int i = 0; i < SCHED_MAX_TASKS; i++) {
+        struct ktask *child = &ktasks[i];
+        if (child->pid == -1 || child->parent != parent_pid ||
+            (requested_pid != -1 && child->pid != requested_pid))
+            continue;
+        found = true;
+        if (child->state == TASK_DONE) {
+            int reaped = child->pid;
+            if (exit_code != NULL)
+                *exit_code = child->exit_code;
+            child->pid = -1;
+            release_spinlock(&sched_spinlock);
+            return reaped;
+        }
+    }
+    if (!found) {
+        release_spinlock(&sched_spinlock);
+        return -1;
+    }
+    parent->wait_channel = parent;
+    parent->state = TASK_BLOCKED;
+    release_spinlock(&sched_spinlock);
+    schedule();
+    parent->wait_channel = NULL;
+    return 0;
+}
+
 
 void sched_stats()
 {
@@ -474,7 +595,8 @@ static int find_next_task(int current_task)
     {
 
         i = (i + 1) % SCHED_MAX_TASKS;
-        if (ktasks[i].pid != -1 && ktasks[i].state != TASK_DONE)
+        if (ktasks[i].pid != -1 && ktasks[i].state != TASK_BLOCKED &&
+            ktasks[i].state != TASK_DONE)
         {
             found_task = i;
         }
@@ -510,9 +632,11 @@ void schedule()
     bool skip_idle = false;
     uint64_t resume_func;
 
-    if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_NEW && ktasks[prev_task].state != TASK_DONE)
+    if (prev_task != -1 && ktasks[prev_task].state != TASK_NEW &&
+        ktasks[prev_task].state != TASK_DONE)
     {
-        ktasks[prev_task].state = TASK_READY;
+        if (ktasks[prev_task].state != TASK_BLOCKED)
+            ktasks[prev_task].state = TASK_READY;
         // save old stack
         asm volatile("movq %%rsp ,%0"
                      : "=g"(ktasks[prev_task].s_rsp));
@@ -522,9 +646,11 @@ void schedule()
     while (success == false)
     {
         // only set to ready if someone else has not changed the state
-        if (prev_task != -1 && ktasks[prev_task].state != TASK_BLOCKED && ktasks[prev_task].state != TASK_NEW && ktasks[prev_task].state != TASK_DONE)
+        if (prev_task != -1 && ktasks[prev_task].state != TASK_NEW &&
+            ktasks[prev_task].state != TASK_DONE)
         {
-            ktasks[prev_task].state = TASK_READY;
+            if (ktasks[prev_task].state != TASK_BLOCKED)
+                ktasks[prev_task].state = TASK_READY;
             // save old stack
         }
 

@@ -310,11 +310,26 @@ grep "Moses" /usr/share/text/bible.txt | grep "said"
   conventional 8.3-compatible names.
 - No hard links, symlinks, full terminal/termios support, or configurable
   shell environment.
-- The scheduler wait path is polling-based; it is tuned for responsiveness,
-  not yet a full wait-queue implementation.
+- Channel wait queues are implemented for blocking `waitpid` and mutex
+  contention; broader wait-queue coverage and cancellation are still pending.
 - Copy-on-write currently uses full TLB flushes at process switches and has no
   swap, page eviction, file-backed `mmap`, shared-memory mappings, or a
   copy-on-write page cache. ELF load segments that overlap at page granularity
   are rejected rather than merged.
 - The userspace and Newlib source relocation described above is still in
   progress.
+
+## Sleep channels (KyleOS and xv6)
+
+KyleOS follows the xv6 pattern of associating a blocked task with an opaque
+channel pointer.  A waiter records its channel and changes to `BLOCKED`; the
+matching `wakeup` operation marks it `READY`, and the scheduler resumes it.
+`waitpid` uses the parent task as its channel, while mutexes use the mutex
+address.
+
+The important difference is lock ordering.  xv6 serializes the sleep/wakeup
+transition with its process-table lock.  KyleOS uses `sched_spinlock` for the
+same transition and refuses to sleep when that lock is already held, falling
+back to `pause` until the critical section ends.  This prevents recursive
+scheduler-lock deadlocks during process teardown.  Wake-one is used for
+mutexes; wait-channel wakeups scan all matching sleepers.
