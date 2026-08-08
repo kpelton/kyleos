@@ -6,12 +6,13 @@ has a framebuffer-capable DoomGeneric port.
 
 ## Features
 
-- x86-64 long mode, demand-zero heap and stack paging, physical-memory
-  allocation, and a 16-byte-aligned
+- x86-64 long mode, demand-zero heap and stack paging, lazy file-backed ELF
+  executable paging, physical-memory allocation, and a 16-byte-aligned
   first-fit kernel heap with block splitting, adjacent-block coalescing, and
   corruption checks.
 - Preemptive round-robin scheduling with user processes, copy-on-write
-  `fork`, `exec`, `wait`, file descriptors, and standard input/output/error.
+  `fork`, demand-paged `exec`, `wait`, file descriptors, and standard
+  input/output/error.
 - A userspace `/sbin/init` running as PID 1, with orphan adoption, child
   reaping, and automatic console-shell restart.
 - FAT32 root filesystem plus separate RAM filesystems at `/dev` and `/tmp`.
@@ -204,9 +205,10 @@ shell:
 nushell < /tests/gp-fault.sh
 ```
 
-The demand-paging regression reserves a sparse heap, grows the stack, checks
-zero-filled pages and copy-on-write isolation, and then exhausts userspace
-memory to verify that the kernel kills only the allocating process:
+The demand-paging regression checks lazy file-backed executable pages and
+zero-filled BSS, reserves a sparse heap, grows the stack, checks zero-filled
+pages and copy-on-write isolation, and then exhausts userspace memory to
+verify that the kernel kills only the allocating process:
 
 ```sh
 nushell < /tests/demand-paging.sh
@@ -311,6 +313,8 @@ grep "Moses" /usr/share/text/bible.txt | grep "said"
 - The scheduler wait path is polling-based; it is tuned for responsiveness,
   not yet a full wait-queue implementation.
 - Copy-on-write currently uses full TLB flushes at process switches and has no
-  swap, shared-memory mappings, or copy-on-write page cache.
+  swap, page eviction, file-backed `mmap`, shared-memory mappings, or a
+  copy-on-write page cache. ELF load segments that overlap at page granularity
+  are rejected rather than merged.
 - The userspace and Newlib source relocation described above is still in
   progress.
