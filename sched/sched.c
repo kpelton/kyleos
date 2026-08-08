@@ -78,18 +78,31 @@ bool sched_sleep_on_if(void *channel, volatile int *condition)
         release_spinlock(&sched_spinlock);
         return false;
     }
+
+    /* Publish the channel before BLOCKED.  A concurrent wake either sees
+     * this waiter, or completes before the condition recheck below. */
     process->wait_channel = channel;
+    __sync_synchronize();
     process->state = TASK_BLOCKED;
+    __sync_synchronize();
+
+    /* Close the lost-wakeup window: if the condition cleared while the wait
+     * state was being published, cancel the sleep instead of blocking after
+     * the corresponding wakeup has already passed. */
+    if (condition != NULL && *condition == 0) {
+        process->state = TASK_READY;
+        process->wait_channel = NULL;
+        release_spinlock(&sched_spinlock);
+        return false;
+    }
     release_spinlock(&sched_spinlock);
     schedule();
     process->wait_channel = NULL;
     return true;
 }
 
-void sched_wakeup_one(void *channel)
+static void sched_wakeup_one_locked(void *channel)
 {
-    if (channel == NULL)
-        return;
     for (int i = 0; i < SCHED_MAX_TASKS; i++)
         if (ktasks[i].pid != -1 && ktasks[i].state == TASK_BLOCKED &&
             ktasks[i].wait_channel == channel) {
@@ -97,6 +110,28 @@ void sched_wakeup_one(void *channel)
             ktasks[i].state = TASK_READY;
             break;
         }
+}
+
+void sched_wakeup_one(void *channel)
+{
+    bool lock_already_held;
+
+    if (channel == NULL)
+        return;
+
+    /* KyleOS currently schedules on one CPU.  A set scheduler lock therefore
+     * means this CPU is already inside a scheduler critical section (notably
+     * process teardown), so reacquiring it would self-deadlock.  Normal wake
+     * calls acquire the lock here; teardown uses the already-held lock. */
+    lock_already_held =
+        __sync_val_compare_and_swap(&sched_spinlock.lock, 0, 0) != 0;
+    if (!lock_already_held)
+        acquire_spinlock(&sched_spinlock);
+
+    sched_wakeup_one_locked(channel);
+
+    if (!lock_already_held)
+        release_spinlock(&sched_spinlock);
 }
 
 void sched_init()
