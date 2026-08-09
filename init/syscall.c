@@ -626,8 +626,6 @@ static int rename(char *old_path, char *new_path)
     if (old_dir == NULL)
         return -1;
     source = vfs_walk_path(old_path, old_dir);
-    if (kstrstr(old_path, ROOT) < 0)
-        vfs_free_dnode(old_dir);
     if (source == NULL)
         return -1;
 
@@ -666,8 +664,6 @@ static int rename(char *old_path, char *new_path)
         vfs_free_dnode(new_dir);
     } else {
         parent = vfs_walk_path(parent_path, new_dir);
-        if (kstrstr(parent_path, ROOT) < 0)
-            vfs_free_dnode(new_dir);
     }
     if (parent == NULL) {
         kfree(new_copy);

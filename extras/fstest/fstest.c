@@ -51,6 +51,7 @@ int main(void)
     const char *fat_child = "/fsfull/child";
     const char *tmp_dir = "/tmp/fstest";
     const char *tmp_file = "/tmp/fstest/data";
+    const char *tmp_moved = "/tmp/fstest/moved";
     const char *tmp_empty = "/tmp/fstest/empty";
     const char *tmp_full = "/tmp/fstest/full";
     const char *tmp_child = "/tmp/fstest/full/child";
@@ -66,6 +67,7 @@ int main(void)
     kyleos_rmdir(fat_child);
     kyleos_rmdir(fat_full);
     unlink(tmp_file);
+    unlink(tmp_moved);
     kyleos_rmdir(tmp_empty);
     kyleos_rmdir(tmp_child);
     kyleos_rmdir(tmp_full);
@@ -117,7 +119,12 @@ int main(void)
         close(fd);
     }
     check("tmp read", file_contains(tmp_file, "ram", 3));
-    check("tmp unlink", unlink(tmp_file) == 0);
+    check("tmp chdir", chdir(tmp_dir) == 0);
+    check("tmp relative rename", rename("data", "moved") == 0);
+    check("tmp relative rename source gone", stat("data", &st) < 0);
+    check("tmp relative rename destination", file_contains("moved", "ram", 3));
+    check("root chdir", chdir("/") == 0);
+    check("tmp unlink", unlink(tmp_moved) == 0);
 
     check("empty directory mkdir", mkdir(tmp_empty, 0) == 0);
     check("empty directory rmdir", kyleos_rmdir(tmp_empty) == 0);
