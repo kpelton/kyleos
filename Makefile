@@ -1,6 +1,6 @@
 CC	?= gcc
 .DEFAULT_GOAL := all
-OPT ?= -O0
+OPT ?= -O2
 AS = nasm
 ASFLAGS = -f elf64
 KERNEL_ROOT=$(shell pwd)
