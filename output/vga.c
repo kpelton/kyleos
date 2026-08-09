@@ -4,8 +4,13 @@
 #include <asm/asm.h>
 #include <output/font.h>
 
+#ifndef LEGACY_EN
+#define COLS 128
+#define ROWS 48
+#else
 #define COLS 80
 #define ROWS 25
+#endif
 #define CELL_W 8
 #define CELL_H 16
 #define FG 0x00d0d0d0
@@ -155,7 +160,9 @@ static void put_char(char ch)
     }
     else {
         cells[cursor_y][cursor_x] = ch;
+#ifdef LEGACY_EN
         legacy_put(ch);
+#endif
         if (framebuffer_is_ready() && !redraw_pending) draw_cell(cursor_x, cursor_y);
         cursor_x++;
     }

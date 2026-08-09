@@ -27,12 +27,13 @@ align 4
     dd 0                    ; load_end_addr
     dd 0                    ; bss_end_addr
     dd 0                    ; entry_addr
-
+%ifndef LEGACY_EN
     ; Video mode request
     dd 0                    ; mode_type: 0 = graphics
-    dd 640                 ; width
-    dd 480                  ; height
+    dd 1024                 ; width
+    dd 768                 ; height
     dd 32                   ; depth
+%endif
 
 section .multiboot.text
 align 4

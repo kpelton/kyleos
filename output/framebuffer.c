@@ -67,20 +67,41 @@ static uint32_t find_vga_framebuffer(void)
     }
     return 0;
 }
-void *f_memcpy(void *dest, const void *src, int n)
+static void framebuffer_fill_pixels(uint32_t *pixels, uint32_t color,
+                                    uint64_t count)
 {
-    void *ret = dest;
+    if (count == 0)
+        return;
+    if (count == 1) {
+        *pixels = color;
+        return;
+    }
 
-    __asm__ volatile (
-        "rep movsb"
-        : "+D"(dest),
-          "+S"(src),
-          "+c"(n)
-        :
-        : "memory"
-    );
+    asm volatile(
+        "cld\n\t"
+        "rep stosl"
+        : "+D"(pixels), "+c"(count)
+        : "a"(color)
+        : "memory", "cc");
+}
 
-    return ret;
+static void framebuffer_copy_rows(uint8_t *dest, uint32_t dest_pitch,
+                                  const uint8_t *src, uint32_t src_pitch,
+                                  uint32_t row_bytes, uint32_t rows)
+{
+    if (row_bytes == 0 || rows == 0)
+        return;
+
+    if (dest_pitch == row_bytes && src_pitch == row_bytes) {
+        memcpy8(dest, src, (uint64_t)row_bytes * rows);
+        return;
+    }
+
+    for (uint32_t row = 0; row < rows; row++) {
+        memcpy8(dest, src, row_bytes);
+        dest += dest_pitch;
+        src += src_pitch;
+    }
 }
 
 void framebuffer_init(uint64_t mb_info)
@@ -107,9 +128,7 @@ void framebuffer_init(uint64_t mb_info)
             kprintf("unsupported framebuffer bpp\n");
             return;
         }
-        // setup WC MTRR to speed up FB
-        fb_size = fb_pitch * fb_height;
-
+        /* Write combining is important for the large streaming stores below. */
         if (!mtrr_set_write_combining(phys, fb_size))
             kprintf("Framebuffer: unable to enable MTRR WC\n");
 
@@ -147,6 +166,8 @@ void framebuffer_init(uint64_t mb_info)
     fb_height = 400;
     fb_pitch = fb_width * 4;
     fb_size = fb_pitch * fb_height;
+    if (!mtrr_set_write_combining(phys_base, fb_size))
+        kprintf("Framebuffer: unable to enable MTRR WC\n");
     pages = (fb_size + PAGE_SIZE - 1) / PAGE_SIZE;
     paging_map_physmap_range(phys_base, pages);
     framebuffer = (uint8_t *)KERN_PHYS_TO_PVIRT(phys_base);
@@ -168,16 +189,25 @@ void framebuffer_clear(uint32_t color)
 void framebuffer_fill_rect(uint32_t x, uint32_t y, uint32_t width,
                            uint32_t height, uint32_t color)
 {
-    if (framebuffer == NULL || x >= fb_width || y >= fb_height)
+    if (framebuffer == NULL || width == 0 || height == 0 ||
+        x >= fb_width || y >= fb_height)
         return;
-    if (x + width > fb_width)
+    if (width > fb_width - x)
         width = fb_width - x;
-    if (y + height > fb_height)
+    if (height > fb_height - y)
         height = fb_height - y;
+
+    uint32_t *pixels =
+        (uint32_t *)(framebuffer + y * fb_pitch + x * sizeof(uint32_t));
+
+    if (x == 0 && width == fb_width && fb_pitch == fb_width * sizeof(uint32_t)) {
+        framebuffer_fill_pixels(pixels, color, (uint64_t)width * height);
+        return;
+    }
+
     for (uint32_t row = 0; row < height; row++) {
-        uint32_t *pixels = (uint32_t *)(framebuffer + (y + row) * fb_pitch + x * 4);
-        for (uint32_t col = 0; col < width; col++)
-            pixels[col] = color;
+        framebuffer_fill_pixels(pixels, color, width);
+        pixels = (uint32_t *)((uint8_t *)pixels + fb_pitch);
     }
 }
 
@@ -220,36 +250,9 @@ int framebuffer_present(const void *pixels, uint32_t bytes)
 
     uint32_t bytes_per_row = copy_width * 4;
 
-    /*
-     * Fast path:
-     *
-     * If the source and destination rows have the same pitch,
-     * copy the entire image in one operation.
-     */
-    if (fb_pitch == src_pitch &&
-        xoff == 0 &&
-        copy_width == src_width &&
-        copy_height == src_height) {
-
-        f_memcpy(dst,
-               src,
-               src_pitch * src_height);
-
-        return 0;
-    }
-
-    /*
-     * General path for a framebuffer with a different pitch
-     * or a centered Doom image.
-     */
-    for (uint32_t y = 0; y < copy_height; y++) {
-        f_memcpy(dst,
-               src,
-               bytes_per_row);
-
-        dst += fb_pitch;
-        src += src_pitch;
-    }
+    /* One helper handles both tightly packed and pitched/centered blits. */
+    framebuffer_copy_rows(dst, fb_pitch, src, src_pitch,
+                          bytes_per_row, copy_height);
 
     return 0;
 }

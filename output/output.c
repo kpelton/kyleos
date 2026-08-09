@@ -64,21 +64,44 @@ char * kstrncpy(char *dest, const char *src,int bytes) {
     }
     return dest;
 }
- inline uint8_t * memcpy8(uint8_t *dest, const uint8_t *src,uint64_t bytes) {
-    uint64_t i;
-    for (i=0; i <bytes; i++) {
-        dest[i] = src[i];
-    }
-    return dest;
+static void *copy_bytes(void *dest, const void *src, uint64_t bytes)
+{
+    void *result = dest;
+
+    asm volatile(
+        "cld\n\t"
+        "rep movsb"
+        : "+D"(dest), "+S"(src), "+c"(bytes)
+        :
+        : "memory", "cc");
+
+    return result;
 }
 
-void *memcpy(void *dest, const void *src, int n) {
-    unsigned char *d = (unsigned char *)dest;
-    const unsigned char *s = (const unsigned char *)src;
-    while (n--) {
-        *d++ = *s++;
-    }
-    return dest;
+static void *zero_bytes(void *dest, uint64_t bytes)
+{
+    void *result = dest;
+
+    asm volatile(
+        "cld\n\t"
+        "rep stosb"
+        : "+D"(dest), "+c"(bytes)
+        : "a"(0)
+        : "memory", "cc");
+
+    return result;
+}
+
+uint8_t *memcpy8(uint8_t *dest, const uint8_t *src, uint64_t bytes)
+{
+    return (uint8_t *)copy_bytes(dest, src, bytes);
+}
+
+void *memcpy(void *dest, const void *src, int n)
+{
+    if (n <= 0)
+        return dest;
+    return copy_bytes(dest, src, (uint64_t)n);
 }
 
 char *kstrrchr(char *cstr, int ch) {
@@ -101,29 +124,45 @@ char *kstrrchr(char *cstr, int ch) {
     return cstr+last_occurrence;
 }
 
- inline uint64_t * memcpy64(uint64_t *dest, const uint64_t *src,uint64_t bytes) {
-    uint64_t i;
-    uint64_t j;
-    for (i=0, j=0; j <bytes; j+=sizeof(uint64_t), i++)
-        dest[i] = src[i];
-    return dest;
+uint64_t *memcpy64(uint64_t *dest, const uint64_t *src, uint64_t bytes)
+{
+    uint64_t *result = dest;
+    uint64_t words = bytes / sizeof(uint64_t);
+    uint64_t tail = bytes % sizeof(uint64_t);
+
+    asm volatile(
+        "cld\n\t"
+        "rep movsq"
+        : "+D"(dest), "+S"(src), "+c"(words)
+        :
+        : "memory", "cc");
+    if (tail != 0)
+        copy_bytes(dest, src, tail);
+
+    return result;
 }
 
- inline uint64_t * memzero64(uint64_t *dest,uint64_t bytes) {
-    uint64_t i;
-    uint64_t j;
-    for (i=0, j=0; j <bytes; j+=sizeof(uint64_t), i++) {
-        dest[i] = 0;
-    }
-    return dest;
+uint64_t *memzero64(uint64_t *dest, uint64_t bytes)
+{
+    uint64_t *result = dest;
+    uint64_t words = bytes / sizeof(uint64_t);
+    uint64_t tail = bytes % sizeof(uint64_t);
+
+    asm volatile(
+        "cld\n\t"
+        "rep stosq"
+        : "+D"(dest), "+c"(words)
+        : "a"(0ULL)
+        : "memory", "cc");
+    if (tail != 0)
+        zero_bytes(dest, tail);
+
+    return result;
 }
 
-uint8_t * memzero8(uint8_t *dest,uint64_t bytes) {
-    uint64_t i;
-    for (i=0; i < bytes; i++) {
-        dest[i] = 0;
-    }
-    return dest;
+uint8_t *memzero8(uint8_t *dest, uint64_t bytes)
+{
+    return (uint8_t *)zero_bytes(dest, bytes);
 }
 
 int kstrcmp(const char *dest, const char *src) {
