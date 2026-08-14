@@ -265,6 +265,31 @@ int framebuffer_present(const void *pixels, uint32_t bytes)
 
     return 0;
 }
+
+int framebuffer_present_rect(const void *pixels, uint32_t surface_width,
+                             uint32_t surface_height, uint32_t surface_stride,
+                             uint32_t x, uint32_t y, uint32_t width,
+                             uint32_t height)
+{
+    const uint8_t *src;
+    uint8_t *dst;
+    uint32_t src_pitch;
+
+    if (framebuffer == NULL || pixels == NULL ||
+        surface_width != fb_width || surface_height != fb_height ||
+        surface_stride < surface_width || x >= surface_width ||
+        y >= surface_height || width == 0 || height == 0)
+        return -1;
+    if (width > surface_width - x) width = surface_width - x;
+    if (height > surface_height - y) height = surface_height - y;
+    src_pitch = surface_stride * sizeof(uint32_t);
+    src = (const uint8_t *)pixels + y * src_pitch + x * sizeof(uint32_t);
+    dst = framebuffer + y * fb_pitch + x * sizeof(uint32_t);
+    framebuffer_copy_rows(dst, fb_pitch, src, src_pitch,
+                          width * sizeof(uint32_t), height);
+    return 0;
+}
+
 uint32_t framebuffer_width(void) { return fb_width; }
 uint32_t framebuffer_height(void) { return fb_height; }
 uint32_t framebuffer_pitch(void) { return fb_pitch; }

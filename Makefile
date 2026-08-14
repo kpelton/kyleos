@@ -9,6 +9,7 @@ IMAGE_MOUNT ?= $(KERNEL_ROOT)/build/image/mnt
 USERLAND_STAGE ?= $(KERNEL_ROOT)/build/userland
 KUI_LIBRARY ?= $(USERLAND_STAGE)/libkui.a
 KUI_OBJECT ?= $(USERLAND_STAGE)/kui.o
+KUI_CLIENT_OBJECT ?= $(USERLAND_STAGE)/kui_client.o
 MINESWEEPER_WIDGET_OBJECT ?= $(USERLAND_STAGE)/minesweeper_widget.o
 SOLITAIRE_WIDGET_OBJECT ?= $(USERLAND_STAGE)/solitaire_widget.o
 CALCULATOR_WIDGET_OBJECT ?= $(USERLAND_STAGE)/calculator_widget.o
@@ -17,7 +18,7 @@ PROGS_SRC ?= $(KERNEL_ROOT)/../../newlib-progs
 NEWLIB_BUILD ?= $(KERNEL_ROOT)/../../newlib-build
 SYSROOT ?= /tmp/z
 DOOM_BINARY ?= $(KERNEL_ROOT)/build/extras/doom/doom
-DOOM_WAD ?= $(KERNEL_ROOT)/assets/doom.wad
+DOOM_WAD ?= /home/kyle/Downloads/DOOM.WAD
 QUAKE_BINARY ?= $(KERNEL_ROOT)/build/extras/quake/quake
 QUAKE_DATA_DIR ?= $(KERNEL_ROOT)/assets/quake/id1
 DUKE3D_BINARY ?= $(KERNEL_ROOT)/build/extras/duke3d/duke3d
@@ -108,7 +109,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit kui desktop minesweeper solitaire calculator kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc bootstrap-cc doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
+.PHONY: toolchain userland userinit kui gui-assets desktop finder sysmon editor kterm minesweeper solitaire calculator kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc bootstrap-cc doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -117,7 +118,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit desktop minesweeper solitaire calculator kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc
+	$(MAKE) userinit desktop finder sysmon editor kterm minesweeper solitaire calculator kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -137,12 +138,19 @@ userinit: extras/init/init.c
 
 kui: $(KUI_LIBRARY)
 
-$(KUI_OBJECT): extras/kui/kui.c extras/kui/kui.h output/font.h include/uapi/mouse.h
+gui-assets:
+	scripts/build-gui-assets.sh
+
+$(KUI_OBJECT): extras/kui/kui.c extras/kui/kui.h extras/kui/kui_protocol.h output/font.h include/uapi/framebuffer.h include/uapi/mouse.h
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/kui/kui.c -o $@
 
-$(KUI_LIBRARY): $(KUI_OBJECT)
-	ar rcs $@ $<
+$(KUI_CLIENT_OBJECT): extras/kui/kui_client.c extras/kui/kui_client.h extras/kui/kui.h extras/kui/kui_protocol.h
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/kui/kui_client.c -o $@
+
+$(KUI_LIBRARY): $(KUI_OBJECT) $(KUI_CLIENT_OBJECT)
+	$(AR) rcs $@ $^
 
 $(MINESWEEPER_WIDGET_OBJECT): extras/minesweeper/minesweeper_widget.c extras/minesweeper/minesweeper.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
@@ -156,19 +164,35 @@ $(CALCULATOR_WIDGET_OBJECT): extras/calculator/calculator_widget.c extras/calcul
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/calculator/calculator_widget.c -o $@
 
-desktop: extras/desktop/desktop.c extras/solitaire/solitaire_ipc.h extras/calculator/calculator_ipc.h $(KUI_LIBRARY) $(MINESWEEPER_WIDGET_OBJECT) $(SOLITAIRE_WIDGET_OBJECT) $(CALCULATOR_WIDGET_OBJECT)
+desktop: extras/desktop/desktop.c extras/desktop/shell.c extras/desktop/shell.h extras/kui/kui_protocol.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
-	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(MINESWEEPER_WIDGET_OBJECT) $(SOLITAIRE_WIDGET_OBJECT) $(CALCULATOR_WIDGET_OBJECT) $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/desktop
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/desktop/desktop.c extras/desktop/shell.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/desktop
+
+finder: extras/finder/finder.c extras/finder/finder_ipc.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/finder
+
+sysmon: extras/sysmon/sysmon.c extras/sysmon/sysmon_ipc.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/sysmon
+
+editor: extras/editor/editor.c extras/editor/editor_ipc.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/editor
+
+kterm: extras/terminal/terminal.c extras/terminal/terminal_ipc.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kterm
 
 minesweeper: extras/minesweeper/minesweeper.c $(KUI_LIBRARY) $(MINESWEEPER_WIDGET_OBJECT)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(MINESWEEPER_WIDGET_OBJECT) $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/minesweeper
 
-solitaire: extras/solitaire/solitaire.c extras/solitaire/solitaire_ipc.h $(KUI_LIBRARY) $(SOLITAIRE_WIDGET_OBJECT)
+solitaire: extras/solitaire/solitaire.c $(KUI_LIBRARY) $(SOLITAIRE_WIDGET_OBJECT)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(SOLITAIRE_WIDGET_OBJECT) $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/solitaire
 
-calculator: extras/calculator/calculator.c extras/calculator/calculator_ipc.h $(KUI_LIBRARY) $(CALCULATOR_WIDGET_OBJECT)
+calculator: extras/calculator/calculator.c $(KUI_LIBRARY) $(CALCULATOR_WIDGET_OBJECT)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(CALCULATOR_WIDGET_OBJECT) $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/calculator
 

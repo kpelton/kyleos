@@ -28,8 +28,10 @@ has a framebuffer-capable DoomGeneric port.
 - User-mode page and general-protection faults terminate only the offending
   process; kernel-mode faults retain the register-dump panic path.
 - UART/serial input, keyboard input, raw-console mode, and a framebuffer.
-- PS/2 mouse input and an early-Mac-inspired userspace desktop at
-  `/bin/desktop`, with menus, draggable windows, icons, and keyboard fallback.
+- PS/2 mouse input and an early-2000s-inspired userspace desktop at
+  `/bin/desktop`, with a taskbar, Start menu, minimizable windows, raster
+  icons, and keyboard fallback. Each Finder window runs `/bin/finder` as a
+  separate process and exchanges directory state with the desktop over pipes.
 - Small userspace: `ls`, `cat`, `cp`, `rm`, `mkdir`, `grep`, `wc`, `head`,
   `tail`, `mv`, `ed`, `kedit`, and more.
 - Incrementally rendered ASCII Breakout at `/bin/breakout` (`a`/`d` move,

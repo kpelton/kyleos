@@ -8,7 +8,9 @@ struct kyleos_mouse_event {
     int dx;
     int dy;
     unsigned char buttons;
-    unsigned char reserved[3];
+    /* Positive scrolls up and negative scrolls down. */
+    signed char wheel;
+    unsigned char reserved[2];
 };
 
 #endif

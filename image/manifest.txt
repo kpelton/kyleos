@@ -13,6 +13,8 @@ donut
 demandtest
 desktop
 echo
+editor
+finder
 fstest
 gpfault
 waittest
@@ -20,6 +22,7 @@ ed
 grep
 head
 kedit
+kterm
 ls
 mkdir
 minesweeper
@@ -32,6 +35,7 @@ rmdir
 shell
 solitaire
 stat
+sysmon
 tail
 testprint
 wc

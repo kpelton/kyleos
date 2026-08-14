@@ -28,6 +28,7 @@ void sched_wakeup(void *channel);
 void sched_wakeup_one(void *channel);
 struct ktask* get_current_process();
 struct ktask *sched_get_process(int pid);
+int sched_proc_report(char *buffer, uint32_t size);
 int sched_reap_child(int parent_pid, int requested_pid, int *exit_code);
 int sched_wait_child(int parent_pid, int requested_pid, int *exit_code);
 bool sched_process_kill(int pid,bool cleanup,bool closefiles);
@@ -36,6 +37,7 @@ void sched_save_context(uint64_t rip, uint64_t rsp);
 int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm, char *argv[],struct inode *cwd);
 int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool update_pid,char *argv[],struct ktask *t, struct inode *cwd,bool setup_files);
 void sched_init();
+bool sched_is_running();
 #define FXSAVE_SIZE 512
 enum sched_states {
     TASK_RUNNING,

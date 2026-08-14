@@ -16,12 +16,15 @@
 #define PS2_WRITE_MOUSE 0xd4
 #define MOUSE_DEFAULTS 0xf6
 #define MOUSE_SET_SAMPLE_RATE 0xf3
+#define MOUSE_GET_DEVICE_ID 0xf2
 #define MOUSE_SET_RESOLUTION 0xe8
 #define MOUSE_SCALING_1_TO_1 0xe6
 #define MOUSE_ENABLE_STREAM 0xf4
 #define MOUSE_ACK 0xfa
 
 #define MOUSE_SAMPLE_RATE_200 200
+#define MOUSE_SAMPLE_RATE_100 100
+#define MOUSE_SAMPLE_RATE_80 80
 #define MOUSE_RESOLUTION_8_COUNTS 3
 
 #define MOUSE_IRQ 12
@@ -31,8 +34,9 @@ static struct kyleos_mouse_event mouse_queue[MOUSE_QUEUE_SIZE];
 /* IRQ12 is the sole producer; /dev/mouse and syscall 30 share the consumer. */
 static int mouse_head;
 static int mouse_tail;
-static uint8_t packet[3];
+static uint8_t packet[4];
 static int packet_index;
+static int packet_size;
 static bool mouse_ready;
 
 static bool wait_write(void)
@@ -89,7 +93,17 @@ static bool write_mouse(uint8_t value)
     return response == MOUSE_ACK;
 }
 
-static void queue_event(int dx, int dy, uint8_t buttons)
+static bool set_sample_rate(uint8_t rate)
+{
+    return write_mouse(MOUSE_SET_SAMPLE_RATE) && write_mouse(rate);
+}
+
+static bool get_device_id(uint8_t *device_id)
+{
+    return write_mouse(MOUSE_GET_DEVICE_ID) && read_data(device_id);
+}
+
+static void queue_event(int dx, int dy, uint8_t buttons, int wheel)
 {
     int head = __atomic_load_n(&mouse_head, __ATOMIC_RELAXED);
     int next = (head + 1) % MOUSE_QUEUE_SIZE;
@@ -100,9 +114,9 @@ static void queue_event(int dx, int dy, uint8_t buttons)
     mouse_queue[head].dx = dx;
     mouse_queue[head].dy = dy;
     mouse_queue[head].buttons = buttons;
+    mouse_queue[head].wheel = wheel;
     mouse_queue[head].reserved[0] = 0;
     mouse_queue[head].reserved[1] = 0;
-    mouse_queue[head].reserved[2] = 0;
     __atomic_store_n(&mouse_head, next, __ATOMIC_RELEASE);
 }
 
@@ -121,8 +135,10 @@ static int dequeue_event(struct kyleos_mouse_event *event)
 void mouse_init(void)
 {
     uint8_t config;
+    uint8_t device_id = 0;
 
     mouse_head = mouse_tail = packet_index = 0;
+    packet_size = 3;
     mouse_ready = false;
 
     if (!write_controller(PS2_ENABLE_AUX) ||
@@ -135,20 +151,26 @@ void mouse_init(void)
     config &= ~0x20; /* Enable the auxiliary clock. */
     if (!write_controller(PS2_WRITE_CONFIG) || !write_data(config) ||
         !write_mouse(MOUSE_DEFAULTS) ||
+        !set_sample_rate(MOUSE_SAMPLE_RATE_200) ||
+        !set_sample_rate(MOUSE_SAMPLE_RATE_100) ||
+        !set_sample_rate(MOUSE_SAMPLE_RATE_80) ||
+        !get_device_id(&device_id) ||
         !write_mouse(MOUSE_SCALING_1_TO_1) ||
         !write_mouse(MOUSE_SET_RESOLUTION) ||
         !write_mouse(MOUSE_RESOLUTION_8_COUNTS) ||
-        !write_mouse(MOUSE_SET_SAMPLE_RATE) ||
-        !write_mouse(MOUSE_SAMPLE_RATE_200) ||
+        !set_sample_rate(MOUSE_SAMPLE_RATE_200) ||
         !write_mouse(MOUSE_ENABLE_STREAM)) {
         klog("PS/2 mouse: initialization failed\n");
         return;
     }
 
+    if (device_id == 3 || device_id == 4)
+        packet_size = 4;
     packet_index = 0;
     mouse_ready = true;
     IRQ_clear_mask(MOUSE_IRQ);
-    klog("PS/2 mouse ready\n");
+    klog("PS/2 mouse ready (device %d, %d-byte packets)\n",
+         device_id, packet_size);
 }
 
 void mouse_irq(void)
@@ -166,13 +188,21 @@ void mouse_irq(void)
     }
 
     packet[packet_index++] = value;
-    if (packet_index == 3) {
+    if (packet_index == packet_size) {
         packet_index = 0;
         if ((packet[0] & 0xc0) == 0) {
             int dx = (int)(signed char)packet[1];
             int dy = (int)(signed char)packet[2];
+            int wheel = 0;
 
-            queue_event(dx, dy, packet[0] & 0x07);
+            if (packet_size == 4) {
+                wheel = packet[3] & 0x0f;
+                if (wheel & 0x08) wheel -= 16;
+                /* PS/2 reports the opposite sign from GUI scroll APIs. */
+                wheel = -wheel;
+            }
+
+            queue_event(dx, dy, packet[0] & 0x07, wheel);
         }
     }
     PIC_sendEOI(MOUSE_IRQ);

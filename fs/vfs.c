@@ -58,7 +58,7 @@ int vfs_getdents(struct file * rfile,void *dirp,int count) {
         goto error;
     
     ptr = dptr->head;
-    while (ptr != 0)
+    while (ptr != 0 && read_count < count)
     {
         dir_arr[read_count].i_no = ptr->current->i_ino;
         dir_arr[read_count].i_type = ptr->current->i_type;
@@ -66,11 +66,6 @@ int vfs_getdents(struct file * rfile,void *dirp,int count) {
         kstrncpy(dir_arr[read_count].i_name, ptr->current->i_name,VFS_MAX_FNAME);
         ptr = ptr->next;
         read_count++;
-        if (read_count >= count) {
-            panic("unable to do anything here");
-            vfs_free_dnode(dptr);
-            return -1;
-        }
     }
     vfs_free_dnode(dptr);
     return read_count;

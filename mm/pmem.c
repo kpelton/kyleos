@@ -309,6 +309,24 @@ void phys_mem_print_usage() {
                     (phys_mem_zones[phys_first_region].len/4096) * 4096);
 }
 
+void pmem_get_stats(uint64_t *total, uint64_t *used, uint64_t *free)
+{
+    uint64_t total_bytes = 0;
+    uint64_t used_bytes = 0;
+
+    if (phys_first_region >= 0) {
+        total_bytes = (phys_mem_zones[phys_first_region].len / BLOCK_SIZE) *
+                      BLOCK_SIZE;
+        used_bytes = get_used_page_count(
+            phys_mem_zones[phys_first_region].len,
+            phys_mem_zones[phys_first_region].bitmap) * BLOCK_SIZE;
+        if (used_bytes > total_bytes) used_bytes = total_bytes;
+    }
+    if (total != NULL) *total = total_bytes;
+    if (used != NULL) *used = used_bytes;
+    if (free != NULL) *free = total_bytes - used_bytes;
+}
+
 void phys_mem_early_init(uint64_t  mb_info) {
 
     int i;

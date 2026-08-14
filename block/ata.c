@@ -4,6 +4,7 @@
 #include <block/ata.h>
 #include <fs/fat.h>
 #include <locks/mutex.h>
+#include <sched/sched.h>
 
 #define DATA_REG 0
 #define ERROR_REG 1
@@ -36,8 +37,14 @@ static int PRIMARY = 0;
 #define CMD_READ_SECTORS 0x20
 #define CMD_WRITE_SECTORS 0x30
 #define CMD_CACHE_FLUSH 0xe7
+#define STAT_ERROR 0x01
+#define STAT_DEVICE_FAULT 0x20
 #define STAT_DRIVE_BUSY 0x80
 #define STAT_PIO_READY 0x8
+#define ATA_MAX_LBA 0x0fffffffU
+#define ATA_MAX_SECTORS_PER_COMMAND 255U
+#define ATA_POLL_LIMIT 10000000U
+#define ATA_YIELD_INTERVAL 65536U
 //#define ATA_DEBUG
 
 /* Small read-through cache.  FAT metadata and directory sectors are read
@@ -55,6 +62,7 @@ static uint32_t ata_cache_next;
 struct mbr_info fs1;
 static struct mutex ata_mutex;
 static bool ata_init_port();
+uint8_t read_status(void);
 
 static void ata_cache_reset(void)
 {
@@ -71,6 +79,104 @@ static void ata_cache_invalidate(uint32_t sector)
     }
 }
 
+static void ata_poll_relax(uint32_t poll_count)
+{
+    asm volatile("pause");
+
+    /* ATA is also used before the first task starts, when schedule() cannot
+     * safely be entered.  Once scheduling is live, let unrelated tasks run
+     * while a slow device is changing state. */
+    if (poll_count != 0 &&
+        poll_count % ATA_YIELD_INTERVAL == 0 &&
+        sched_is_running())
+        schedule();
+}
+
+static int ata_wait(bool require_drq)
+{
+    uint32_t poll_count;
+
+    for (poll_count = 0; poll_count < ATA_POLL_LIMIT; poll_count++) {
+        uint8_t status = read_status();
+
+        if (status == 0 || status == 0xff)
+            return -1;
+        if ((status & STAT_DRIVE_BUSY) == 0) {
+            if (status & (STAT_ERROR | STAT_DEVICE_FAULT))
+                return -1;
+            if (!require_drq || (status & STAT_PIO_READY))
+                return 0;
+        }
+        ata_poll_relax(poll_count);
+    }
+
+    return -1;
+}
+
+static void ata_400ns_delay(void)
+{
+    read_status();
+    read_status();
+    read_status();
+    read_status();
+}
+
+static int ata_begin_command(uint32_t sector, uint32_t count, uint8_t command)
+{
+    if (count == 0 || count > ATA_MAX_SECTORS_PER_COMMAND ||
+        sector > ATA_MAX_LBA || count - 1 > ATA_MAX_LBA - sector)
+        return -1;
+
+    outb(PRIMARY + DRIVE_HEAD_REG, 0xe0 | ((sector >> 24) & 0x0f));
+    outb(PRIMARY + FEATURES_REG, 0);
+    outb(PRIMARY + SEC_COUNT_REG, count);
+    outb(PRIMARY + SEC_NUM_REG, sector & 0xff);
+    outb(PRIMARY + CYL_LOW_REG, (sector >> 8) & 0xff);
+    outb(PRIMARY + CYL_HI_REG, (sector >> 16) & 0xff);
+    outb(PRIMARY + COMMAND_REG, command);
+    ata_400ns_delay();
+    return 0;
+}
+
+static int ata_read_locked(uint32_t sector, uint32_t count, void *buffer)
+{
+    uint16_t *data = buffer;
+
+    if (ata_begin_command(sector, count, CMD_READ_SECTORS) < 0)
+        return -1;
+
+    for (uint32_t current = 0; current < count; current++) {
+        if (ata_wait(true) < 0)
+            return -1;
+        for (uint32_t word = 0; word < ATA_SECTOR_SIZE / 2; word++)
+            *data++ = inw(PRIMARY + DATA_REG);
+    }
+
+    return ata_wait(false);
+}
+
+static int ata_write_locked(uint32_t sector, uint32_t count,
+                            const void *buffer)
+{
+    const uint16_t *data = buffer;
+
+    if (ata_begin_command(sector, count, CMD_WRITE_SECTORS) < 0)
+        return -1;
+
+    for (uint32_t current = 0; current < count; current++) {
+        if (ata_wait(true) < 0)
+            return -1;
+        for (uint32_t word = 0; word < ATA_SECTOR_SIZE / 2; word++)
+            outw(PRIMARY + DATA_REG, *data++);
+    }
+
+    if (ata_wait(false) < 0)
+        return -1;
+    outb(PRIMARY + COMMAND_REG, CMD_CACHE_FLUSH);
+    ata_400ns_delay();
+    return ata_wait(false);
+}
+
 uint8_t read_status(void)
 {
     uint8_t status;
@@ -82,118 +188,58 @@ void print_drive_status(void)
 {
     kprintf("ATA STATUS:0x%x\n", read_status());
 }
-int write_sec(uint32_t sec, void *buffer)
+int write_sectors(uint32_t sec, uint32_t count, const void *buffer)
 {
-    short *data = 0;
-    uint8_t status;
-    int i;
-    data = buffer;
+    int result;
+
+    if (buffer == NULL || count == 0 || count > ATA_MAX_SECTORS_PER_COMMAND)
+        return -1;
+
     acquire_mutex(&ata_mutex);
-    ata_cache_invalidate(sec);
-#ifdef ATA_DEBUG
-    print_drive_status();
-#endif
-    outb(PRIMARY + DRIVE_HEAD_REG, 0xE0);
-    outb(PRIMARY + ERROR_REG, 0x00);
-    // read 1 sectors =0x200
-    outb(PRIMARY + SEC_COUNT_REG, 1);
-    outb(PRIMARY + SEC_NUM_REG, sec & 0xff);
-    outb(PRIMARY + CYL_LOW_REG, (sec & 0xff00) >> 8);
-    // outb(PRIMARY + CYL_LOW_REG,10);
-    outb(PRIMARY + CYL_HI_REG, (sec & 0xff0000) >> 16);
-    outb(PRIMARY + COMMAND_REG, CMD_WRITE_SECTORS);
-    status = read_status();
-
-    while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY) != 0)
-    {
-        status = read_status();
-#ifdef ATA_DEBUG
-        print_drive_status();
-#endif
-    }
-
-    // Data is not quite ready, need to read status a few more times
-    for (i = 0; i < 100; i++)
-        status = read_status();
-
-    // data is ready
-    for (i = 0; i < 256; i++)
-    {
-        /// kprintf("writing\n");
-        outw(PRIMARY, data[i]);
-        status = read_status();
-        status = read_status();
-        status = read_status();
-        while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY) != 0)
-            status = read_status();
-        // print_drive_status();
-    }
-    outb(PRIMARY + COMMAND_REG, CMD_CACHE_FLUSH);
-    status = read_status();
-    while ((status & STAT_DRIVE_BUSY) != 0)
-        status = read_status();
+    for (uint32_t i = 0; i < count; i++)
+        ata_cache_invalidate(sec + i);
+    result = ata_write_locked(sec, count, buffer);
     release_mutex(&ata_mutex);
-    return 0;
+    return result;
 }
+
+int write_sec(uint32_t sec, const void *buffer)
+{
+    return write_sectors(sec, 1, buffer);
+}
+
 int read_sec(uint32_t sec, void *buffer)
 {
-    short *data = 0;
-    uint8_t status;
-    int i;
-    data = buffer;
+    int cache_entry;
+    int result;
+
+    if (buffer == NULL)
+        return -1;
 #ifdef ATA_DEBUG
     print_drive_status();
 #endif
     acquire_mutex(&ata_mutex);
 
-    for (i = 0; i < ATA_READ_CACHE_ENTRIES; i++) {
-        if (ata_read_cache[i].valid && ata_read_cache[i].sector == sec) {
-            memcpy(buffer, ata_read_cache[i].data, ATA_SECTOR_SIZE);
+    for (cache_entry = 0; cache_entry < ATA_READ_CACHE_ENTRIES; cache_entry++) {
+        if (ata_read_cache[cache_entry].valid &&
+            ata_read_cache[cache_entry].sector == sec) {
+            memcpy(buffer, ata_read_cache[cache_entry].data, ATA_SECTOR_SIZE);
             release_mutex(&ata_mutex);
             return 0;
         }
     }
 
-    outb(PRIMARY + DRIVE_HEAD_REG, 0xE0);
-    outb(PRIMARY + ERROR_REG, 0x00);
-    // read 1 sectors =0x200
-    outb(PRIMARY + SEC_COUNT_REG, 1);
-    outb(PRIMARY + SEC_NUM_REG, sec & 0xff);
-    outb(PRIMARY + CYL_LOW_REG, (sec & 0xff00) >> 8);
-    // outb(PRIMARY + CYL_LOW_REG,10);
-    outb(PRIMARY + CYL_HI_REG, (sec & 0xff0000) >> 16);
-    outb(PRIMARY + COMMAND_REG, CMD_READ_SECTORS);
-
-    status = read_status();
-
-    while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY) != 0)
-    {
-        status = read_status();
-#ifdef ATA_DEBUG
-                print_drive_status();
-#endif
+    result = ata_read_locked(sec, 1, buffer);
+    if (result < 0) {
+        release_mutex(&ata_mutex);
+        return result;
     }
 
-    // data is ready
-    for (i = 0; i < 256; i++)
-    {
-        while ((status & STAT_PIO_READY) != STAT_PIO_READY && (status & STAT_DRIVE_BUSY) != 0) {
-            status = read_status();
-        }
-            data[i] = 0;
-            data[i] = inw(PRIMARY);
-
-#ifdef ATA_DEBUG
-	    kprintf("%x ",data[i]);
-#endif
-    }
-    status = read_status();
-
-    i = (int)ata_cache_next;
+    cache_entry = (int)ata_cache_next;
     ata_cache_next = (ata_cache_next + 1) % ATA_READ_CACHE_ENTRIES;
-    ata_read_cache[i].sector = sec;
-    memcpy(ata_read_cache[i].data, buffer, ATA_SECTOR_SIZE);
-    ata_read_cache[i].valid = 1;
+    ata_read_cache[cache_entry].sector = sec;
+    memcpy(ata_read_cache[cache_entry].data, buffer, ATA_SECTOR_SIZE);
+    ata_read_cache[cache_entry].valid = 1;
     release_mutex(&ata_mutex);
 
     return 0;
@@ -201,7 +247,8 @@ int read_sec(uint32_t sec, void *buffer)
 void ata_init(void) {
     bool passed = false;
 
-    for(uint64_t i=0; i<sizeof(ATA_PORTS); i++) {
+    init_mutex(&ata_mutex);
+    for(uint64_t i = 0; i < sizeof(ATA_PORTS) / sizeof(ATA_PORTS[0]); i++) {
         PRIMARY = ATA_PORTS[i];
         if(ata_init_port() == true) {
             passed = true;
@@ -219,16 +266,15 @@ static bool ata_init_port()
     uint16_t valid_mbr;
     uint16_t part_type;
     bool passed = false;
-    char mbr[512];
+    uint8_t mbr[ATA_SECTOR_SIZE];
     ata_cache_reset();
     kprintf("ATA init\n");
-    read_sec(0, mbr);
+    if (read_sec(0, mbr) < 0)
+        return false;
     part_start = mbr[0x1c6] | mbr[0x1c7] << 8 | mbr[0x1c8] << 16 | mbr[0x1c9] << 24;
     part_size = mbr[0x1ca] | mbr[0x1cb] << 8 | mbr[0x1cc] << 16 | mbr[0x1cd] << 24;
     valid_mbr = mbr[0x1fe] | mbr[0x1ff] << 8;
     part_type = mbr[0x1c2];
-    init_mutex(&ata_mutex);
-
     kprintf("Trying port 0x%x\n",PRIMARY);
     kprintf("mbr:0x%x\n",valid_mbr);
     // Look for valid MBR 0x55aa

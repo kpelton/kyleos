@@ -25,6 +25,24 @@ extern void resume_p_userspace(uint64_t *rsp, uint64_t *rbp);
 
 static const char process_types_str[PROCESS_TYPES_LEN][20] = {"Kernel", "User"};
 const char task_type_str[TASK_STATE_NUM][20] = {"RUNNING", "READY", "NEW", "BLOCKED", "DONE"};
+
+static int report_text(char *buffer, uint32_t size, int position,
+                       const char *text)
+{
+    while (*text != '\0' && position + 1 < (int)size)
+        buffer[position++] = *text++;
+    if (size > 0) buffer[position] = '\0';
+    return position;
+}
+
+static int report_number(char *buffer, uint32_t size, int position,
+                         uint64_t value)
+{
+    char number[24];
+
+    itoa(value, number, 10);
+    return report_text(buffer, size, position, number);
+}
 //#define SCHED_DEBUG
 void ksleepm(uint32_t ms)
 {
@@ -143,6 +161,11 @@ void sched_init()
     init_spinlock(&sched_spinlock);
 }
 
+bool sched_is_running()
+{
+    return prev_task >= 0;
+}
+
 static int find_free_task()
 {
 
@@ -225,6 +248,58 @@ struct ktask *sched_get_process(int pid)
     release_spinlock(&sched_spinlock);
 
     return NULL;
+}
+
+int sched_proc_report(char *buffer, uint32_t size)
+{
+    int position = 0;
+    int processes = 0;
+    int running = 0;
+    int ready = 0;
+    int blocked = 0;
+
+    if (buffer == NULL || size == 0) return 0;
+    buffer[0] = '\0';
+    acquire_spinlock(&sched_spinlock);
+    for (int i = 0; i < SCHED_MAX_TASKS; i++) {
+        if (ktasks[i].pid == -1) continue;
+        processes++;
+        if (ktasks[i].state == TASK_RUNNING) running++;
+        else if (ktasks[i].state == TASK_READY) ready++;
+        else if (ktasks[i].state == TASK_BLOCKED) blocked++;
+    }
+    position = report_text(buffer, size, position, "Processes: ");
+    position = report_number(buffer, size, position, processes);
+    position = report_text(buffer, size, position, "\nRunning: ");
+    position = report_number(buffer, size, position, running);
+    position = report_text(buffer, size, position, "\nReady: ");
+    position = report_number(buffer, size, position, ready);
+    position = report_text(buffer, size, position, "\nBlocked: ");
+    position = report_number(buffer, size, position, blocked);
+    position = report_text(buffer, size, position,
+                           "\n\nPID  STATE     TYPE    NAME\n");
+    for (int i = 0; i < SCHED_MAX_TASKS && position + 48 < (int)size; i++) {
+        if (ktasks[i].pid == -1) continue;
+        position = report_number(buffer, size, position, ktasks[i].pid);
+        position = report_text(buffer, size, position,
+                               ktasks[i].pid < 10 ? "    " :
+                               ktasks[i].pid < 100 ? "   " :
+                               ktasks[i].pid < 1000 ? "  " : " ");
+        position = report_text(buffer, size, position,
+                               task_type_str[ktasks[i].state]);
+        for (int pad = kstrlen((char *)task_type_str[ktasks[i].state]);
+             pad < 10; pad++)
+            position = report_text(buffer, size, position, " ");
+        position = report_text(buffer, size, position,
+                               process_types_str[ktasks[i].type]);
+        for (int pad = kstrlen((char *)process_types_str[ktasks[i].type]);
+             pad < 8; pad++)
+            position = report_text(buffer, size, position, " ");
+        position = report_text(buffer, size, position, ktasks[i].name);
+        position = report_text(buffer, size, position, "\n");
+    }
+    release_spinlock(&sched_spinlock);
+    return position;
 }
 
 void sched_save_context(uint64_t rip, uint64_t rsp)

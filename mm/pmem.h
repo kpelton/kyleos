@@ -40,6 +40,7 @@ void *pmem_alloc_zero_page();
 void *pmem_alloc_page();
 void *pmem_try_alloc_zero_page(void);
 void *pmem_try_alloc_page(void);
+void pmem_get_stats(uint64_t *total, uint64_t *used, uint64_t *free);
 void phys_mem_print_usage();
 void phys_mem_init();
 

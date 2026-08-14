@@ -6,6 +6,10 @@
 /* Called after paging is fully initialized. */
 void framebuffer_init(uint64_t mb_info);
 int framebuffer_present(const void *pixels, uint32_t bytes);
+int framebuffer_present_rect(const void *pixels, uint32_t surface_width,
+                             uint32_t surface_height, uint32_t surface_stride,
+                             uint32_t x, uint32_t y, uint32_t width,
+                             uint32_t height);
 uint32_t framebuffer_width(void);
 uint32_t framebuffer_height(void);
 uint32_t framebuffer_pitch(void);

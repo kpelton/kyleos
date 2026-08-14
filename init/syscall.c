@@ -1,5 +1,6 @@
 #include <fs/vfs.h>
 #include <include/types.h>
+#include <include/uapi/framebuffer.h>
 #include <mm/mm.h>
 #include <output/output.h>
 #include <output/input.h>
@@ -261,6 +262,21 @@ static int framebuffer_size_syscall(uint32_t *width, uint32_t *height)
     *width = framebuffer_width();
     *height = framebuffer_height();
     return 0;
+}
+
+static int framebuffer_present_rect_syscall(
+    void *pixels, const struct kyleos_framebuffer_rect *user_rect)
+{
+    struct kyleos_framebuffer_rect rect;
+
+    if (pixels == NULL || pixels >= (void *)KERN_SPACE_BOUNDRY ||
+        user_rect == NULL ||
+        user_rect >= (const struct kyleos_framebuffer_rect *)KERN_SPACE_BOUNDRY)
+        return -1;
+    rect = *user_rect;
+    return framebuffer_present_rect(pixels, rect.surface_width,
+                                    rect.surface_height, rect.surface_stride,
+                                    rect.x, rect.y, rect.width, rect.height);
 }
 
 static int key_poll_syscall(int *pressed, uint8_t *scancode, bool *extended)
@@ -779,7 +795,8 @@ void *syscall_tbl[] = {
     (void *)&rename,                      // 28
     (void *)&rmdir,                       // 29
     (void *)&mouse_poll_syscall,          // 30
-    (void *)&framebuffer_size_syscall     // 31
+    (void *)&framebuffer_size_syscall,          // 31
+    (void *)&framebuffer_present_rect_syscall   // 32
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

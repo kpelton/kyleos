@@ -5,8 +5,8 @@
 #include <unistd.h>
 
 #include "extras/kui/kui.h"
+#include "extras/kui/kui_client.h"
 #include "extras/solitaire/solitaire.h"
-#include "extras/solitaire/solitaire_ipc.h"
 
 static uint32_t *framebuffer;
 static uint32_t framebuffer_bytes;
@@ -23,49 +23,32 @@ static int cursor_y;
 static uint8_t old_buttons;
 static int running = 1;
 
-static int read_all(int fd, void *buffer, int length)
-{
-    int total = 0;
-    while (total < length) {
-        int count = read(fd, (char *)buffer + total, length - total);
-        if (count <= 0) return -1;
-        total += count;
-    }
-    return 0;
-}
-
-static int write_all(int fd, const void *buffer, int length)
-{
-    int total = 0;
-    while (total < length) {
-        int count = write(fd, (const char *)buffer + total, length - total);
-        if (count <= 0) return -1;
-        total += count;
-    }
-    return 0;
-}
-
 static int embedded_main(void)
 {
-    struct solitaire_request request;
-    struct solitaire_response response;
+    struct solitaire_game state;
+    struct kui_client client;
+    struct kui_event event;
 
-    memset(&response, 0, sizeof(response));
+    memset(&state, 0, sizeof(state));
+    kui_client_init(&client);
     for (;;) {
-        if (read_all(0, &request, sizeof(request)) < 0) return 0;
-        if (request.command == SOLITAIRE_COMMAND_QUIT) return 0;
-        if (request.command == SOLITAIRE_COMMAND_RESET) {
-            solitaire_reset(&response.game, request.seed);
-            response.changed = 1;
-        } else if (request.command == SOLITAIRE_COMMAND_CLICK) {
-            response.changed = solitaire_click(
-                &response.game, 0, 0, request.width, request.height,
-                request.pointer_x, request.pointer_y, request.seed);
-        } else {
-            response.changed = 0;
-        }
-        if (write_all(1, &response, sizeof(response)) < 0) return 0;
+        if (kui_client_read_event(&event) < 0) break;
+        if (event.type == KUI_EVENT_CLOSE) break;
+        if (event.type == KUI_EVENT_INIT ||
+            (event.type == KUI_EVENT_KEY && event.key_pressed &&
+             !event.key_extended && event.key_code == 19))
+            solitaire_reset(&state, event.seed);
+        else if (event.type == KUI_EVENT_POINTER && event.button == 1)
+            solitaire_click(&state, 0, 0, event.width, event.height,
+                            event.x, event.y, event.seed);
+        kui_client_begin(&client, &event, "Solitaire");
+        kui_client_set_constraints(&client, 319, 226, 699, 481);
+        solitaire_draw(&client.surface, &state, 0, 0,
+                       event.width, event.height);
+        if (kui_client_send(&client) < 0) break;
     }
+    kui_client_free(&client);
+    return 0;
 }
 
 static void draw_cursor(void)
@@ -104,7 +87,8 @@ static void restore_console(void)
 
 int main(int argc, char **argv)
 {
-    if (argc > 1 && strcmp(argv[1], "--embedded") == 0)
+    if (argc > 1 && (strcmp(argv[1], "--embedded") == 0 ||
+                     strcmp(argv[1], "--kui-client") == 0))
         return embedded_main();
 
     if (kui_screen_size(&screen_width, &screen_height) < 0) {

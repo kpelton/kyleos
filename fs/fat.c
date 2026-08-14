@@ -150,10 +150,16 @@ int fat_stat_file (struct file * rfile,struct stat *st) {
 
 static int write_cluster(uint32_t sector_start, uint32_t sectors_per_cluster, uint8_t *data)
 {
-    uint32_t i;
-    for (i = 0; i < sectors_per_cluster; i++)
-        if (write_sec(sector_start + i, data + (ATA_SECTOR_SIZE * i)) < 0)
+    while (sectors_per_cluster > 0) {
+        uint32_t count = sectors_per_cluster > 255 ? 255 : sectors_per_cluster;
+
+        if (write_sectors(sector_start, count, data) < 0)
             return -1;
+
+        sector_start += count;
+        sectors_per_cluster -= count;
+        data += ATA_SECTOR_SIZE * count;
+    }
     return 0;
 }
 

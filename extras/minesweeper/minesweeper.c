@@ -2,8 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "extras/kui/kui.h"
+#include "extras/kui/kui_client.h"
 #include "extras/minesweeper/minesweeper.h"
 
 static uint32_t *framebuffer;
@@ -20,6 +22,36 @@ static int cursor_x;
 static int cursor_y;
 static uint8_t old_buttons;
 static int running = 1;
+
+static int embedded_main(void)
+{
+    struct minesweeper_game embedded_game;
+    struct kui_client client;
+    struct kui_event event;
+
+    memset(&embedded_game, 0, sizeof(embedded_game));
+    kui_client_init(&client);
+    for (;;) {
+        if (kui_client_read_event(&event) < 0) break;
+        if (event.type == KUI_EVENT_CLOSE) break;
+        if (event.type == KUI_EVENT_INIT ||
+            (event.type == KUI_EVENT_KEY && event.key_pressed &&
+             !event.key_extended && event.key_code == 19))
+            minesweeper_reset(&embedded_game, event.seed);
+        else if (event.type == KUI_EVENT_POINTER && event.button != 0)
+            minesweeper_click(&embedded_game, 0, 0,
+                              event.width, event.height,
+                              event.x, event.y, event.button == 2,
+                              event.seed);
+        kui_client_begin(&client, &event, "Minesweeper");
+        kui_client_set_constraints(&client, 239, 181, 519, 581);
+        minesweeper_draw(&client.surface, &embedded_game, 0, 0,
+                         event.width, event.height);
+        if (kui_client_send(&client) < 0) break;
+    }
+    kui_client_free(&client);
+    return 0;
+}
 
 static void draw_cursor(void)
 {
@@ -70,8 +102,11 @@ static void restore_console(void)
     fflush(stdout);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    if (argc > 1 && (strcmp(argv[1], "--embedded") == 0 ||
+                     strcmp(argv[1], "--kui-client") == 0))
+        return embedded_main();
     if (kui_screen_size(&screen_width, &screen_height) < 0) {
         screen_width = KUI_SCREEN_WIDTH;
         screen_height = KUI_SCREEN_HEIGHT;

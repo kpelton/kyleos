@@ -2,6 +2,7 @@
 #include <mm/mm.h>
 #include <fs/vfs.h>
 #include <sched/sched.h>
+#include <mm/pmem.h>
 #include <output/input.h>
 #include <output/mouse.h>
 
@@ -11,16 +12,21 @@ static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
 #include <locks/spinlock.h>
 #include <output/output.h>
 #define MAX_RAMFS 512
+#define MAX_PROC_INODES 8
 #define CONSOLE_INO 1
 #define NULL_INO 2
 #define ZERO_INO 3
 #define KMSG_INO 4
 #define MOUSE_INO 5
-#define RAMFS_INSTANCE_COUNT 2
+#define PROC_PROCESSES_INO 1
+#define PROC_MEMINFO_INO 2
+#define RAMFS_INSTANCE_COUNT 3
 struct ramfs_instance {
-    struct ramfs_inode inodes[MAX_RAMFS];
+    struct ramfs_inode *inodes;
+    int inode_capacity;
     struct spinlock lock;
     bool has_console;
+    bool has_proc;
 };
 struct dnode *ramfs_read_root_dir(struct vfs_device *dev);
 struct dnode *ramfs_read_inode_dir(struct inode *inode);
@@ -47,22 +53,24 @@ static struct ramfs_instance *ramfs_for_device(struct vfs_device *dev)
 
 static int ramfs_alloc_inode(struct ramfs_instance *fs)
 {
-    int first = fs->has_console ? 6 : 2;
-    for (int i = first; i < MAX_RAMFS; i++)
+    int first = fs->has_console ? 6 : fs->has_proc ? 3 : 2;
+    for (int i = first; i < fs->inode_capacity; i++)
         if (fs->inodes[i].dev == NULL)
             return i;
     return -1;
 }
 
-static void create_root_dir(struct vfs_device *dev, bool with_console) {
+static void create_root_dir(struct vfs_device *dev, bool with_console,
+                            bool with_proc) {
     struct ramfs_instance *fs = ramfs_for_device(dev);
 
     fs->has_console = with_console;
+    fs->has_proc = with_proc;
     fs->inodes[0].dev = dev;
     kstrcpy(fs->inodes[0].i_name, dev->mountpoint_root);
     fs->inodes[0].i_type=I_DIR;
     fs->inodes[0].i_ino = 0;
-    fs->inodes[0].last_child = with_console ? 5 : 0;
+    fs->inodes[0].last_child = with_console ? 5 : with_proc ? 2 : 0;
     fs->inodes[0].file_size = 0;
     fs->inodes[0].parent = -1;
     fs->inodes[0].blocks = NULL;
@@ -101,50 +109,92 @@ static void create_root_dir(struct vfs_device *dev, bool with_console) {
         fs->inodes[MOUSE_INO].file_size = 0;
         fs->inodes[MOUSE_INO].parent = 0;
         fs->inodes[MOUSE_INO].blocks = NULL;
+    } else if (with_proc) {
+        fs->inodes[0].children[0] = PROC_PROCESSES_INO;
+        fs->inodes[PROC_PROCESSES_INO].dev = dev;
+        kstrcpy(fs->inodes[PROC_PROCESSES_INO].i_name, "processes");
+        fs->inodes[PROC_PROCESSES_INO].i_type = I_FILE;
+        fs->inodes[PROC_PROCESSES_INO].i_ino = PROC_PROCESSES_INO;
+        fs->inodes[PROC_PROCESSES_INO].file_size = 0;
+        fs->inodes[PROC_PROCESSES_INO].parent = 0;
+        fs->inodes[PROC_PROCESSES_INO].blocks = NULL;
+        fs->inodes[0].children[1] = PROC_MEMINFO_INO;
+        fs->inodes[PROC_MEMINFO_INO].dev = dev;
+        kstrcpy(fs->inodes[PROC_MEMINFO_INO].i_name, "meminfo");
+        fs->inodes[PROC_MEMINFO_INO].i_type = I_FILE;
+        fs->inodes[PROC_MEMINFO_INO].i_ino = PROC_MEMINFO_INO;
+        fs->inodes[PROC_MEMINFO_INO].file_size = 0;
+        fs->inodes[PROC_MEMINFO_INO].parent = 0;
+        fs->inodes[PROC_MEMINFO_INO].blocks = NULL;
     }
 
 }
 
-static int ramfs_mount(const char *path, const char *name, bool with_console)
+static int ramfs_mount(const char *path, const char *name, bool with_console,
+                       bool with_proc)
 {
     struct vfs_device dev;
     struct dnode *root = vfs_read_root_dir(ROOT);
     int device_num;
+    int instance;
 
     if (ramfs_mount_count >= RAMFS_INSTANCE_COUNT)
         return -1;
 
+    instance = ramfs_mount_count;
+    ramfs_instances[instance].inode_capacity =
+        with_proc ? MAX_PROC_INODES : MAX_RAMFS;
+    ramfs_instances[instance].inodes =
+        kmalloc(sizeof(struct ramfs_inode) *
+                ramfs_instances[instance].inode_capacity);
+    if (ramfs_instances[instance].inodes == NULL)
+        return -1;
+    memzero8((uint8_t *)ramfs_instances[instance].inodes,
+             sizeof(struct ramfs_inode) *
+             ramfs_instances[instance].inode_capacity);
+
     /* Create the FAT mount point on first boot, so no image preparation is
      * required for /dev or /tmp. */
     if (root == NULL)
-        return -1;
+        goto error;
     if (vfs_create_dir(root->root_inode, (char *)name) < 0) {
         vfs_free_dnode(root);
-        return -1;
+        goto error;
     }
     vfs_free_dnode(root);
 
     memzero8((uint8_t *)&dev, sizeof(dev));
     dev.fstype = RAM_FS;
     dev.ops = &ramfs_ops;
-    int instance = ramfs_mount_count++;
+    ramfs_mount_count++;
     dev.rootfs = false;
     kstrcpy(dev.mountpoint, path);
     kstrcpy(dev.mountpoint_root, name);
     kstrcpy(dev.mountpoint_parent, ROOT);
     device_num = vfs_register_device(dev);
-    if (device_num < 0)
-        return -1;
+    if (device_num < 0) {
+        ramfs_mount_count--;
+        goto error;
+    }
     ramfs_device_nums[instance] = device_num;
     init_spinlock(&ramfs_instances[instance].lock);
-    create_root_dir(vfs_get_device(device_num), with_console);
+    create_root_dir(vfs_get_device(device_num), with_console, with_proc);
     return 0;
+
+error:
+    kfree(ramfs_instances[instance].inodes);
+    ramfs_instances[instance].inodes = NULL;
+    ramfs_instances[instance].inode_capacity = 0;
+    return -1;
 }
 
 int ramfs_init(void) {
     ramfs_mount_count = 0;
-    for (int i = 0; i < RAMFS_INSTANCE_COUNT; i++)
+    for (int i = 0; i < RAMFS_INSTANCE_COUNT; i++) {
         ramfs_device_nums[i] = -1;
+        ramfs_instances[i].inodes = NULL;
+        ramfs_instances[i].inode_capacity = 0;
+    }
     memzero8((uint8_t *)&ramfs_ops, sizeof(ramfs_ops));
     ramfs_ops.read_root_dir = ramfs_read_root_dir;
     ramfs_ops.read_inode_dir= ramfs_read_inode_dir;
@@ -159,8 +209,9 @@ int ramfs_init(void) {
 #ifdef DEBUG_RAMFS
     kprintf("RAMFS: mounting /dev and /tmp\n");
 #endif
-    if (ramfs_mount("/dev", "dev", true) < 0 ||
-        ramfs_mount("/tmp", "tmp", false) < 0)
+    if (ramfs_mount("/dev", "dev", true, false) < 0 ||
+        ramfs_mount("/tmp", "tmp", false, false) < 0 ||
+        ramfs_mount("/proc", "proc", false, true) < 0)
         return -1;
     return 0;
 }
@@ -186,6 +237,67 @@ static int ramfs_write_console(void *buf, uint32_t count) {
     return count;
 }
 
+static int proc_append(char *buffer, int size, int position,
+                       const char *text)
+{
+    while (*text != '\0' && position + 1 < size)
+        buffer[position++] = *text++;
+    if (size > 0) buffer[position] = '\0';
+    return position;
+}
+
+static int proc_append_number(char *buffer, int size, int position,
+                              uint64_t value)
+{
+    char number[24];
+
+    itoa(value, number, 10);
+    return proc_append(buffer, size, position, number);
+}
+
+static int proc_copy_read(struct file *rfile, void *buf, uint32_t count,
+                          const char *report, int length)
+{
+    uint32_t available;
+
+    if (rfile->pos >= (uint64_t)length) return 0;
+    available = length - rfile->pos;
+    if (count > available) count = available;
+    memcpy(buf, report + rfile->pos, count);
+    return count;
+}
+
+static int ramfs_read_proc(struct file *rfile, void *buf, uint32_t count)
+{
+    if (rfile->i_node.i_ino == PROC_PROCESSES_INO) {
+        char report[8192];
+        int length = sched_proc_report(report, sizeof(report));
+
+        return proc_copy_read(rfile, buf, count, report, length);
+    }
+    if (rfile->i_node.i_ino == PROC_MEMINFO_INO) {
+        char report[256];
+        uint64_t total;
+        uint64_t used;
+        uint64_t free;
+        int length = 0;
+
+        pmem_get_stats(&total, &used, &free);
+        length = proc_append(report, sizeof(report), length, "MemTotal: ");
+        length = proc_append_number(report, sizeof(report), length,
+                                    total / 1024);
+        length = proc_append(report, sizeof(report), length, " kB\nMemUsed:  ");
+        length = proc_append_number(report, sizeof(report), length,
+                                    used / 1024);
+        length = proc_append(report, sizeof(report), length, " kB\nMemFree:  ");
+        length = proc_append_number(report, sizeof(report), length,
+                                    free / 1024);
+        length = proc_append(report, sizeof(report), length, " kB\n");
+        return proc_copy_read(rfile, buf, count, report, length);
+    }
+    return -1;
+}
+
 int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) { 
     struct ramfs_instance *fs = ramfs_for_device(rfile->dev);
 
@@ -205,6 +317,8 @@ int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) {
         return kmsg_read(buf, count, rfile->pos);
     if (fs->has_console && rfile->i_node.i_ino == MOUSE_INO)
         return mouse_read_events(buf, count);
+    if (fs->has_proc)
+        return ramfs_read_proc(rfile, buf, count);
     acquire_spinlock(&fs->lock);
     // Approaching the end of the file truncate read bytes
 #ifdef DEBUG_FS_RAMFS
@@ -253,6 +367,8 @@ int ramfs_write_file (struct file * rfile,void *buf,uint32_t count) {
         return kmsg_write(buf, count);
     if (fs->has_console && rfile->i_node.i_ino == MOUSE_INO)
         return -1;
+    if (fs->has_proc)
+        return -1;
  
     acquire_spinlock(&fs->lock);
     struct ramfs_block *r_block = fs->inodes[rfile->i_node.i_ino].blocks;
@@ -289,6 +405,8 @@ static int ramfs_truncate_file(struct file *rfile)
     struct ramfs_instance *fs = ramfs_for_device(rfile->dev);
     struct ramfs_block *block;
 
+    if (fs->has_proc) return -1;
+
     /* Output redirection conventionally opens its target with O_TRUNC.
      * Character devices have no stored contents, so truncating one is a
      * successful no-op rather than an error. */
@@ -315,6 +433,8 @@ static int ramfs_truncate_file(struct file *rfile)
 struct inode* ramfs_create_file(struct inode *parent, char *name) 
 {
     struct ramfs_instance *fs = ramfs_for_device(parent->dev);
+
+    if (fs->has_proc) return NULL;
 
     if (fs->inodes[parent->i_ino].last_child >= RAMFS_MAX_DIRECTORY)
         return NULL;
@@ -352,6 +472,7 @@ struct inode* ramfs_create_file(struct inode *parent, char *name)
 int ramfs_create_dir(struct inode *parent, char *name) 
 {
     struct ramfs_instance *fs = ramfs_for_device(parent->dev);
+    if (fs->has_proc) return -1;
     if (fs->inodes[parent->i_ino].last_child >= RAMFS_MAX_DIRECTORY)
         return -1;
 
@@ -382,7 +503,8 @@ int ramfs_remove_file(struct inode *i_node)
     int inode_num = i_node->i_ino;
     struct ramfs_block *block;
 
-    if (inode_num < 2 || inode_num >= MAX_RAMFS)
+    if (fs->has_proc || inode_num < 2 ||
+        inode_num >= fs->inode_capacity)
         return -1;
     acquire_spinlock(&fs->lock);
     if (fs->inodes[inode_num].dev == NULL ||
@@ -429,7 +551,10 @@ static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
     uint64_t old_parent;
     int index = -1;
 
-    if (inode_num < 2 || inode_num >= MAX_RAMFS || new_name[0] == '\0' ||
+    if (fs->has_proc) return -1;
+
+    if (inode_num < 2 || inode_num >= fs->inode_capacity ||
+        new_name[0] == '\0' ||
         new_parent->dev != i_node->dev || new_parent->i_type != I_DIR)
         return -1;
     if (fs->has_console && inode_num <= MOUSE_INO)
