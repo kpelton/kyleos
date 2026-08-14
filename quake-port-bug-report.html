@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KyleOS Doom &amp; Quake Port — Engineering Bug Report</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090d12;
+      --panel: #111820;
+      --panel-2: #17212b;
+      --text: #e9f0f5;
+      --muted: #a4b3bf;
+      --line: #293744;
+      --accent: #f0b35a;
+      --accent-2: #78c7c2;
+      --danger: #ef7b72;
+      --ok: #80c98f;
+      --code: #0a1118;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      line-height: 1.62;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 85% 3%, rgba(120, 199, 194, .12), transparent 28rem),
+        radial-gradient(circle at 5% 12%, rgba(240, 179, 90, .10), transparent 25rem),
+        var(--bg);
+    }
+
+    a { color: var(--accent-2); }
+    code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    code { color: #ffd391; }
+
+    .wrap {
+      width: min(1160px, calc(100% - 36px));
+      margin: 0 auto;
+    }
+
+    header {
+      padding: 74px 0 42px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--accent);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .17em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 900px;
+      margin: 0;
+      font-size: clamp(2.35rem, 7vw, 5.4rem);
+      line-height: .98;
+      letter-spacing: -.055em;
+    }
+
+    .lede {
+      max-width: 790px;
+      margin: 26px 0 0;
+      color: var(--muted);
+      font-size: clamp(1.05rem, 2vw, 1.28rem);
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .pill {
+      padding: 7px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(17, 24, 32, .72);
+      font-size: .88rem;
+    }
+
+    main { padding: 46px 0 80px; }
+
+    h2 {
+      margin: 0 0 18px;
+      font-size: clamp(1.65rem, 3vw, 2.4rem);
+      letter-spacing: -.03em;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 1.33rem;
+      letter-spacing: -.015em;
+    }
+
+    section { margin-top: 58px; }
+
+    .summary-grid,
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+    }
+
+    .metric {
+      grid-column: span 3;
+      min-height: 142px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(145deg, rgba(23, 33, 43, .92), rgba(13, 20, 27, .92));
+    }
+
+    .metric strong {
+      display: block;
+      color: var(--accent);
+      font-size: 2.2rem;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 10px;
+      color: var(--muted);
+    }
+
+    .callout {
+      margin-top: 18px;
+      padding: 20px 22px;
+      border-left: 4px solid var(--accent-2);
+      border-radius: 0 12px 12px 0;
+      color: var(--muted);
+      background: rgba(120, 199, 194, .075);
+    }
+
+    .bug {
+      grid-column: span 6;
+      padding: 25px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: rgba(17, 24, 32, .88);
+    }
+
+    .bug.critical { border-top: 3px solid var(--danger); }
+    .bug.hard { border-top: 3px solid var(--accent); }
+    .bug.medium { border-top: 3px solid var(--accent-2); }
+    .bug.known { border-top: 3px solid #a88bd5; }
+
+    .bug-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .score {
+      flex: 0 0 auto;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--accent);
+      font-weight: 800;
+      background: var(--code);
+    }
+
+    .label {
+      margin: 16px 0 3px;
+      color: var(--muted);
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .bug p { margin: 0; }
+
+    .trace {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin: 18px 0 0;
+    }
+
+    .trace div {
+      position: relative;
+      padding: 11px 10px;
+      border-radius: 9px;
+      color: var(--muted);
+      background: var(--code);
+      font-size: .82rem;
+      text-align: center;
+    }
+
+    .trace div:not(:last-child)::after {
+      position: absolute;
+      right: -8px;
+      top: 50%;
+      content: "›";
+      z-index: 2;
+      color: var(--accent);
+      transform: translate(50%, -54%);
+      font-size: 1.25rem;
+    }
+
+    .code-path {
+      margin-top: 17px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .86rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(17, 24, 32, .86);
+    }
+
+    th, td {
+      padding: 13px 15px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--accent);
+      font-size: .76rem;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+      background: var(--panel-2);
+    }
+
+    tr:last-child td { border-bottom: 0; }
+    td:nth-child(2), td:nth-child(3) { white-space: nowrap; }
+
+    .verification {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .verification article {
+      padding: 23px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: var(--panel);
+    }
+
+    .verification ul { margin-bottom: 0; padding-left: 20px; }
+    .verification li + li { margin-top: 7px; }
+    .ok { color: var(--ok); }
+    .warn { color: var(--accent); }
+
+    pre {
+      overflow-x: auto;
+      margin: 15px 0 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: #d9e8ef;
+      background: var(--code);
+      font-size: .86rem;
+    }
+
+    footer {
+      padding: 26px 0 42px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .88rem;
+    }
+
+    @media (max-width: 850px) {
+      .metric { grid-column: span 6; }
+      .bug { grid-column: span 12; }
+      .trace { grid-template-columns: 1fr 1fr; }
+      .trace div:nth-child(2)::after { display: none; }
+      .verification { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 520px) {
+      .wrap { width: min(100% - 24px, 1160px); }
+      header { padding-top: 48px; }
+      .metric { grid-column: span 12; }
+      .trace { grid-template-columns: 1fr; }
+      .trace div::after { display: none; }
+      th, td { padding: 10px; }
+    }
+
+    @media print {
+      :root { color-scheme: light; --bg: white; --panel: white; --panel-2: #f1f3f5;
+        --text: #111; --muted: #46505a; --line: #c8ced4; --code: #f4f5f6; }
+      body { background: white; font-size: 10.5pt; }
+      header { padding-top: 22px; }
+      .bug, .metric, .verification article { break-inside: avoid; }
+      section { margin-top: 32px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <p class="eyebrow">KyleOS engineering report</p>
+      <h1>Doom &amp; Quake port: the bugs behind the pixels</h1>
+      <p class="lede">
+        A technical postmortem of the kernel and Quake failures uncovered while bringing a
+        1996 game engine onto a small native x86-64 operating system. The visible failures
+        looked like bad game data; most were really violations of CPU, ABI, or device contracts.
+      </p>
+      <div class="meta">
+        <span class="pill">Platform: x86-64 KyleOS</span>
+        <span class="pill">Renderer: software framebuffer</span>
+        <span class="pill">Data: Doom WAD / Quake PAK</span>
+        <span class="pill">Status: Doom + Quake installable together</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section aria-labelledby="executive-summary">
+      <h2 id="executive-summary">Executive summary</h2>
+      <div class="summary-grid">
+        <article class="metric"><strong>7</strong><span>major defects diagnosed and corrected</span></article>
+        <article class="metric"><strong>3</strong><span>optimization levels exercised: O1, O2, and O3</span></article>
+        <article class="metric"><strong>2</strong><span>engines supported in the same disk image</span></article>
+        <article class="metric"><strong>1</strong><span>known visual issue: shared-console flicker</span></article>
+      </div>
+      <p class="callout">
+        The central lesson is that a successful game port tests much more than graphics. Quake
+        stressed floating-point state, task switching, stack layout, storage polling, raw input,
+        and a 32-bit virtual machine model. Doom and Quake now benefit from the same corrected OS
+        foundation, though each should have exclusive framebuffer and keyboard ownership while running.
+      </p>
+    </section>
+
+    <section aria-labelledby="bug-analysis">
+      <h2 id="bug-analysis">Detailed bug analysis</h2>
+      <div class="cards">
+        <article class="bug critical">
+          <div class="bug-head"><h3>1. FPU/SSE state crossed task boundaries</h3><span class="score">9/10</span></div>
+          <p class="label">Visible symptom</p>
+          <p>Quake aborted map loading with <code>Bad surface extents</code>, suggesting a corrupt BSP or renderer calculation.</p>
+          <p class="label">Why it was deceptive</p>
+          <p>The map file and surface data were valid. Floating-point values changed only when a timer interrupt scheduled another process, so the corruption appeared inside unrelated geometry code.</p>
+          <p class="label">Root cause</p>
+          <p>The scheduler restored an FPU context but did not first save the outgoing process’s live x87/SSE state. Registers therefore jumped backward or inherited another task’s values at each timeslice.</p>
+          <p class="label">Correction</p>
+          <p>Save the outgoing user task with <code>fxsave</code> before selection and restore the selected task with <code>fxrstor</code>, including a valid architectural reset state for new tasks.</p>
+          <div class="trace"><div>valid BSP</div><div>timer preemption</div><div>FPU state replaced</div><div>geometry error</div></div>
+          <p class="code-path">Relevant code: <a href="sched/sched.c">sched/sched.c</a>, <a href="asm/asm_calls.s">asm/asm_calls.s</a></p>
+        </article>
+
+        <article class="bug critical">
+          <div class="bug-head"><h3>2. Voluntary switches lost callee-saved registers</h3><span class="score">9/10</span></div>
+          <p class="label">Visible symptom</p>
+          <p>At <code>-O1</code>, init repeatedly printed <code>console exited; restarting</code> and eventually the kernel faulted while writing through a null pointer in <code>kstrcpy</code>.</p>
+          <p class="label">Why it was deceptive</p>
+          <p>The faulting string function was correct. Optimized <code>ramfs_read_file</code> held its user buffer in <code>r13</code> across <code>ksleepm()</code>; unoptimized code happened to keep the same value on the stack.</p>
+          <p class="label">Root cause</p>
+          <p>A voluntary context switch saved only <code>RSP</code> and <code>RBP</code>. The x86-64 ABI requires <code>RBX</code> and <code>R12–R15</code> to survive a C call. Another task overwrote those registers before the original task resumed.</p>
+          <p class="label">Correction</p>
+          <p>An assembly <code>schedule</code> wrapper now pushes every callee-saved general register onto the task’s own kernel stack. Restoring that stack naturally restores the registers before returning to C.</p>
+          <div class="trace"><div>buffer in R13</div><div>console sleeps</div><div>other task runs</div><div>R13 restored</div></div>
+          <p class="code-path">Relevant code: <a href="asm/asm_calls.s">asm/asm_calls.s</a>, <a href="sched/sched.c">sched/sched.c</a></p>
+        </article>
+
+        <article class="bug hard">
+          <div class="bug-head"><h3>3. QuakeC strings assumed a 32-bit address relationship</h3><span class="score">8/10</span></div>
+          <p class="label">Visible symptom</p>
+          <p>Saving in Slipgate Complex printed <code>done.</code> and then segfaulted in <code>GetEdictFieldValue</code>. The saved <code>mapname</code> contained framebuffer-like bytes instead of <code>e1m1</code>.</p>
+          <p class="label">Why it was deceptive</p>
+          <p>The crash happened after the save completed, and the immediate failure was a corrupted cache index. The original overwrite occurred earlier while formatting a string.</p>
+          <p class="label">Root cause</p>
+          <p>QuakeC represents strings as signed 32-bit offsets from <code>pr_strings</code>. Native static strings such as <code>sv.name</code> could be more than 2 GiB from the Quake hunk on KyleOS. Subtracting the pointers truncated the offset and produced an unrelated address.</p>
+          <p class="label">Correction</p>
+          <p>Copy native strings into hunk-owned memory with <code>ED_NewString</code>, initialize temporary QuakeC strings inside the persistent hunk, and bound diagnostic formatting with larger <code>snprintf</code> buffers.</p>
+          <div class="trace"><div>native pointer</div><div>32-bit truncation</div><div>bad VM string</div><div>save overflow</div></div>
+          <p class="code-path">Relevant patch: <a href="patches/quake/0001-kyleos-64-bit-vm-types.patch">patches/quake/0001-kyleos-64-bit-vm-types.patch</a></p>
+        </article>
+
+        <article class="bug hard">
+          <div class="bug-head"><h3>4. Initial userspace stack violated the ABI</h3><span class="score">7/10</span></div>
+          <p class="label">Visible symptom</p>
+          <p>Optimized user programs could fault on aligned stack operations, sometimes depending on whether the argument count was odd or even.</p>
+          <p class="label">Why it was deceptive</p>
+          <p>Simple programs and debug builds worked. The failure appeared only when a compiler selected instructions or layouts that relied on the documented x86-64 stack contract.</p>
+          <p class="label">Root cause</p>
+          <p>KyleOS enters newlib’s <code>_start</code> directly instead of arriving through a normal <code>call</code>. The constructed stack did not consistently reproduce the alignment a called function expects.</p>
+          <p class="label">Correction</p>
+          <p>Pad the initial argument frame so <code>RSP</code> is 8 modulo 16 on entry; the startup push then produces a 16-byte-aligned frame.</p>
+          <p class="code-path">Relevant code: <a href="sched/sched.c">sched/sched.c</a></p>
+        </article>
+
+        <article class="bug medium">
+          <div class="bug-head"><h3>5. The user stack was too small for Quake</h3><span class="score">5/10</span></div>
+          <p class="label">Visible symptom</p>
+          <p>Pack-file and map-loading code could run beyond the original 128 KiB user-stack reservation.</p>
+          <p class="label">Why it was deceptive</p>
+          <p>A stack failure during asset loading resembles bad file data, broken demand paging, or heap corruption. Quake also uses unusually large temporary stack frames in old loading code.</p>
+          <p class="label">Root cause</p>
+          <p>The kernel reserved 32 pages for a user stack. Quake’s loader could consume slightly more than that in one path, leaving no safe growth margin.</p>
+          <p class="label">Correction</p>
+          <p>Increase the reservation to 256 pages, or 1 MiB, while retaining demand paging so physical memory is committed only as touched.</p>
+          <p class="code-path">Relevant code: <a href="sched/sched.h">sched/sched.h</a></p>
+        </article>
+
+        <article class="bug medium">
+          <div class="bug-head"><h3>6. ATA PIO readiness logic was incomplete</h3><span class="score">6/10</span></div>
+          <p class="label">Visible symptom</p>
+          <p>Disk activity could hang, proceed before data was ready, or make filesystem and save operations appear unreliable.</p>
+          <p class="label">Why it was deceptive</p>
+          <p>Failures surfaced above the driver as FAT errors, bad assets, or save corruption. QEMU timing can also hide polling mistakes that real hardware exposes.</p>
+          <p class="label">Root cause</p>
+          <p>The old wait condition could stop once <code>BUSY</code> cleared even when <code>DRQ</code> was not asserted. It also lacked bounded timeouts and explicit checks for ATA error and device-fault status.</p>
+          <p class="label">Correction</p>
+          <p>Add bounded <code>wait_drq</code> and <code>wait_not_busy</code> helpers, reject invalid status values and device errors, initialize the mutex before the first read, and iterate the port array by element count.</p>
+          <p class="code-path">Relevant code: <a href="block/ata.c">block/ata.c</a></p>
+        </article>
+
+        <article class="bug medium">
+          <div class="bug-head"><h3>7. Shell keys leaked into raw game input</h3><span class="score">3/10</span></div>
+          <p class="label">Visible symptom</p>
+          <p>A game could receive stale key events typed while the shell still owned the console, producing unwanted motion or menu actions at startup.</p>
+          <p class="label">Root cause</p>
+          <p>Switching into raw mode reset the byte-oriented raw queue but left make/break events in the keyboard event queue.</p>
+          <p class="label">Correction</p>
+          <p>Reset both queue heads and tails at the ownership transition, along with the cooked line buffers.</p>
+          <p class="code-path">Relevant code: <a href="output/input.c">output/input.c</a></p>
+        </article>
+
+        <article class="bug known">
+          <div class="bug-head"><h3>Known issue: periodic console flicker</h3><span class="score">Open</span></div>
+          <p class="label">Visible symptom</p>
+          <p>The text console periodically flashes over the game framebuffer.</p>
+          <p class="label">Root cause</p>
+          <p>Quake and the VGA terminal share the same framebuffer. Quake’s diagnostic output reaches <code>/dev/console</code>; terminal scrolling performs a full redraw over the game, which the next game frame then replaces.</p>
+          <p class="label">Recommended correction</p>
+          <p>Separate the serial/kernel log from the graphical terminal while a game owns the framebuffer, or add explicit framebuffer ownership so console rendering is suppressed and later restored. This issue was diagnosed but is not part of the completed fixes in this report.</p>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="difficulty">
+      <h2 id="difficulty">Human difficulty and likely time</h2>
+      <table>
+        <thead><tr><th>Defect</th><th>Difficulty</th><th>Experienced estimate</th><th>Main skill required</th></tr></thead>
+        <tbody>
+          <tr><td>FPU/SSE task state</td><td>9/10</td><td>1–5 days</td><td>CPU architecture, scheduler tracing</td></tr>
+          <tr><td>Callee-saved register loss</td><td>9/10</td><td>1–4 days</td><td>ABI, assembly, optimized disassembly</td></tr>
+          <tr><td>QuakeC 32-bit string offsets</td><td>8/10</td><td>1–3 days</td><td>Engine VM internals, memory forensics</td></tr>
+          <tr><td>Initial stack alignment</td><td>7/10</td><td>4–12 hours</td><td>x86-64 ABI and process startup</td></tr>
+          <tr><td>ATA PIO polling</td><td>6/10</td><td>½–2 days</td><td>Device protocols, failure handling</td></tr>
+          <tr><td>User stack capacity</td><td>5/10</td><td>2–6 hours</td><td>VM layout and stack measurement</td></tr>
+          <tr><td>Raw-input queue transition</td><td>3/10</td><td>1–3 hours</td><td>Input ownership and queue state</td></tr>
+        </tbody>
+      </table>
+      <p class="callout">
+        These estimates assume a reproducible QEMU environment, debug symbols, and the ability to inspect binaries and disk images. Without those tools, the two context-state bugs could each consume a week because their symptoms point toward innocent game code.
+      </p>
+    </section>
+
+    <section aria-labelledby="verification">
+      <h2 id="verification">Verification evidence</h2>
+      <div class="verification">
+        <article>
+          <h3 class="ok">Completed checks</h3>
+          <ul>
+            <li>Quake reached the start map repeatedly after the FPU correction.</li>
+            <li>A new quicksave stored <code>"mapname" "e1m1"</code> with no oversized line.</li>
+            <li>The generated quicksave loaded successfully back into Slipgate Complex.</li>
+            <li>Three cold boots each remained stable at <code>-O1</code>, <code>-O2</code>, and <code>-O3</code>.</li>
+            <li>Quake entered <code>e1m1</code> under each tested optimization level.</li>
+            <li>The permanent Quake patch reapplied during a clean engine build.</li>
+          </ul>
+        </article>
+        <article>
+          <h3 class="warn">Operational notes</h3>
+          <ul>
+            <li>The previously created <code>s0.sav</code> contains a corrupt map name and should be overwritten.</li>
+            <li>Doom and Quake may be installed together, but should not run simultaneously.</li>
+            <li>Both engines expect exclusive ownership of raw keyboard input and the framebuffer.</li>
+            <li>The scheduler implementation retains its existing per-object <code>-O0</code> build override; surrounding kernel code was exercised through <code>-O3</code>.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="build-layout">
+      <h2 id="build-layout">Combined Doom and Quake layout</h2>
+      <p>Both ports are included by the same image builder when their binaries and legally obtained data files are present.</p>
+      <pre><code>Host repository                       KyleOS disk image
+assets/doom.wad                  →    /usr/share/doom/doom.wad
+assets/quake/id1/pak0.pak        →    /usr/share/quake/id1/pak0.pak
+build/extras/doom/doom           →    /usr/bin/doom
+build/extras/quake/quake         →    /usr/bin/quake</code></pre>
+      <pre><code>make doom quake
+make image-reset
+make test</code></pre>
+    </section>
+
+    <section aria-labelledby="conclusion">
+      <h2 id="conclusion">Conclusion</h2>
+      <p>
+        The hardest work was not translating rendering code. It was making KyleOS honor the contracts
+        that mature native software silently depends on: complete CPU state preservation, ABI-correct
+        stacks and calls, bounded device protocols, sufficient virtual memory, and clear device ownership.
+        Doom is the lighter workload; Quake acted as the deeper systems test and exposed faults that could
+        affect any optimized program. Fixing those faults improved the operating system, not just one game.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">Generated for the KyleOS workspace · Technical postmortem and porting report</div>
+  </footer>
+</body>
+</html>

@@ -115,6 +115,10 @@ void input_set_raw(bool enabled)
         }
         raw_head = 0;
         raw_tail = 0;
+        /* Games consume make/break events directly.  Do not deliver keys
+         * left in the queue while the shell owned the console. */
+        key_head = 0;
+        key_tail = 0;
     }
     release_spinlock(&input_spinlock);
 }

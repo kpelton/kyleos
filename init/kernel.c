@@ -1,5 +1,6 @@
 #include <asm/asm.h>
 #include <output/output.h>
+#include <output/mouse.h>
 #include <init/tables.h>
 #include <block/ata.h>
 #include <irq/irq.h>
@@ -91,6 +92,7 @@ static void kinit(uint64_t mb_info)
     asm volatile("movq %0,%%rsp " : : "r"(kernel_stack+4096*STACK_PAGES));
     klog("MM init done\n");
     PIC_init();
+    mouse_init();
     klog("PIC init done\n");
     ata_init();
     timer_system_init();

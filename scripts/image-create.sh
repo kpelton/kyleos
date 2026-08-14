@@ -21,6 +21,12 @@ seed_dir="$root/image/rootfs"
 doom_binary=${DOOM_BINARY:-"$root/build/extras/doom/doom"}
 doom_wad=${DOOM_WAD:-"$root/assets/doom.wad"}
 
+quake_binary=${QUAKE_BINARY:-"$root/build/extras/quake/quake"}
+quake_data_dir=${QUAKE_DATA_DIR:-"$root/assets/quake/id1"}
+
+duke3d_binary=${DUKE3D_BINARY:-"$root/build/extras/duke3d/duke3d"}
+duke3d_grp=${DUKE3D_GRP:-"$root/assets/duke3d/duke3d.grp"}
+
 lua_binary=${LUA_BINARY:-"$root/build/extras/lua/lua"}
 
 bible_text=${BIBLE_TEXT:-"$root/assets/bible.txt"}
@@ -321,6 +327,58 @@ if [[ -f $lua_binary ]]; then
     cp \
         "$root/extras/lua/examples"/*.lua \
         "$mount_dir/usr/share/lua/"
+fi
+
+
+# ----------------------------------------------------------------------
+# Quake
+# ----------------------------------------------------------------------
+
+if [[ -f $quake_binary ]]; then
+    mkdir -p \
+        "$mount_dir/usr/bin" \
+        "$mount_dir/usr/share/quake/id1"
+
+    cp "$quake_binary" "$mount_dir/usr/bin/quake"
+
+    quake_paks=0
+    for pak in \
+        "$quake_data_dir"/pak*.pak \
+        "$quake_data_dir"/PAK*.PAK
+    do
+        if [[ -f $pak ]]; then
+            cp "$pak" \
+                "$mount_dir/usr/share/quake/id1/$(basename "$pak" | tr '[:upper:]' '[:lower:]')"
+            quake_paks=$((quake_paks + 1))
+        fi
+    done
+
+    if [[ $quake_paks -eq 0 ]]; then
+        echo \
+            "warning: Quake binary installed without data; set QUAKE_DATA_DIR=/path/to/id1" \
+            >&2
+    fi
+fi
+
+
+# ----------------------------------------------------------------------
+# Duke Nukem 3D
+# ----------------------------------------------------------------------
+
+if [[ -f $duke3d_binary ]]; then
+    mkdir -p \
+        "$mount_dir/usr/bin" \
+        "$mount_dir/usr/share/duke3d"
+
+    cp "$duke3d_binary" "$mount_dir/usr/bin/duke3d"
+
+    if [[ -f $duke3d_grp ]]; then
+        cp "$duke3d_grp" "$mount_dir/usr/share/duke3d/duke3d.grp"
+    else
+        echo \
+            "warning: Duke3D binary installed without data; set DUKE3D_GRP=/path/to/DUKE3D.GRP" \
+            >&2
+    fi
 fi
 
 

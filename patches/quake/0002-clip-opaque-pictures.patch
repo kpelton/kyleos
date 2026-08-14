@@ -1,0 +1,73 @@
+diff --git a/WinQuake/draw.c b/WinQuake/draw.c
+--- a/WinQuake/draw.c
++++ b/WinQuake/draw.c
+@@ -290,25 +290,46 @@ void Draw_Pic (int x, int y, qpic_t *pic)
+ {
+ 	byte			*dest, *source;
+ 	unsigned short	*pusdest;
+-	int				v, u;
++	int				v, u, source_x, source_y, draw_width, draw_height;
+ 
+-	if ((x < 0) ||
+-		(x + pic->width > vid.width) ||
+-		(y < 0) ||
+-		(y + pic->height > vid.height))
+-	{
+-		Sys_Error ("Draw_Pic: bad coordinates");
+-	}
++	if (!pic || pic->width <= 0 || pic->height <= 0 ||
++		pic->width > 4096 || pic->height > 4096)
++		Sys_Error ("Draw_Pic: bad picture size");
++
++	/* UI pictures can briefly straddle an edge while the view or status bar is
++	 * being recalculated.  Clip them instead of aborting the whole engine. */
++	source_x = source_y = 0;
++	draw_width = pic->width;
++	draw_height = pic->height;
++	if (x < 0)
++	{
++		source_x = -x;
++		draw_width -= source_x;
++		x = 0;
++	}
++	if (y < 0)
++	{
++		source_y = -y;
++		draw_height -= source_y;
++		y = 0;
++	}
++	if (x >= vid.width || y >= vid.height ||
++		draw_width <= 0 || draw_height <= 0)
++		return;
++	if (draw_width > vid.width - x)
++		draw_width = vid.width - x;
++	if (draw_height > vid.height - y)
++		draw_height = vid.height - y;
+ 
+-	source = pic->data;
++	source = pic->data + source_y * pic->width + source_x;
+ 
+ 	if (r_pixbytes == 1)
+ 	{
+ 		dest = vid.buffer + y * vid.rowbytes + x;
+ 
+-		for (v=0 ; v<pic->height ; v++)
++		for (v=0 ; v<draw_height ; v++)
+ 		{
+-			Q_memcpy (dest, source, pic->width);
++			Q_memcpy (dest, source, draw_width);
+ 			dest += vid.rowbytes;
+ 			source += pic->width;
+ 		}
+@@ -318,9 +339,9 @@ void Draw_Pic (int x, int y, qpic_t *pic)
+ 	// FIXME: pretranslate at load time?
+ 		pusdest = (unsigned short *)vid.buffer + y * (vid.rowbytes >> 1) + x;
+ 
+-		for (v=0 ; v<pic->height ; v++)
++		for (v=0 ; v<draw_height ; v++)
+ 		{
+-			for (u=0 ; u<pic->width ; u++)
++			for (u=0 ; u<draw_width ; u++)
+ 			{
+ 				pusdest[u] = d_8to16table[source[u]];
+ 			}

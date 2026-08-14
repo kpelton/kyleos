@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>KyleOS — subsystem atlas</title>
+  <style>
+    :root {
+      --ink: #f2f0e7;
+      --muted: #aaa99f;
+      --dim: #77776f;
+      --ground: #0e100f;
+      --panel: #151816;
+      --panel-2: #1b1f1c;
+      --line: #30352f;
+      --lime: #c7f36b;
+      --cyan: #67d7d0;
+      --orange: #f5a45d;
+      --violet: #b9a1ff;
+      --red: #ff7c70;
+      --radius: 16px;
+      --mono: "SFMono-Regular", "Cascadia Code", "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 75% -10%, rgba(103, 215, 208, .09), transparent 34rem),
+        radial-gradient(circle at 12% 18%, rgba(199, 243, 107, .06), transparent 27rem),
+        var(--ground);
+      font-family: var(--sans);
+      line-height: 1.5;
+    }
+
+    a { color: inherit; }
+    button { font: inherit; }
+    code { font-family: var(--mono); }
+
+    .shell {
+      width: min(1480px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      background: rgba(14,16,15,.84);
+      backdrop-filter: blur(18px);
+    }
+
+    .topbar-inner {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      text-decoration: none;
+      font-weight: 700;
+      letter-spacing: -.02em;
+    }
+
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(199,243,107,.55);
+      border-radius: 8px;
+      color: var(--lime);
+      background: rgba(199,243,107,.08);
+      font: 700 12px var(--mono);
+    }
+
+    nav { display: flex; gap: 6px; }
+    nav a {
+      padding: 8px 11px;
+      border-radius: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+    }
+    nav a:hover { color: var(--ink); background: rgba(255,255,255,.05); }
+
+    .hero {
+      padding: 88px 0 56px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(320px, .7fr);
+      gap: 64px;
+      align-items: end;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--lime);
+      font: 700 11px var(--mono);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: 28px; height: 1px; background: currentColor; }
+
+    h1 {
+      max-width: 850px;
+      margin: 18px 0 20px;
+      font-size: clamp(48px, 7vw, 92px);
+      line-height: .94;
+      letter-spacing: -.065em;
+      font-weight: 720;
+    }
+
+    .hero-copy {
+      max-width: 720px;
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(16px, 2vw, 20px);
+    }
+
+    .hero-aside {
+      padding-left: 24px;
+      border-left: 1px solid var(--line);
+    }
+
+    .hero-aside p {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .stat strong { display: block; color: var(--ink); font: 600 26px var(--mono); }
+    .stat span { display: block; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+
+    section { padding: 46px 0 74px; }
+    .section-head {
+      display: grid;
+      grid-template-columns: 1fr minmax(280px, 560px);
+      gap: 32px;
+      align-items: end;
+      margin-bottom: 24px;
+    }
+    .section-index { color: var(--lime); font: 600 11px var(--mono); letter-spacing: .12em; }
+    h2 { margin: 5px 0 0; font-size: clamp(30px, 4vw, 48px); letter-spacing: -.045em; line-height: 1.05; }
+    .section-head p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .atlas {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      overflow: hidden;
+      background: rgba(21,24,22,.88);
+      box-shadow: 0 30px 100px rgba(0,0,0,.24);
+    }
+
+    .atlas-toolbar {
+      min-height: 58px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.016);
+    }
+    .hint { color: var(--dim); font: 12px var(--mono); }
+    .legend { display: flex; flex-wrap: wrap; gap: 7px; }
+    .legend button {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .legend button::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin-right: 7px;
+      border-radius: 50%;
+      background: var(--tag);
+      vertical-align: 1px;
+    }
+    .legend button:hover, .legend button.active { color: var(--ink); border-color: var(--tag); background: color-mix(in srgb, var(--tag) 8%, transparent); }
+
+    .map-scroll { overflow-x: auto; }
+    .map {
+      position: relative;
+      min-width: 1130px;
+      padding: 36px;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(130px, 1fr));
+      grid-template-rows: repeat(5, minmax(126px, auto));
+      gap: 26px 24px;
+      background-image:
+        linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    #edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 0; }
+    .edge { fill: none; stroke: #657069; stroke-width: 1.3; opacity: .42; transition: opacity .2s, stroke .2s, stroke-width .2s; }
+    .edge.hot { opacity: .95; stroke: var(--lime); stroke-width: 2; }
+    .edge.dimmed { opacity: .07; }
+
+    .node {
+      --tag: var(--ink);
+      position: relative;
+      z-index: 2;
+      min-height: 126px;
+      padding: 16px;
+      border: 1px solid #343a35;
+      border-radius: 14px;
+      background: linear-gradient(145deg, rgba(31,35,32,.97), rgba(23,26,24,.97));
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+      transition: transform .18s, border-color .18s, opacity .18s, box-shadow .18s;
+    }
+    .node::after {
+      content: "";
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--tag);
+      box-shadow: 0 0 16px var(--tag);
+    }
+    .node:hover, .node.selected { transform: translateY(-3px); border-color: var(--tag); box-shadow: 0 14px 34px rgba(0,0,0,.28); }
+    .node.dimmed { opacity: .24; }
+    .node small { color: var(--tag); font: 700 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .node h3 { margin: 14px 0 5px; font-size: 17px; letter-spacing: -.02em; }
+    .node p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.42; }
+
+    [data-group="user"] { --tag: var(--lime); }
+    [data-group="service"] { --tag: var(--cyan); }
+    [data-group="core"] { --tag: var(--violet); }
+    [data-group="driver"] { --tag: var(--orange); }
+    [data-group="hardware"] { --tag: var(--red); }
+
+    #apps { grid-area: 1 / 1 / 2 / 3; }
+    #libc { grid-area: 1 / 3 / 2 / 5; }
+    #init { grid-area: 1 / 5 / 2 / 7; }
+    #syscall { grid-area: 2 / 1 / 3 / 3; }
+    #process { grid-area: 2 / 3 / 3 / 4; }
+    #scheduler { grid-area: 2 / 4 / 3 / 5; }
+    #exec { grid-area: 2 / 5 / 3 / 7; }
+    #vfs { grid-area: 3 / 1 / 4 / 3; }
+    #memory { grid-area: 3 / 3 / 4 / 5; }
+    #interrupts { grid-area: 3 / 5 / 4 / 7; }
+    #fat { grid-area: 4 / 1 / 5 / 2; }
+    #ramfs { grid-area: 4 / 2 / 5 / 3; }
+    #pipes { grid-area: 4 / 3 / 5 / 4; }
+    #locks { grid-area: 4 / 4 / 5 / 5; }
+    #timer { grid-area: 4 / 5 / 5 / 6; }
+    #console { grid-area: 4 / 6 / 5 / 7; }
+    #ata { grid-area: 5 / 1 / 6 / 3; }
+    #hardware { grid-area: 5 / 3 / 6 / 7; }
+
+    .inspector {
+      min-height: 104px;
+      display: grid;
+      grid-template-columns: 160px 1fr auto;
+      gap: 22px;
+      align-items: center;
+      padding: 20px 24px;
+      border-top: 1px solid var(--line);
+      background: #111411;
+    }
+    .inspector-label { color: var(--dim); font: 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .inspector h3 { margin: 2px 0; font-size: 17px; }
+    .inspector p { margin: 0; color: var(--muted); font-size: 13px; }
+    .source-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      font: 11px var(--mono);
+      white-space: nowrap;
+    }
+    .source-link:hover { color: var(--lime); border-color: rgba(199,243,107,.45); }
+
+    .bootline {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+      padding-top: 24px;
+    }
+    .bootline::before {
+      content: "";
+      position: absolute;
+      top: 39px;
+      left: 8%;
+      right: 8%;
+      height: 1px;
+      background: linear-gradient(90deg, var(--orange), var(--lime), var(--cyan));
+      opacity: .42;
+    }
+    .boot-step { position: relative; z-index: 1; padding-right: 12px; }
+    .boot-step .dot {
+      width: 31px;
+      height: 31px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 20px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--ground);
+      color: var(--lime);
+      font: 700 10px var(--mono);
+    }
+    .boot-step h3 { margin: 0 0 6px; font-size: 14px; }
+    .boot-step p { margin: 0; color: var(--dim); font-size: 11px; }
+    .boot-step code { color: var(--muted); font-size: 10px; }
+
+    .flow-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .flow-card {
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+    .flow-card header { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+    .flow-card .number { color: var(--dim); font: 11px var(--mono); }
+    .flow-card h3 { margin: 0; font-size: 19px; letter-spacing: -.025em; }
+    .flow-card > p { margin: 8px 0 22px; color: var(--muted); font-size: 13px; }
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .flow span {
+      flex: 0 0 auto;
+      padding: 7px 9px;
+      border-radius: 7px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      color: #d7d7ce;
+      font: 10px var(--mono);
+    }
+    .flow i { flex: 0 0 auto; color: var(--lime); font-style: normal; font-size: 12px; }
+    .return-note { margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--line); color: var(--dim); font: 10px var(--mono); }
+
+    .source-table { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+    .source-row {
+      display: grid;
+      grid-template-columns: 190px 250px 1fr;
+      gap: 24px;
+      padding: 17px 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(21,24,22,.78);
+      align-items: baseline;
+    }
+    .source-row:last-child { border-bottom: 0; }
+    .source-row:hover { background: var(--panel-2); }
+    .source-row strong { font-size: 13px; }
+    .source-row a { color: var(--cyan); text-decoration: none; font: 11px var(--mono); }
+    .source-row a:hover { text-decoration: underline; }
+    .source-row span { color: var(--muted); font-size: 12px; }
+
+    footer { padding: 24px 0 50px; border-top: 1px solid var(--line); color: var(--dim); font: 11px var(--mono); }
+    footer .shell { display: flex; justify-content: space-between; gap: 20px; }
+
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; gap: 36px; padding-top: 60px; }
+      .hero-aside { padding-left: 0; border-left: 0; }
+      .section-head { grid-template-columns: 1fr; gap: 14px; }
+      .flow-grid { grid-template-columns: 1fr; }
+      .bootline { grid-template-columns: repeat(3, 1fr); row-gap: 30px; }
+      .bootline::before { display: none; }
+      .source-row { grid-template-columns: 130px 210px 1fr; gap: 14px; }
+    }
+
+    @media (max-width: 650px) {
+      .shell { width: min(100% - 24px, 1480px); }
+      nav { display: none; }
+      .hero { padding: 50px 0 28px; }
+      h1 { font-size: 48px; }
+      section { padding: 36px 0 52px; }
+      .atlas-toolbar { align-items: start; flex-direction: column; }
+      .inspector { grid-template-columns: 1fr; gap: 10px; }
+      .bootline { grid-template-columns: repeat(2, 1fr); }
+      .source-row { grid-template-columns: 1fr; gap: 5px; }
+      footer .shell { flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .001ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="#top"><span class="brand-mark">K</span><span>KyleOS / system atlas</span></a>
+      <nav aria-label="Page sections">
+        <a href="#map">Topology</a>
+        <a href="#boot">Boot</a>
+        <a href="#flows">Interactions</a>
+        <a href="#sources">Sources</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="shell hero">
+      <div>
+        <div class="eyebrow">x86-64 hobby operating system</div>
+        <h1>One kernel.<br>Every connection.</h1>
+        <p class="hero-copy">A code-backed map of KyleOS—from Multiboot and long mode to PID&nbsp;1, FAT32, demand paging, interrupts, and the devices beneath them.</p>
+      </div>
+      <aside class="hero-aside">
+        <p>The map reads top-to-bottom: userspace crosses the syscall boundary into kernel services, which coordinate drivers and hardware. Select any node to isolate its direct interactions.</p>
+        <div class="stats" aria-label="Architecture summary">
+          <div class="stat"><strong>18</strong><span>nodes</span></div>
+          <div class="stat"><strong>5</strong><span>layers</span></div>
+          <div class="stat"><strong>30</strong><span>syscalls</span></div>
+        </div>
+      </aside>
+    </div>
+
+    <section id="map" class="shell">
+      <div class="section-head">
+        <div><span class="section-index">01 / TOPOLOGY</span><h2>Subsystem interaction map</h2></div>
+        <p>Arrows show the dominant direction of control or data. Shared-state locks are shown as coordination dependencies. Click a node or filter by layer.</p>
+      </div>
+
+      <div class="atlas">
+        <div class="atlas-toolbar">
+          <span class="hint">SELECT A NODE TO TRACE ITS EDGES</span>
+          <div class="legend" aria-label="Filter subsystem layers">
+            <button type="button" data-filter="all" class="active" style="--tag:#f2f0e7">All</button>
+            <button type="button" data-filter="user" style="--tag:#c7f36b">Userspace</button>
+            <button type="button" data-filter="service" style="--tag:#67d7d0">Services</button>
+            <button type="button" data-filter="core" style="--tag:#b9a1ff">Core</button>
+            <button type="button" data-filter="driver" style="--tag:#f5a45d">Drivers</button>
+            <button type="button" data-filter="hardware" style="--tag:#ff7c70">Hardware</button>
+          </div>
+        </div>
+
+        <div class="map-scroll">
+          <div class="map" id="architecture-map">
+            <svg id="edges" aria-hidden="true"><defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#657069"></path></marker><marker id="arrow-hot" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c7f36b"></path></marker></defs></svg>
+
+            <button class="node" id="apps" data-group="user" data-source="README.md" data-detail="Shell commands, init, tests, editors, games, Lua, and TinyCC run as user processes."><small>Userspace</small><h3>Applications & shell</h3><p><code>init</code> · <code>nushell</code> · tools · extras</p></button>
+            <button class="node" id="libc" data-group="user" data-source="init/syscall.c" data-detail="Newlib-facing calls marshal arguments into KyleOS's interrupt-based syscall ABI."><small>Userspace</small><h3>Newlib / syscall stubs</h3><p>POSIX-like API · ABI glue · <code>int 0x80</code></p></button>
+            <button class="node" id="init" data-group="user" data-source="extras/init/init.c" data-detail="PID 1 owns the console descriptors, launches the shell, adopts orphans, and reaps children."><small>Userspace</small><h3>PID 1 lifecycle</h3><p>console owner · shell supervisor · reaper</p></button>
+
+            <button class="node" id="syscall" data-group="service" data-source="init/syscall.c" data-detail="The IDT's user-callable 0x80 gate dispatches 30 syscall slots for files, processes, time, and display/input."><small>Kernel boundary</small><h3>Syscall dispatch</h3><p>validation · 30-entry table · return via <code>iretq</code></p></button>
+            <button class="node" id="process" data-group="service" data-source="sched/ps.c" data-detail="Owns per-task file descriptors plus process-facing open/read/write/pipe/sbrk/exit/wait operations."><small>Kernel service</small><h3>Process & FD layer</h3><p>descriptor tables · wait/reap · heap break</p></button>
+            <button class="node" id="scheduler" data-group="core" data-source="sched/sched.c" data-detail="A single-CPU, preemptive round-robin scheduler manages task state, context, sleep channels, fork, exit, and reaping."><small>Kernel core</small><h3>Scheduler</h3><p>run queue · context switch · sleep/wakeup</p></button>
+            <button class="node" id="exec" data-group="service" data-source="sched/exec.c" data-detail="Validates ELF program headers and reserves lazy file-backed mappings before adding or replacing a task image."><small>Kernel service</small><h3>ELF exec loader</h3><p>ELF validation · lazy segments · argv</p></button>
+
+            <button class="node" id="vfs" data-group="service" data-source="fs/vfs.c" data-detail="Provides pathname walking, mounts, inodes, the global file table, and a uniform operations interface over every filesystem."><small>Kernel service</small><h3>Virtual filesystem</h3><p>paths · mounts · inode/file ops · file table</p></button>
+            <button class="node" id="memory" data-group="core" data-source="mm/vmm.c" data-detail="Combines physical allocation, page tables, kernel heap, process maps, demand paging, and copy-on-write fault resolution."><small>Kernel core</small><h3>Memory system</h3><p>PMM · paging · heap · VMM · COW</p></button>
+            <button class="node" id="interrupts" data-group="core" data-source="init/tables.c" data-detail="GDT/TSS and IDT setup route CPU exceptions, hardware IRQs, and the userspace syscall gate into C handlers."><small>Kernel core</small><h3>CPU tables & IRQ</h3><p>GDT/TSS · IDT · PIC · exception gates</p></button>
+
+            <button class="node" id="fat" data-group="driver" data-source="fs/fat.c" data-detail="The persistent root filesystem implements FAT32 directory, file, metadata, allocation-chain, and mutation operations."><small>Filesystem</small><h3>FAT32 root</h3><p><code>/</code> · persistent files · 8.3-safe mutation</p></button>
+            <button class="node" id="ramfs" data-group="driver" data-source="fs/ramfs.c" data-detail="Two RAM filesystem instances mount at /dev and /tmp; /dev exposes console, null, zero, and kmsg devices."><small>Filesystem</small><h3>RAM filesystems</h3><p><code>/dev</code> · <code>/tmp</code> · device nodes</p></button>
+            <button class="node" id="pipes" data-group="driver" data-source="fs/pipe.c" data-detail="An in-kernel circular buffer backs VFS pipe endpoints and yields with timed sleeps when empty or full."><small>IPC</small><h3>Pipes</h3><p>reader/writer refs · ring buffer · backpressure</p></button>
+            <button class="node" id="locks" data-group="core" data-source="locks/mutex.c" data-detail="Spinlocks protect short critical sections; sleeping mutexes coordinate longer operations using scheduler wakeups."><small>Kernel core</small><h3>Synchronization</h3><p>spinlocks · mutexes · wait channels</p></button>
+            <button class="node" id="timer" data-group="driver" data-source="timer/pit.c" data-detail="PIT ticks advance jiffies and invoke schedule at 50 Hz; RTC support is initialized alongside it."><small>Timer</small><h3>PIT & RTC</h3><p>100 Hz ticks · 50 Hz scheduling · sleeps</p></button>
+            <button class="node" id="console" data-group="driver" data-source="output/output.c" data-detail="A shared input path receives keyboard and UART bytes; output fans out to the VGA framebuffer console and serial port."><small>I/O</small><h3>Console & graphics</h3><p>keyboard · UART · VGA text · framebuffer</p></button>
+
+            <button class="node" id="ata" data-group="driver" data-source="block/ata.c" data-detail="A mutex-serialized PIO ATA driver probes known ports, reads the MBR, and caches recently read 512-byte sectors."><small>Block driver</small><h3>ATA PIO</h3><p>MBR probe · sector I/O · read-through cache</p></button>
+            <button class="node" id="hardware" data-group="hardware" data-source="asm/asm.c" data-detail="The x86-64 CPU/MMU, PIC, PIT/RTC, keyboard, UART, framebuffer, and emulated disk form the hardware-facing base."><small>Machine</small><h3>x86-64 hardware / QEMU</h3><p>CPU + MMU · IRQ devices · display · disk</p></button>
+          </div>
+        </div>
+
+        <div class="inspector" aria-live="polite">
+          <div><span class="inspector-label">Selected subsystem</span><h3 id="inspect-title">Explore the map</h3></div>
+          <p id="inspect-copy">Click a node to highlight everything it directly calls or receives data from.</p>
+          <a class="source-link" id="inspect-source" href="README.md">README.md ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="boot" class="shell">
+      <div class="section-head">
+        <div><span class="section-index">02 / BOOT</span><h2>From bootloader to PID 1</h2></div>
+        <p>The order below follows <code>kernel_bootstrap</code>, <code>kmain</code>, <code>kinit</code>, and <code>kernel</code>. ATA initialization discovers and registers the FAT root before RAM filesystems are mounted.</p>
+      </div>
+      <div class="bootline">
+        <article class="boot-step"><div class="dot">01</div><h3>GRUB / Multiboot</h3><p>Loads the kernel and supplies memory plus framebuffer metadata.</p><code>boot/grub.cfg</code></article>
+        <article class="boot-step"><div class="dot">02</div><h3>Bootstrap</h3><p>Builds temporary 2 MiB mappings, enables PAE + long mode, jumps high.</p><code>init/loader.s</code></article>
+        <article class="boot-step"><div class="dot">03</div><h3>CPU foundations</h3><p>Initializes output, validates Multiboot, then installs GDT/TSS and IDT.</p><code>init/kernel.c</code></article>
+        <article class="boot-step"><div class="dot">04</div><h3>Memory</h3><p>Starts the PMM, protected paging, kernel heap, VMM, stack, and framebuffer.</p><code>mm/*.c</code></article>
+        <article class="boot-step"><div class="dot">05</div><h3>Devices & services</h3><p>PIC → ATA/FAT → timers → exec → scheduler → FPU → RAMFS mounts.</p><code>kinit()</code></article>
+        <article class="boot-step"><div class="dot">06</div><h3>Userspace</h3><p>Adds idle, loads <code>/sbin/init</code>, and lets the scheduler take over.</p><code>exec_from_inode()</code></article>
+      </div>
+    </section>
+
+    <section id="flows" class="shell">
+      <div class="section-head">
+        <div><span class="section-index">03 / INTERACTIONS</span><h2>Four critical paths</h2></div>
+        <p>These traces make the high-level arrows concrete. Each step names the owning subsystem or the key function used at the boundary.</p>
+      </div>
+      <div class="flow-grid">
+        <article class="flow-card">
+          <header><h3>File read / write</h3><span class="number">PATH 01</span></header>
+          <p>A userspace descriptor resolves through the current task before VFS dispatches to the mounted implementation.</p>
+          <div class="flow"><span>app</span><i>→</i><span>int 0x80</span><i>→</i><span>process FD</span><i>→</i><span>VFS</span><i>→</i><span>FAT / RAMFS / pipe</span><i>→</i><span>device</span></div>
+          <div class="return-note">return: byte count or −1 → userspace RAX</div>
+        </article>
+
+        <article class="flow-card">
+          <header><h3>Fork then exec</h3><span class="number">PATH 02</span></header>
+          <p><code>fork</code> shares writable pages as COW; <code>exec</code> replaces the map with validated, lazy file-backed ELF segments.</p>
+          <div class="flow"><span>fork syscall</span><i>→</i><span>scheduler</span><i>→</i><span>COW VMM</span><i>→</i><span>exec syscall</span><i>→</i><span>VFS + ELF</span><i>→</i><span>new map</span></div>
+          <div class="return-note">fault path: #PF → COW copy or demand-load page → resume</div>
+        </article>
+
+        <article class="flow-card">
+          <header><h3>Timer preemption</h3><span class="number">PATH 03</span></header>
+          <p>The PIT supplies 100 ticks per second. Every second tick reaches the round-robin scheduler for a 50 Hz scheduling cadence.</p>
+          <div class="flow"><span>PIT IRQ0</span><i>→</i><span>IDT 32</span><i>→</i><span>timer_irq</span><i>→</i><span>jiffies++</span><i>→</i><span>schedule</span><i>→</i><span>context switch</span></div>
+          <div class="return-note">state: RUNNING → READY; sleeping timers may become READY</div>
+        </article>
+
+        <article class="flow-card">
+          <header><h3>waitpid + WNOHANG</h3><span class="number">PATH 04</span></header>
+          <p><code>WNOHANG</code> selects a locked, non-blocking child scan instead of putting the parent on its wait channel.</p>
+          <div class="flow"><span>waitpid</span><i>→</i><span>syscall 7</span><i>→</i><span>process_wait</span><i>→</i><span>sched_reap_child</span><i>→</i><span>PID / 0 / −1</span></div>
+          <div class="return-note">0 = matching child still runs; PID = reaped; −1 = no match</div>
+        </article>
+      </div>
+    </section>
+
+    <section id="sources" class="shell">
+      <div class="section-head">
+        <div><span class="section-index">04 / SOURCE MAP</span><h2>Where each layer lives</h2></div>
+        <p>Relative links open the implementation directly when this atlas is served from or opened inside the repository.</p>
+      </div>
+      <div class="source-table">
+        <div class="source-row"><strong>Boot & entry</strong><a href="init/loader.s">init/loader.s</a><span>Multiboot header, temporary page tables, long-mode transition</span></div>
+        <div class="source-row"><strong>Kernel init</strong><a href="init/kernel.c">init/kernel.c</a><span>Ordered subsystem initialization and first userspace image</span></div>
+        <div class="source-row"><strong>Syscall ABI</strong><a href="init/syscall.c">init/syscall.c</a><span>30-entry dispatch table and syscall implementations</span></div>
+        <div class="source-row"><strong>Processes</strong><a href="sched/">sched/</a><span>Scheduler, FD bridge, fork, exec, exit, wait, sleep channels</span></div>
+        <div class="source-row"><strong>Memory</strong><a href="mm/">mm/</a><span>PMM, paging, heap allocator, VMM, COW, lazy page faults, MTRR</span></div>
+        <div class="source-row"><strong>Filesystems</strong><a href="fs/">fs/</a><span>VFS, FAT32, RAMFS device nodes, and pipes</span></div>
+        <div class="source-row"><strong>Block I/O</strong><a href="block/ata.c">block/ata.c</a><span>PIO ATA, MBR discovery, sector cache</span></div>
+        <div class="source-row"><strong>Interrupts & time</strong><a href="irq/">irq/</a><span>PIC routing; PIT and RTC implementations live under timer/</span></div>
+        <div class="source-row"><strong>Console I/O</strong><a href="output/">output/</a><span>UART, keyboard/input, VGA text renderer, framebuffer, kernel log</span></div>
+        <div class="source-row"><strong>Synchronization</strong><a href="locks/">locks/</a><span>Spinlocks and scheduler-aware mutexes</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell"><span>KYLEOS SYSTEM ATLAS · GENERATED FROM THE CURRENT TREE</span><span>Last mapped: 2026-08-09</span></div>
+  </footer>
+
+  <script>
+    const connections = [
+      ['apps', 'libc'], ['init', 'libc'], ['libc', 'syscall'],
+      ['syscall', 'process'], ['syscall', 'vfs'], ['syscall', 'timer'], ['syscall', 'console'],
+      ['process', 'scheduler'], ['process', 'vfs'], ['process', 'memory'],
+      ['exec', 'vfs'], ['exec', 'memory'], ['exec', 'scheduler'],
+      ['vfs', 'fat'], ['vfs', 'ramfs'], ['vfs', 'pipes'],
+      ['fat', 'ata'], ['ramfs', 'console'], ['pipes', 'scheduler'],
+      ['timer', 'scheduler'], ['hardware', 'interrupts'], ['interrupts', 'timer'],
+      ['interrupts', 'console'], ['interrupts', 'memory'],
+      ['ata', 'hardware'], ['console', 'hardware'], ['memory', 'hardware'],
+      ['locks', 'scheduler'], ['locks', 'vfs'], ['locks', 'ata']
+    ];
+
+    const map = document.getElementById('architecture-map');
+    const svg = document.getElementById('edges');
+    const nodes = [...document.querySelectorAll('.node')];
+    let selected = null;
+
+    function boundaryPoint(fromRect, toRect, rootRect) {
+      const from = { x: fromRect.left + fromRect.width / 2 - rootRect.left, y: fromRect.top + fromRect.height / 2 - rootRect.top };
+      const to = { x: toRect.left + toRect.width / 2 - rootRect.left, y: toRect.top + toRect.height / 2 - rootRect.top };
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const scale = Math.min(Math.abs((fromRect.width / 2 + 4) / (dx || .001)), Math.abs((fromRect.height / 2 + 4) / (dy || .001)));
+      return { x: from.x + dx * scale, y: from.y + dy * scale };
+    }
+
+    function drawEdges() {
+      svg.querySelectorAll('.edge').forEach(edge => edge.remove());
+      const root = map.getBoundingClientRect();
+      connections.forEach(([fromId, toId]) => {
+        const fromEl = document.getElementById(fromId);
+        const toEl = document.getElementById(toId);
+        const aRect = fromEl.getBoundingClientRect();
+        const bRect = toEl.getBoundingClientRect();
+        const a = boundaryPoint(aRect, bRect, root);
+        const b = boundaryPoint(bRect, aRect, root);
+        const curve = Math.max(28, Math.abs(b.y - a.y) * .42);
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M ${a.x} ${a.y} C ${a.x} ${a.y + curve}, ${b.x} ${b.y - curve}, ${b.x} ${b.y}`);
+        path.setAttribute('class', 'edge');
+        path.setAttribute('data-from', fromId);
+        path.setAttribute('data-to', toId);
+        path.setAttribute('marker-end', 'url(#arrow)');
+        svg.appendChild(path);
+      });
+      updateHighlight();
+    }
+
+    function updateHighlight() {
+      const edges = [...svg.querySelectorAll('.edge')];
+      if (!selected) {
+        nodes.forEach(node => node.classList.remove('dimmed', 'selected'));
+        edges.forEach(edge => { edge.classList.remove('hot', 'dimmed'); edge.setAttribute('marker-end', 'url(#arrow)'); });
+        return;
+      }
+      const related = new Set([selected]);
+      edges.forEach(edge => {
+        const hot = edge.dataset.from === selected || edge.dataset.to === selected;
+        edge.classList.toggle('hot', hot);
+        edge.classList.toggle('dimmed', !hot);
+        edge.setAttribute('marker-end', hot ? 'url(#arrow-hot)' : 'url(#arrow)');
+        if (hot) { related.add(edge.dataset.from); related.add(edge.dataset.to); }
+      });
+      nodes.forEach(node => {
+        node.classList.toggle('selected', node.id === selected);
+        node.classList.toggle('dimmed', !related.has(node.id));
+      });
+    }
+
+    nodes.forEach(node => node.addEventListener('click', () => {
+      selected = selected === node.id ? null : node.id;
+      updateHighlight();
+      const active = selected ? document.getElementById(selected) : null;
+      document.getElementById('inspect-title').textContent = active ? active.querySelector('h3').textContent : 'Explore the map';
+      document.getElementById('inspect-copy').textContent = active ? active.dataset.detail : 'Click a node to highlight everything it directly calls or receives data from.';
+      const source = document.getElementById('inspect-source');
+      source.href = active ? active.dataset.source : 'README.md';
+      source.textContent = (active ? active.dataset.source : 'README.md') + ' ↗';
+    }));
+
+    document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => {
+      document.querySelectorAll('[data-filter]').forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+      selected = null;
+      const filter = button.dataset.filter;
+      nodes.forEach(node => node.classList.toggle('dimmed', filter !== 'all' && node.dataset.group !== filter));
+      svg.querySelectorAll('.edge').forEach(edge => {
+        const from = document.getElementById(edge.dataset.from);
+        const to = document.getElementById(edge.dataset.to);
+        edge.classList.toggle('dimmed', filter !== 'all' && from.dataset.group !== filter && to.dataset.group !== filter);
+        edge.classList.remove('hot');
+        edge.setAttribute('marker-end', 'url(#arrow)');
+      });
+    }));
+
+    const resizeObserver = new ResizeObserver(drawEdges);
+    resizeObserver.observe(map);
+    window.addEventListener('load', drawEdges);
+  </script>
+</body>
+</html>

@@ -3,6 +3,7 @@
 #include <mm/mm.h>
 #include <output/output.h>
 #include <output/input.h>
+#include <output/mouse.h>
 #include <sched/exec.h>
 #include <sched/ps.h>
 #include <sched/sched.h>
@@ -199,7 +200,7 @@ static int open(char *path, uint32_t flags)
 static int read(int fd, void *buf, int count)
 {
     int countr = 0;
-    if (count < 0 || fd < 0)
+    if (count < 0 || fd < 0 || buf == NULL)
         return -1;
     if (buf >= (void *)KERN_SPACE_BOUNDRY)
     {
@@ -250,6 +251,18 @@ static int framebuffer_present_syscall(void *pixels, uint32_t bytes)
     return framebuffer_present(pixels, bytes);
 }
 
+static int framebuffer_size_syscall(uint32_t *width, uint32_t *height)
+{
+    if (width == NULL || height == NULL ||
+        width >= (uint32_t *)KERN_SPACE_BOUNDRY ||
+        height >= (uint32_t *)KERN_SPACE_BOUNDRY ||
+        !framebuffer_is_ready())
+        return -1;
+    *width = framebuffer_width();
+    *height = framebuffer_height();
+    return 0;
+}
+
 static int key_poll_syscall(int *pressed, uint8_t *scancode, bool *extended)
 {
     if (pressed == NULL || scancode == NULL || extended == NULL ||
@@ -269,6 +282,16 @@ static int tty_raw_syscall(int enabled)
 static uint32_t ticks_ms_syscall(void)
 {
     return (read_jiffies() * 1000) / TICK_HZ;
+}
+
+static int mouse_poll_syscall(int *dx, int *dy, uint8_t *buttons)
+{
+    if (dx == NULL || dy == NULL || buttons == NULL ||
+        dx >= (int *)KERN_SPACE_BOUNDRY ||
+        dy >= (int *)KERN_SPACE_BOUNDRY ||
+        buttons >= (uint8_t *)KERN_SPACE_BOUNDRY)
+        return -1;
+    return mouse_poll(dx, dy, buttons);
 }
 
 static int fork()
@@ -754,7 +777,9 @@ void *syscall_tbl[] = {
     (void *)&pipe,                        // 26
     (void *)&tty_raw_syscall,             // 27
     (void *)&rename,                      // 28
-    (void *)&rmdir                        // 29
+    (void *)&rmdir,                       // 29
+    (void *)&mouse_poll_syscall,          // 30
+    (void *)&framebuffer_size_syscall     // 31
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

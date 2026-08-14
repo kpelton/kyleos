@@ -5,8 +5,8 @@
 #include <output/font.h>
 
 #ifndef LEGACY_EN
-#define COLS 128
-#define ROWS 48
+#define COLS 160
+#define ROWS 45
 #else
 #define COLS 80
 #define ROWS 25

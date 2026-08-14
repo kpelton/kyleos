@@ -13,7 +13,7 @@
 //jiffies will in increased at a interval of TICK_HZ/HZ should be ~1ms
 static uint32_t jiffies=0;
 static struct spinlock spinlock_time;
-uint64_t HZ=50;
+uint64_t HZ=100;
 uint64_t TICK_HZ=100;
 void pit_init(void) {
     init_spinlock(&spinlock_time);

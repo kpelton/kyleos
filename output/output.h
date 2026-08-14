@@ -25,6 +25,6 @@ void output_init();
 int kstrcmp(const char *dest, const char *src);
 int kstrlen(char *str);
 void read_input(char * dest);
-void panic(char* msg);
+__attribute__((noreturn)) void panic(char* msg);
 
 #endif

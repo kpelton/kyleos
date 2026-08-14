@@ -434,6 +434,14 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     //Fix up stack for arguments
     sp-=argc+8;
 
+    /* Newlib's _start is entered directly rather than through a CALL.  Keep
+     * RSP at 8 mod 16 so its initial PUSH produces a 16-byte-aligned frame,
+     * as required by the x86-64 SysV ABI.  Without this padding, alignment
+     * depended on whether argc was odd or even and optimized code could fault
+     * on aligned SSE stack accesses. */
+    if (((uint64_t)sp & 0xf) != 8)
+        sp--;
+
     for(int i=0; i<=argc; i++)
         sp[i+3] = (uint64_t) ustack[i];
 
@@ -671,13 +679,22 @@ static void update_timers()
     }
 }
 
-void schedule()
+void schedule_impl()
 {
     asm("cli");
     // kprintf("schedule\n");
     bool success = false;
     bool skip_idle = false;
     uint64_t resume_func;
+
+    /* A timer interrupt may preempt optimized userspace while live values are
+     * still held in x87/SSE registers.  Preserve that state before selecting
+     * another task; restoring without first saving made floating-point and
+     * vector state jump backwards at every timeslice. */
+    if (prev_task != -1 && ktasks[prev_task].state != TASK_NEW &&
+        ktasks[prev_task].state != TASK_DONE &&
+        ktasks[prev_task].type == USER_PROCESS)
+        fpu_save_context(ktasks[prev_task].fxsave_region);
 
     if (prev_task != -1 && ktasks[prev_task].state != TASK_NEW &&
         ktasks[prev_task].state != TASK_DONE)
@@ -741,6 +758,7 @@ void schedule()
         {
             ktasks[i].state = TASK_RUNNING;
             set_tss_rsp(ktasks[i].start_stack); // Set the kernel stack pointer.
+            fpu_restore_context(ktasks[i].fxsave_region);
             user_switch_paging(&(ktasks[i].mm->pagetable));
 
             asm volatile("movq %0,%%rdi\n\t"

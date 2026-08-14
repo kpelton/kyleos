@@ -11,7 +11,9 @@
 #define KTHREAD_STACK_SIZE 4096*8
 
 #define USER_STACK_VADDR (uint64_t *) 0x700000000
-#define USER_STACK_SIZE 32
+/* Quake's pack-file loader uses a little over 128 KiB in one stack frame.
+ * Reserve 1 MiB so demand paging can grow through that frame safely. */
+#define USER_STACK_SIZE 256
 #define USER_HEAP_VADDR (uint64_t *) 0x600000000
 #define USER_HEAP_SIZE 1 // in pages
 #define IDLE_PID 0

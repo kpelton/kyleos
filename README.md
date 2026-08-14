@@ -28,11 +28,17 @@ has a framebuffer-capable DoomGeneric port.
 - User-mode page and general-protection faults terminate only the offending
   process; kernel-mode faults retain the register-dump panic path.
 - UART/serial input, keyboard input, raw-console mode, and a framebuffer.
+- PS/2 mouse input and an early-Mac-inspired userspace desktop at
+  `/bin/desktop`, with menus, draggable windows, icons, and keyboard fallback.
 - Small userspace: `ls`, `cat`, `cp`, `rm`, `mkdir`, `grep`, `wc`, `head`,
   `tail`, `mv`, `ed`, `kedit`, and more.
 - Incrementally rendered ASCII Breakout at `/bin/breakout` (`a`/`d` move,
   `q` quits), with input/render timing independent from ball movement.
 - DoomGeneric as an optional extra, installed at `/usr/bin/doom`.
+- Original Quake's C software renderer as an optional silent, keyboard-only
+  extra, installed at `/usr/bin/quake`.
+- Chocolate Duke3D's Build software renderer as an optional silent,
+  keyboard-only extra, installed at `/usr/bin/duke3d`.
 - Lua 5.4.4 as an optional Newlib-built extra, installed at `/usr/bin/lua`.
 - A native x86-64 TinyCC at `/bin/cc`, including headers, static Newlib,
   compiler sources, and a tested stage-2/stage-3 self-bootstrap path.
@@ -174,6 +180,64 @@ make test
 If `DOOM_WAD` is omitted, `doom-image` looks for `assets/doom.wad`.  The image
 builder installs the selected file as `/usr/share/doom/doom.wad`; Doom will
 start without it but will stop with an `IWAD file ... not found` message.
+
+## Quake extra
+
+The original GPL Quake engine is pinned as the `extras/quake` submodule. The
+KyleOS port uses the portable C software renderer at 320x200, scaled to the
+640x400 framebuffer. Sound, mouse input, and external networking are disabled
+for the first port; single-player and loopback games use the keyboard.
+
+Place legally obtained Quake data in an `id1` directory containing at least
+`pak0.pak`, then build and recreate the image:
+
+```bash
+make quake
+QUAKE_DATA_DIR=/path/to/id1 make quake-image
+make test
+```
+
+For a one-command setup using the freely distributable Quake 1.06 shareware
+episode, install an LHA extractor (`sudo apt install lhasa` on Debian/Ubuntu)
+and run:
+
+```bash
+scripts/setup-quake-shareware.sh
+```
+
+The script verifies both the downloaded archive and extracted PAK before
+installing it. Pass `--data-only` to install `pak0.pak` without rebuilding the
+disk image, or set `QUAKE_SHAREWARE_ARCHIVE=/path/to/quake106.zip` to reuse an
+existing download.
+
+When `QUAKE_DATA_DIR` is omitted, the image builder checks
+`assets/quake/id1`. It installs available `pak*.pak` files under
+`/usr/share/quake/id1`; game data is not part of the source release and is not
+tracked here. Run `quake` inside KyleOS. Arrow keys move and turn, Ctrl fires,
+Space jumps, Enter selects, and Escape opens or closes the menu.
+
+## Duke Nukem 3D extra
+
+Chocolate Duke3D is pinned as the `extras/duke3d` submodule. The KyleOS port
+uses the Build software renderer at 320x200, scaled to the 640x400 framebuffer.
+The initial port is single-player, silent, and keyboard-only; mouse, sound,
+and external networking are disabled.
+
+Supply a legally obtained shareware, registered 1.3D, or Atomic Edition
+`DUKE3D.GRP`, then build and recreate the image:
+
+```bash
+make duke3d
+DUKE3D_GRP=/path/to/DUKE3D.GRP make duke3d-image
+make test
+```
+
+When `DUKE3D_GRP` is omitted, the image builder checks
+`assets/duke3d/duke3d.grp`. It installs the file as
+`/usr/share/duke3d/duke3d.grp`; the proprietary game data is not included in
+the source repository. Run `duke3d` inside KyleOS. The default keyboard layout
+uses the arrow keys to move and turn, Ctrl to fire, Space to use, Enter to
+select, and Escape to open or close the menu.
 
 ## In-OS regression tests
 

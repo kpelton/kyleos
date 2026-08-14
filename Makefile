@@ -1,18 +1,27 @@
 CC	?= gcc
 .DEFAULT_GOAL := all
-OPT ?= -O2
+OPT ?= -O0
 AS = nasm
 ASFLAGS = -f elf64
 KERNEL_ROOT=$(shell pwd)
 IMAGE ?= $(KERNEL_ROOT)/build/image/test-hd.img
 IMAGE_MOUNT ?= $(KERNEL_ROOT)/build/image/mnt
 USERLAND_STAGE ?= $(KERNEL_ROOT)/build/userland
+KUI_LIBRARY ?= $(USERLAND_STAGE)/libkui.a
+KUI_OBJECT ?= $(USERLAND_STAGE)/kui.o
+MINESWEEPER_WIDGET_OBJECT ?= $(USERLAND_STAGE)/minesweeper_widget.o
+SOLITAIRE_WIDGET_OBJECT ?= $(USERLAND_STAGE)/solitaire_widget.o
+CALCULATOR_WIDGET_OBJECT ?= $(USERLAND_STAGE)/calculator_widget.o
 CORE_SRC ?= $(KERNEL_ROOT)/../../kyleos-userspace
 PROGS_SRC ?= $(KERNEL_ROOT)/../../newlib-progs
 NEWLIB_BUILD ?= $(KERNEL_ROOT)/../../newlib-build
 SYSROOT ?= /tmp/z
 DOOM_BINARY ?= $(KERNEL_ROOT)/build/extras/doom/doom
 DOOM_WAD ?= $(KERNEL_ROOT)/assets/doom.wad
+QUAKE_BINARY ?= $(KERNEL_ROOT)/build/extras/quake/quake
+QUAKE_DATA_DIR ?= $(KERNEL_ROOT)/assets/quake/id1
+DUKE3D_BINARY ?= $(KERNEL_ROOT)/build/extras/duke3d/duke3d
+DUKE3D_GRP ?= $(KERNEL_ROOT)/assets/duke3d/duke3d.grp
 LUA_SOURCE ?= $(KERNEL_ROOT)/extras/lua/src
 LUA_BINARY ?= $(KERNEL_ROOT)/build/extras/lua/lua
 LUA_INPUTS := $(wildcard $(LUA_SOURCE)/*.[ch]) $(LUA_SOURCE)/Makefile
@@ -28,9 +37,11 @@ ifneq (,$(wildcard config.mk))
 include config.mk
 endif
 CFLAGS	= -m64 $(OPT) -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2  -I $(KERNEL_ROOT)  -g 
+GUI_CFLAGS = $(filter-out -O%,$(CFLAGS)) -O2
 ifeq ($(SERIAL_OUTPUT),0)
 CFLAGS += -DKYLEOS_DISABLE_SERIAL_OUTPUT
 endif
+sched/sched.o: CFLAGS := $(filter-out -O%,$(CFLAGS)) -O0
 LD	= ld  -m elf_x86_64 
 export CFLAGS 
 export CC
@@ -46,7 +57,7 @@ OBJ_FILES = asm/asm.o asm/asm_calls.o \
 	locks/spinlock.o locks/mutex.o \
 	mm/paging.o mm/mm.o mm/pmem.o mm/vmm.o mm/mtrr.o \
 	output/keyboard.o output/uart.o output/vga.o output/framebuffer.o \
-	output/output.o output/input.o \
+	output/output.o output/input.o output/mouse.o \
 	sched/sched.o sched/ps.o sched/exec.o \
 	timer/timer.o timer/rtc.o timer/pit.o \
 	utils/llist.o
@@ -85,7 +96,7 @@ mm: mm/mm.o mm/paging.o mm/pmem.o mm/vmm.o
 sched: sched/sched.o sched/exec.o sched/ps.o
 	$(MAKE) -C sched
 
-output: output/output.o output/vga.o output/uart.o output/keyboard.o output/input.o output/framebuffer.o
+output: output/output.o output/vga.o output/uart.o output/keyboard.o output/input.o output/framebuffer.o output/mouse.o
 	$(MAKE) -C output
 
 timer: timer/pit.o timer/timer.o timer/rtc.o
@@ -97,7 +108,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc bootstrap-cc doom doom-image image image-reset image-mount image-unmount image-copy iso iso-test
+.PHONY: toolchain userland userinit kui desktop minesweeper solitaire calculator kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc bootstrap-cc doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -106,7 +117,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc
+	$(MAKE) userinit desktop minesweeper solitaire calculator kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -123,6 +134,43 @@ kedit: extras/kedit/kedit.c
 userinit: extras/init/init.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/init
+
+kui: $(KUI_LIBRARY)
+
+$(KUI_OBJECT): extras/kui/kui.c extras/kui/kui.h output/font.h include/uapi/mouse.h
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/kui/kui.c -o $@
+
+$(KUI_LIBRARY): $(KUI_OBJECT)
+	ar rcs $@ $<
+
+$(MINESWEEPER_WIDGET_OBJECT): extras/minesweeper/minesweeper_widget.c extras/minesweeper/minesweeper.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/minesweeper/minesweeper_widget.c -o $@
+
+$(SOLITAIRE_WIDGET_OBJECT): extras/solitaire/solitaire_widget.c extras/solitaire/solitaire.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/solitaire/solitaire_widget.c -o $@
+
+$(CALCULATOR_WIDGET_OBJECT): extras/calculator/calculator_widget.c extras/calculator/calculator.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/calculator/calculator_widget.c -o $@
+
+desktop: extras/desktop/desktop.c extras/solitaire/solitaire_ipc.h extras/calculator/calculator_ipc.h $(KUI_LIBRARY) $(MINESWEEPER_WIDGET_OBJECT) $(SOLITAIRE_WIDGET_OBJECT) $(CALCULATOR_WIDGET_OBJECT)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(MINESWEEPER_WIDGET_OBJECT) $(SOLITAIRE_WIDGET_OBJECT) $(CALCULATOR_WIDGET_OBJECT) $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/desktop
+
+minesweeper: extras/minesweeper/minesweeper.c $(KUI_LIBRARY) $(MINESWEEPER_WIDGET_OBJECT)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(MINESWEEPER_WIDGET_OBJECT) $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/minesweeper
+
+solitaire: extras/solitaire/solitaire.c extras/solitaire/solitaire_ipc.h $(KUI_LIBRARY) $(SOLITAIRE_WIDGET_OBJECT)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(SOLITAIRE_WIDGET_OBJECT) $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/solitaire
+
+calculator: extras/calculator/calculator.c extras/calculator/calculator_ipc.h $(KUI_LIBRARY) $(CALCULATOR_WIDGET_OBJECT)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(CALCULATOR_WIDGET_OBJECT) $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/calculator
 
 rm: extras/rm/rm.c
 	mkdir -p $(USERLAND_STAGE)
@@ -172,6 +220,20 @@ doom-image:
 	$(MAKE) doom
 	$(MAKE) image-reset
 
+quake:
+	SYSROOT=$(SYSROOT) scripts/build-quake.sh
+
+quake-image:
+	$(MAKE) quake
+	$(MAKE) image-reset
+
+duke3d:
+	SYSROOT=$(SYSROOT) scripts/build-duke3d.sh
+
+duke3d-image:
+	$(MAKE) duke3d
+	$(MAKE) image-reset
+
 lua: $(LUA_BINARY)
 
 $(LUA_BINARY): $(LUA_INPUTS)
@@ -181,10 +243,10 @@ $(LUA_BINARY): $(LUA_INPUTS)
 	cp $(LUA_SOURCE)/lua $(LUA_BINARY)
 
 image: userland lua
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) QUAKE_BINARY=$(QUAKE_BINARY) QUAKE_DATA_DIR=$(QUAKE_DATA_DIR) DUKE3D_BINARY=$(DUKE3D_BINARY) DUKE3D_GRP=$(DUKE3D_GRP) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh
 
 image-reset: userland lua
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh --reset
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) QUAKE_BINARY=$(QUAKE_BINARY) QUAKE_DATA_DIR=$(QUAKE_DATA_DIR) DUKE3D_BINARY=$(DUKE3D_BINARY) DUKE3D_GRP=$(DUKE3D_GRP) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh --reset
 
 image-mount:
 	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) scripts/image-mount.sh
@@ -208,8 +270,10 @@ clean:
 kernel.bin: $(OBJ_FILES)
 	$(LD) -T linker.ld -o kernel.bin $(OBJ_FILES) 
 
-kernel.img: kernel.bin
+kernel32.bin: kernel.bin
 	objcopy   -I elf64-x86-64 -O elf32-i386   kernel.bin kernel32.bin
+
+kernel.img: kernel32.bin
 
 test: kernel32.bin image
 	qemu-system-x86_64 -m 64M -vga std -kernel kernel32.bin  -hda $(IMAGE) -serial stdio -rtc base=localtime
@@ -219,7 +283,7 @@ test-nox: kernel32.bin image
 test-log: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -serial stdio 2>log
 kvm-test: kernel32.bin
-	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -serial stdio -enable-kvm 2>log
+	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda $(IMAGE) -serial stdio -enable-kvm 2>log
 
 test-c: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -display none -serial stdio 2>log

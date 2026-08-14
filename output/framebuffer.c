@@ -157,13 +157,13 @@ void framebuffer_init(uint64_t mb_info)
         return;
 
     bga_write(BGA_ENABLE, 0);
-    bga_write(BGA_XRES, 640);
-    bga_write(BGA_YRES, 400);
+    bga_write(BGA_XRES, 1280);
+    bga_write(BGA_YRES, 720);
     bga_write(BGA_BPP, 32);
     bga_write(BGA_ENABLE, BGA_ENABLE_ON | BGA_ENABLE_LFB);
 
-    fb_width = 640;
-    fb_height = 400;
+    fb_width = 1280;
+    fb_height = 720;
     fb_pitch = fb_width * 4;
     fb_size = fb_pitch * fb_height;
     if (!mtrr_set_write_combining(phys_base, fb_size))
@@ -213,14 +213,23 @@ void framebuffer_fill_rect(uint32_t x, uint32_t y, uint32_t width,
 
 int framebuffer_present(const void *pixels, uint32_t bytes)
 {
-    const uint32_t src_width  = 640;
-    const uint32_t src_height = 400;
-    const uint32_t src_pitch  = src_width * 4;
-    const uint32_t src_size   = src_pitch * src_height;
+    uint32_t src_width = 640;
+    uint32_t src_height = 400;
+    uint32_t src_pitch;
+    uint32_t src_size;
 
     if (framebuffer == NULL || pixels == NULL)
         return -1;
 
+    /* New clients present a tightly packed native-size surface.  Preserve
+     * centered 640x400 blits for existing programs built against the old
+     * framebuffer ABI. */
+    if ((uint64_t)bytes == (uint64_t)fb_width * fb_height * 4) {
+        src_width = fb_width;
+        src_height = fb_height;
+    }
+    src_pitch = src_width * 4;
+    src_size = src_pitch * src_height;
     if (bytes < src_size)
         return -1;
 

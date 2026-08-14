@@ -4,12 +4,14 @@
 argv
 argv-copy
 breakout
+calculator
 cat
 cc
 constest
 cp
 donut
 demandtest
+desktop
 echo
 fstest
 gpfault
@@ -20,6 +22,7 @@ head
 kedit
 ls
 mkdir
+minesweeper
 mv
 nushell
 oomtest
@@ -27,6 +30,7 @@ rdwr
 rm
 rmdir
 shell
+solitaire
 stat
 tail
 testprint

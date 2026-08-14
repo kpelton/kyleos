@@ -7,9 +7,11 @@
 [extern ksleepm]
 [extern timer_irq]
 [extern rtc_irq]
+[extern mouse_irq]
 [extern NR_syscall]
 [extern syscall_tbl]
 [extern sched_save_context]
+[extern schedule_impl]
 [extern syscall]
 [extern pagefault]
 [extern general_protection_fault]
@@ -27,9 +29,10 @@ TIMER_HANDLER equ 0
 KBD_HANDLER equ 1
 SERIAL_HANDLER equ 2
 RTC_HANDLER equ 3
+MOUSE_HANDLER equ 4
 
 ;C lang handlers 
-IRQ_HANDLERS dq timer_irq, kbd_irq, serial_irq, rtc_irq
+IRQ_HANDLERS dq timer_irq, kbd_irq, serial_irq, rtc_irq, mouse_irq
 
 get_flags_reg:
     sub rsp,8
@@ -69,6 +72,25 @@ fpu_save_context:
 
 fpu_restore_context:
     fxrstor [rdi] ; first argument passed in
+    ret
+
+; A task can voluntarily switch from arbitrarily deep inside a C call.  The
+; resumed call must see the callee-saved registers it had before schedule().
+; Keeping these values on that task's kernel stack lets the existing RSP-based
+; context switch restore them naturally when schedule_impl eventually returns.
+[global schedule]
+schedule:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    call schedule_impl
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
     ret
 
 [global tss_flush]
@@ -309,6 +331,14 @@ serial_handler:
 rtc_handler:
     push rax
     mov rax, RTC_HANDLER
+    call irq_handler
+    pop rax
+    iretq
+
+[global mouse_handler] ; PS/2 auxiliary device, IRQ12/vector 68
+mouse_handler:
+    push rax
+    mov rax, MOUSE_HANDLER
     call irq_handler
     pop rax
     iretq

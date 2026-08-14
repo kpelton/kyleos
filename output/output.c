@@ -461,13 +461,12 @@ int kstrlen(char *str) {
     return len;
 }
 
-void panic(char *msg)
+__attribute__((noreturn)) void panic(char *msg)
 {
     uint64_t rip = (uint64_t)__builtin_return_address(0);
 
     kprintf(msg);
     print_regs(0xdeadbeef,rip);
-    asm("cli");
-    asm("hlt");
-
+    for (;;)
+        asm volatile("cli; hlt");
 }

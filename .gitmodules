@@ -4,3 +4,9 @@
 [submodule "extras/tinycc"]
 	path = extras/tinycc
 	url = https://github.com/Tiny-C-Compiler/tinycc-mirror-repository.git
+[submodule "extras/quake"]
+	path = extras/quake
+	url = https://github.com/id-Software/Quake.git
+[submodule "extras/duke3d"]
+	path = extras/duke3d
+	url = https://github.com/fabiensanglard/chocolate_duke3D.git

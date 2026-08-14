@@ -1,0 +1,169 @@
+diff --git a/Engine/src/filesystem.c b/Engine/src/filesystem.c
+index 4365d99..e35778a 100644
+--- a/Engine/src/filesystem.c
++++ b/Engine/src/filesystem.c
+@@ -258,6 +258,7 @@ typedef struct openFile_s{
+     int cursor    ;  //lseek cursor
+     int grpID     ;  //GRP id
+     int used      ;  //Marker 1=used
++    uint8_t *cache;  //KyleOS: avoid repeated FAT walks for tiny GRP reads.
+ } openFile_t;
+ 
+ 
+@@ -337,6 +338,51 @@ int32_t kread(int32_t handle, void *buffer, int32_t leng){
+     
+     //File is actually in the GRP
+     archive = & grpSet.archives[openFile->grpID];
++
++#ifdef KYLEOS
++    /*
++     * Build maps are parsed with thousands of tiny reads.  KyleOS FAT seeks
++     * from the beginning of a cluster chain, so doing that directly against
++     * the GRP makes level loading prohibitively slow.  Cache the currently
++     * opened GRP entry and serve its reads from memory instead.
++     */
++    if (openFile->cache == NULL)
++    {
++        int32_t fileSize = archive->filesizes[openFile->fd];
++        int32_t total = 0;
++
++        openFile->cache = malloc(fileSize);
++        if (openFile->cache != NULL)
++        {
++            lseek(archive->fileDescriptor,
++                  archive->fileOffsets[openFile->fd], SEEK_SET);
++            while (total < fileSize)
++            {
++                int32_t got = read(archive->fileDescriptor,
++                                   openFile->cache + total,
++                                   fileSize - total);
++                if (got <= 0)
++                    break;
++                total += got;
++            }
++            if (total != fileSize)
++            {
++                free(openFile->cache);
++                openFile->cache = NULL;
++            }
++        }
++    }
++
++    if (openFile->cache != NULL)
++    {
++        leng = min(leng, archive->filesizes[openFile->fd] - openFile->cursor);
++        if (leng <= 0)
++            return 0;
++        memcpy(buffer, openFile->cache + openFile->cursor, leng);
++        openFile->cursor += leng;
++        return leng;
++    }
++#endif
+         
+     lseek(archive->fileDescriptor,
+           archive->fileOffsets[openFile->fd] + openFile->cursor,
+@@ -451,6 +497,9 @@ void kclose(int32_t handle)
+     if (openFile->type == SYSTEM_FILE){
+         close(openFile->fd);
+     }
++
++    if (openFile->cache != NULL)
++        free(openFile->cache);
+ 	
+     memset(openFile, 0, sizeof(openFile_t));
+     
+diff --git a/Game/src/game.c b/Game/src/game.c
+index bcbfc29..55f033b 100644
+--- a/Game/src/game.c
++++ b/Game/src/game.c
+@@ -2448,9 +2448,11 @@ void gameexit(char  *msg)
+ // CTW - MODIFICATION
+ /*  if( *t != 0 && *(t+1) != 'V' && *(t+1) != 'Y' && playonten == 0 )
+         showtwoscreens();*/
++#ifndef KYLEOS
+     if( *t != 0 && *(t+1) != 'V' && *(t+1) != 'Y' && true)
+ 		if(ud.showcinematics) // FIX_00029: toggle cinematics on / off
+ 			showtwoscreens();
++#endif
+ // CTW END - MODIFICATION
+ 
+     GOTOHERE:
+@@ -7739,6 +7739,15 @@ void Startup(void)
+    CONFIG_GetSetupFilename();
+    CONFIG_ReadSetup();
+ 
++#ifdef KYLEOS
++   FXDevice = NumSoundCards;
++   MusicDevice = NumSoundCards;
++   SoundToggle = 0;
++   MusicToggle = 0;
++   ScreenWidth = 320;
++   ScreenHeight = 200;
++#endif
++
+    compilecons();
+ 
+ #ifdef AUSTRALIA
+@@ -8101,7 +8110,11 @@ static int load_duke3d_groupfile(void)
+ 	char  groupfilefullpath[512];
+     groupfilefullpath[0] = '\0';
+     
++#ifdef KYLEOS
++    strcpy(groupfilefullpath, "duke3d.grp");
++#else
+     findGRPToUse(groupfilefullpath);
++#endif
+     
+     if (groupfilefullpath[0] == '\0')
+         return false;
+@@ -8118,6 +8131,14 @@ int main(int argc,char  **argv)
+ 	int32_t filehandle;
+ 
+ 	
++#ifdef KYLEOS
++    if (chdir("/usr/share/duke3d") < 0)
++    {
++        fprintf(stderr, "Duke3D: cannot open /usr/share/duke3d\n");
++        return EXIT_FAILURE;
++    }
++#endif
++
+ 	uint8_t  kbdKey;
+ 	uint8_t  *exe;
+ 
+diff --git a/Game/src/global.c b/Game/src/global.c
+index 2871852..ce41a3c 100644
+--- a/Game/src/global.c
++++ b/Game/src/global.c
+@@ -228,7 +228,14 @@ STATUSBARTYPE sbar;
+ 
+ void FixFilePath(char  *filename)
+ {
+-#if PLATFORM_UNIX
++#ifdef KYLEOS
++    if (filename == NULL)
++        return;
++
++    for (; *filename != '\0'; filename++)
++        if (*filename == '\\')
++            *filename = PATH_SEP_CHAR;
++#elif PLATFORM_UNIX
+     uint8_t  *ptr;
+     uint8_t  *lastsep = filename;
+ 
+@@ -781,6 +781,7 @@ void SwapIntelShort (uint16_t  *s)
+ */
+ 
+ #if PLATFORM_UNIX
++#ifndef KYLEOS
+ uint8_t  *strlwr(uint8_t  *s)
+ {
+ 	uint8_t  *p = s;
+@@ -821,6 +822,7 @@ uint8_t  *itoa(int value, uint8_t  *string, int radix)
+ 	
+ 	return string;
+ }
++#endif
+ 
+ uint8_t  *ltoa(int32_t value, uint8_t  *string, int radix)
+ {

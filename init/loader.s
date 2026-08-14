@@ -30,8 +30,8 @@ align 4
 %ifndef LEGACY_EN
     ; Video mode request
     dd 0                    ; mode_type: 0 = graphics
-    dd 1024                 ; width
-    dd 768                 ; height
+    dd 1280                 ; width
+    dd 720                  ; height
     dd 32                   ; depth
 %endif
 
