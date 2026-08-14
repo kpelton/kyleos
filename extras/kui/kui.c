@@ -134,6 +134,83 @@ static void kui_record_command(struct kui_surface *surface, uint16_t type,
         memcpy(command + 1, text, text_bytes);
 }
 
+static void kui_record_bitmap_row(struct kui_surface *surface,
+                                  const uint32_t *pixels,
+                                  int source_width, int source_height,
+                                  int source_y, int x, int y,
+                                  int width, int height)
+{
+    struct kui_display_command *command;
+    uint32_t pixel_bytes;
+    uint32_t bytes;
+
+    if (surface == NULL || surface->commands == NULL || pixels == NULL ||
+        source_width <= 0 || source_height <= 0 || source_y < 0 ||
+        source_y >= source_height) {
+        if (surface != NULL && surface->commands != NULL)
+            surface->commands->failed = 1;
+        return;
+    }
+    pixel_bytes = (uint32_t)source_width * sizeof(uint32_t);
+    bytes = sizeof(*command) + pixel_bytes;
+    if (source_width > 4096 || source_height > 2160 || bytes > 0xffffU) {
+        surface->commands->failed = 1;
+        return;
+    }
+    command = kui_command_append(surface->commands, bytes);
+    if (command == NULL) return;
+    command->type = KUI_DISPLAY_BITMAP_ROW;
+    command->size = (uint16_t)bytes;
+    command->x0 = x;
+    command->y0 = y;
+    command->x1 = width;
+    command->y1 = height;
+    command->foreground = (uint32_t)source_width;
+    command->background = (uint32_t)source_height;
+    command->flags = (uint32_t)source_y;
+    memcpy(command + 1, pixels, pixel_bytes);
+}
+
+static void kui_record_bitmap_region_row(struct kui_surface *surface,
+                                         const uint32_t *pixels,
+                                         int source_width, int source_height,
+                                         int source_x, int source_y,
+                                         int region_width,
+                                         int x, int y, int width, int height)
+{
+    struct kui_display_command *command;
+    uint32_t pixel_bytes;
+    uint32_t bytes;
+
+    if (surface == NULL || surface->commands == NULL || pixels == NULL ||
+        source_width <= 0 || source_width > 4096 || source_height <= 0 ||
+        source_height > 2160 || source_x < 0 || source_y < 0 ||
+        region_width <= 0 || source_x > source_width - region_width ||
+        source_y >= source_height) {
+        if (surface != NULL && surface->commands != NULL)
+            surface->commands->failed = 1;
+        return;
+    }
+    pixel_bytes = (uint32_t)region_width * sizeof(uint32_t);
+    bytes = sizeof(*command) + pixel_bytes;
+    if (bytes > 0xffffU) {
+        surface->commands->failed = 1;
+        return;
+    }
+    command = kui_command_append(surface->commands, bytes);
+    if (command == NULL) return;
+    command->type = KUI_DISPLAY_BITMAP_REGION_ROW;
+    command->size = (uint16_t)bytes;
+    command->x0 = x;
+    command->y0 = y;
+    command->x1 = width;
+    command->y1 = height;
+    command->foreground = (uint32_t)source_width;
+    command->background = (uint32_t)source_height;
+    command->flags = ((uint32_t)source_y << 16) | (uint32_t)source_x;
+    memcpy(command + 1, pixels, pixel_bytes);
+}
+
 int kui_display_replay(struct kui_surface *surface,
                        const void *commands, uint32_t bytes)
 {
@@ -177,6 +254,113 @@ int kui_display_replay(struct kui_surface *surface,
             kui_draw_text(surface, command->x0, command->y0, text,
                           command->foreground, command->background,
                           (int)command->flags);
+        } else if (command->type == KUI_DISPLAY_BITMAP_ROW) {
+            uint32_t source_width = command->foreground;
+            uint32_t source_height = command->background;
+            uint32_t source_y = command->flags;
+            uint32_t expected_size;
+            const uint32_t *source = (const uint32_t *)(command + 1);
+            int row_top;
+            int row_bottom;
+            int left;
+            int right;
+
+            if (source_width == 0 || source_width > 4096 ||
+                source_height == 0 || source_height > 2160 ||
+                source_y >= source_height || command->x0 < -8192 ||
+                command->x0 > 8192 || command->y0 < -8192 ||
+                command->y0 > 8192 || command->x1 <= 0 ||
+                command->x1 > 8192 || command->y1 <= 0 ||
+                command->y1 > 8192)
+                return -1;
+            expected_size = sizeof(*command) +
+                            source_width * sizeof(uint32_t);
+            if (command->size != expected_size) return -1;
+            row_top = command->y0 +
+                (int)((source_y * (uint32_t)command->y1 +
+                       source_height - 1) / source_height);
+            row_bottom = command->y0 +
+                (int)(((source_y + 1) * (uint32_t)command->y1 +
+                       source_height - 1) / source_height);
+            left = command->x0 < 0 ? 0 : command->x0;
+            right = command->x0 + command->x1;
+            if (right > surface->width) right = surface->width;
+            if (row_top < 0) row_top = 0;
+            if (row_bottom > surface->height) row_bottom = surface->height;
+            for (int destination_y = row_top;
+                 destination_y < row_bottom; destination_y++) {
+                uint32_t *destination = surface->pixels +
+                    destination_y * surface->stride;
+
+                for (int destination_x = left;
+                     destination_x < right; destination_x++) {
+                    int source_x = (destination_x - command->x0) *
+                                   (int)source_width / command->x1;
+                    destination[destination_x] =
+                        source[source_x] & 0x00ffffffU;
+                }
+            }
+        } else if (command->type == KUI_DISPLAY_BITMAP_REGION_ROW) {
+            uint32_t source_width = command->foreground;
+            uint32_t source_height = command->background;
+            uint32_t source_x = command->flags & 0xffffU;
+            uint32_t source_y = command->flags >> 16;
+            uint32_t payload_bytes = command->size - sizeof(*command);
+            uint32_t region_width;
+            const uint32_t *source = (const uint32_t *)(command + 1);
+            int row_top;
+            int row_bottom;
+            int left;
+            int right;
+
+            if (command->size < sizeof(*command) ||
+                payload_bytes == 0 || payload_bytes % sizeof(uint32_t) != 0)
+                return -1;
+            region_width = payload_bytes / sizeof(uint32_t);
+            if (source_width == 0 || source_width > 4096 ||
+                source_height == 0 || source_height > 2160 ||
+                source_x >= source_width || source_y >= source_height ||
+                region_width > source_width - source_x ||
+                command->x0 < -8192 || command->x0 > 8192 ||
+                command->y0 < -8192 || command->y0 > 8192 ||
+                command->x1 <= 0 || command->x1 > 8192 ||
+                command->y1 <= 0 || command->y1 > 8192)
+                return -1;
+            row_top = command->y0 +
+                (int)((source_y * (uint32_t)command->y1 +
+                       source_height - 1) / source_height);
+            row_bottom = command->y0 +
+                (int)(((source_y + 1) * (uint32_t)command->y1 +
+                       source_height - 1) / source_height);
+            left = command->x0 +
+                (int)((source_x * (uint32_t)command->x1 +
+                       source_width - 1) / source_width);
+            right = command->x0 +
+                (int)(((source_x + region_width) *
+                       (uint32_t)command->x1 + source_width - 1) /
+                      source_width);
+            if (left < 0) left = 0;
+            if (right > surface->width) right = surface->width;
+            if (row_top < 0) row_top = 0;
+            if (row_bottom > surface->height) row_bottom = surface->height;
+            for (int destination_y = row_top;
+                 destination_y < row_bottom; destination_y++) {
+                uint32_t *destination = surface->pixels +
+                    destination_y * surface->stride;
+
+                for (int destination_x = left;
+                     destination_x < right; destination_x++) {
+                    int pixel_x = (destination_x - command->x0) *
+                                  (int)source_width / command->x1;
+
+                    if (pixel_x < (int)source_x)
+                        pixel_x = (int)source_x;
+                    if (pixel_x >= (int)(source_x + region_width))
+                        pixel_x = (int)(source_x + region_width - 1);
+                    destination[destination_x] =
+                        source[pixel_x - (int)source_x] & 0x00ffffffU;
+                }
+            }
         } else return -1;
         cursor += command->size;
         remaining -= command->size;
@@ -601,6 +785,86 @@ void kui_blit_image_scaled(struct kui_surface *surface,
                 destination_y * surface->stride + destination_x;
             *destination = image->opaque ? source & 0x00ffffffU :
                 kui_alpha_pixel(*destination, source);
+        }
+    }
+}
+
+void kui_draw_bitmap_scaled(struct kui_surface *surface,
+                            const uint32_t *pixels,
+                            int source_width, int source_height,
+                            int x, int y, int width, int height)
+{
+    struct kui_image image;
+
+    if (surface == NULL || pixels == NULL || source_width <= 0 ||
+        source_height <= 0 || width <= 0 || height <= 0)
+        return;
+    if (surface->commands == NULL) {
+        image.pixels = (uint32_t *)pixels;
+        image.width = source_width;
+        image.height = source_height;
+        image.opaque = 1;
+        kui_blit_image_scaled(surface, &image, x, y, width, height);
+        return;
+    }
+    for (int row = 0; row < source_height; row++)
+        kui_record_bitmap_row(surface, pixels + row * source_width,
+                              source_width, source_height, row,
+                              x, y, width, height);
+}
+
+void kui_draw_bitmap_region_scaled(struct kui_surface *surface,
+                                   const uint32_t *pixels,
+                                   int source_width, int source_height,
+                                   int source_x, int source_y,
+                                   int region_width, int region_height,
+                                   int x, int y, int width, int height)
+{
+    int source_right;
+    int source_bottom;
+
+    if (surface == NULL || pixels == NULL || source_width <= 0 ||
+        source_height <= 0 || source_x < 0 || source_y < 0 ||
+        region_width <= 0 || region_height <= 0 || width <= 0 || height <= 0 ||
+        source_x >= source_width || source_y >= source_height)
+        return;
+    source_right = source_x + region_width;
+    source_bottom = source_y + region_height;
+    if (source_right > source_width) source_right = source_width;
+    if (source_bottom > source_height) source_bottom = source_height;
+    if (surface->commands != NULL) {
+        for (int row = source_y; row < source_bottom; row++)
+            kui_record_bitmap_region_row(
+                surface, pixels + row * source_width + source_x,
+                source_width, source_height, source_x, row,
+                source_right - source_x, x, y, width, height);
+        return;
+    }
+    {
+        int top = y + (source_y * height + source_height - 1) /
+                      source_height;
+        int bottom = y + (source_bottom * height + source_height - 1) /
+                         source_height;
+        int left = x + (source_x * width + source_width - 1) / source_width;
+        int right = x + (source_right * width + source_width - 1) /
+                        source_width;
+
+        if (top < 0) top = 0;
+        if (bottom > surface->height) bottom = surface->height;
+        if (left < 0) left = 0;
+        if (right > surface->width) right = surface->width;
+        for (int destination_y = top; destination_y < bottom;
+             destination_y++) {
+            int pixel_y = (destination_y - y) * source_height / height;
+
+            for (int destination_x = left; destination_x < right;
+                 destination_x++) {
+                int pixel_x = (destination_x - x) * source_width / width;
+
+                surface->pixels[destination_y * surface->stride +
+                                destination_x] =
+                    pixels[pixel_y * source_width + pixel_x] & 0x00ffffffU;
+            }
         }
     }
 }

@@ -9,11 +9,15 @@
 #include "extras/kui/kui.h"
 #include "extras/kui/kui_client.h"
 #include "extras/kui/kui_dialog.h"
+#include "extras/kui/kui_menu.h"
 
 #define FINDER_HISTORY_MAX 16
 #define CONTEXT_MENU_WIDTH 176
 #define CONTEXT_MENU_ROW_HEIGHT 24
 #define CONTEXT_MENU_HEIGHT (CONTEXT_MENU_ROW_HEIGHT * 3 + 4)
+#define FINDER_TOOLBAR_TOP KUI_MENU_BAR_HEIGHT
+#define FINDER_CONTENT_HIT_TOP (KUI_MENU_BAR_HEIGHT + 60)
+#define FINDER_CONTENT_DRAW_TOP (KUI_MENU_BAR_HEIGHT + 65)
 
 enum finder_context_kind {
     FINDER_CONTEXT_NONE,
@@ -25,6 +29,22 @@ enum finder_create_kind {
     FINDER_CREATE_NONE,
     FINDER_CREATE_FOLDER,
     FINDER_CREATE_TEXT_FILE
+};
+
+enum finder_menu_action {
+    FINDER_MENU_NEW_FOLDER = 1,
+    FINDER_MENU_NEW_TEXT_FILE,
+    FINDER_MENU_PASTE
+};
+
+static struct kui_menu_item finder_file_items[] = {
+    { "New Folder", NULL, FINDER_MENU_NEW_FOLDER, 1 },
+    { "New Text File", NULL, FINDER_MENU_NEW_TEXT_FILE, 1 },
+    { "Paste", NULL, FINDER_MENU_PASTE, 0 }
+};
+
+static const struct kui_menu finder_menus[] = {
+    { "File", finder_file_items, 3 }
 };
 
 struct kyleos_dirent {
@@ -270,7 +290,7 @@ static int finder_columns(int width)
 
 static int finder_visible_rows(int height)
 {
-    int rows = (height - 65) / 82;
+    int rows = (height - FINDER_CONTENT_DRAW_TOP) / 82;
     return rows > 0 ? rows : 1;
 }
 
@@ -311,15 +331,19 @@ static void finder_render(struct kui_client *client,
 
     kui_fill_rect(&client->surface, 0, 0, event->width, event->height,
                   KUI_WHITE);
-    kui_fill_rect(&client->surface, 0, 0, event->width, 58, KUI_LIGHT);
-    kui_draw_button(&client->surface, 5, 5, 55, 24, "Back",
+    kui_fill_rect(&client->surface, 0, FINDER_TOOLBAR_TOP,
+                  event->width, 58, KUI_LIGHT);
+    kui_draw_button(&client->surface, 5, FINDER_TOOLBAR_TOP + 5,
+                    55, 24, "Back",
                     !state->can_back);
-    kui_draw_button(&client->surface, 64, 5, 70, 24, "Forward",
+    kui_draw_button(&client->surface, 64, FINDER_TOOLBAR_TOP + 5,
+                    70, 24, "Forward",
                     !state->can_forward);
-    kui_draw_button(&client->surface, 138, 5, 40, 24, "Up",
+    kui_draw_button(&client->surface, 138, FINDER_TOOLBAR_TOP + 5,
+                    40, 24, "Up",
                     !state->can_up);
     snprintf(location, sizeof(location), "Location: %s", state->path);
-    kui_draw_text(&client->surface, 7, 36, location,
+    kui_draw_text(&client->surface, 7, FINDER_TOOLBAR_TOP + 36, location,
                   KUI_BLACK, KUI_LIGHT, 0);
     for (int item = 0; item < state->item_count; item++) {
         int visible = item - scroll_row * columns;
@@ -335,7 +359,7 @@ static void finder_render(struct kui_client *client,
         column = visible % columns;
         if (row >= finder_visible_rows(event->height)) break;
         x = 9 + column * 88;
-        y = 65 + row * 82;
+        y = FINDER_CONTENT_DRAW_TOP + row * 82;
         if (context_kind == FINDER_CONTEXT_ITEM && item == context_item) {
             label_background = 0x00cde8ffU;
             kui_fill_rect(&client->surface, x + 2, y - 3, 76, 68,
@@ -402,9 +426,12 @@ static int finder_item_at(const struct finder_response *state,
     int columns;
     int item;
 
-    if (x < 9 || y < 60 || x >= width - 4 || y >= height) return -1;
+    if (x < 9 || y < FINDER_CONTENT_HIT_TOP ||
+        x >= width - 4 || y >= height)
+        return -1;
     columns = finder_columns(width);
-    item = scroll_row * columns + (y - 60) / 82 * columns + (x - 9) / 88;
+    item = scroll_row * columns +
+           (y - FINDER_CONTENT_HIT_TOP) / 82 * columns + (x - 9) / 88;
     return item >= 0 && item < state->item_count ? item : -1;
 }
 
@@ -444,6 +471,46 @@ static int reload_current_directory(struct finder_response *state)
     return 0;
 }
 
+static int begin_create_dialog(struct kui_input_dialog *dialog,
+                               int *create_kind,
+                               const struct finder_response *state,
+                               int folder)
+{
+    char path[FINDER_PATH_MAX];
+
+    if (make_new_path(path, state->path, folder) < 0) return -1;
+    *create_kind = folder ? FINDER_CREATE_FOLDER : FINDER_CREATE_TEXT_FILE;
+    kui_input_dialog_open(dialog,
+                          folder ? "New Folder" : "New Text File",
+                          folder ? "Folder name:" : "File name:",
+                          base_name(path), FINDER_NAME_MAX - 1);
+    return 0;
+}
+
+static int paste_clipboard_file(const struct finder_response *state,
+                                const char *clipboard,
+                                char *status, size_t status_size)
+{
+    struct stat source_stat;
+    char path[FINDER_PATH_MAX];
+
+    if (clipboard == NULL || clipboard[0] == '\0') {
+        snprintf(status, status_size, "Nothing to paste");
+    } else if (stat(clipboard, &source_stat) < 0) {
+        snprintf(status, status_size, "Copied file no longer exists");
+    } else if (source_stat.st_mode == FINDER_ITEM_DIRECTORY) {
+        snprintf(status, status_size, "Folder copy is not supported yet");
+    } else if (make_copy_path(path, state->path, clipboard) < 0) {
+        snprintf(status, status_size, "Could not choose a copy name");
+    } else if (copy_file_contents(clipboard, path) < 0) {
+        snprintf(status, status_size, "Paste failed");
+    } else {
+        snprintf(status, status_size, "Pasted %s", base_name(path));
+        return 0;
+    }
+    return -1;
+}
+
 static int context_menu_row(int menu_x, int menu_y, int x, int y)
 {
     int row;
@@ -459,6 +526,7 @@ static int embedded_main(void)
 {
     struct finder_response state;
     struct kui_input_dialog create_dialog;
+    struct kui_menu_state menu_state;
     char history[FINDER_HISTORY_MAX][FINDER_PATH_MAX];
     int history_count = 0;
     int history_index = -1;
@@ -476,12 +544,15 @@ static int embedded_main(void)
     memset(&create_dialog, 0, sizeof(create_dialog));
     memset(history, 0, sizeof(history));
     status_message[0] = '\0';
+    kui_menu_init(&menu_state);
     kui_client_init(&client);
 
     for (;;) {
         struct finder_response response;
         char action_path[FINDER_PATH_MAX];
         uint32_t shell_action = KUI_ACTION_NONE;
+        int menu_action = 0;
+        int menu_consumed = 0;
 
         if (kui_client_read_event(&event) < 0) break;
         if (event.type == KUI_EVENT_CLOSE) break;
@@ -490,6 +561,7 @@ static int embedded_main(void)
         response.action = FINDER_ACTION_NONE;
         response.activated_path[0] = '\0';
         action_path[0] = '\0';
+        finder_file_items[2].enabled = event.clipboard[0] != '\0';
         if (event.type == KUI_EVENT_INIT) {
             const char *path = event.argument[0] != '\0' ? event.argument : "/";
             load_directory(path, &response);
@@ -501,6 +573,7 @@ static int embedded_main(void)
                 context_kind = FINDER_CONTEXT_NONE;
                 create_kind = FINDER_CREATE_NONE;
                 kui_input_dialog_close(&create_dialog);
+                kui_menu_close(&menu_state);
             }
         } else if (create_dialog.active) {
             int result = kui_input_dialog_handle(&create_dialog, &event);
@@ -550,6 +623,27 @@ static int embedded_main(void)
             } else if (result == KUI_INPUT_DIALOG_CANCEL) {
                 create_kind = FINDER_CREATE_NONE;
             }
+        } else if ((menu_action = kui_menu_handle(
+                        &menu_state, &event, finder_menus, 1,
+                        &menu_consumed)) != 0) {
+            context_kind = FINDER_CONTEXT_NONE;
+            if (menu_action == FINDER_MENU_NEW_FOLDER) {
+                if (begin_create_dialog(&create_dialog, &create_kind,
+                                        &state, 1) < 0)
+                    strcpy(status_message, "Could not choose a folder name");
+            } else if (menu_action == FINDER_MENU_NEW_TEXT_FILE) {
+                if (begin_create_dialog(&create_dialog, &create_kind,
+                                        &state, 0) < 0)
+                    strcpy(status_message, "Could not choose a file name");
+            } else if (menu_action == FINDER_MENU_PASTE &&
+                       paste_clipboard_file(&state, event.clipboard,
+                                            status_message,
+                                            sizeof(status_message)) == 0) {
+                reload_current_directory(&state);
+                shell_action = KUI_ACTION_FILE_SAVED;
+            }
+        } else if (menu_consumed) {
+            context_kind = FINDER_CONTEXT_NONE;
         } else if (event.type == KUI_EVENT_REFRESH) {
             load_directory(state.path, &response);
             if (response.status == 0) state = response;
@@ -560,7 +654,7 @@ static int embedded_main(void)
             scroll_row -= event.wheel * 3;
             context_kind = FINDER_CONTEXT_NONE;
         } else if (event.type == KUI_EVENT_POINTER && event.button == 2) {
-            if (event.y < 58) {
+            if (event.y < FINDER_TOOLBAR_TOP + 58) {
                 context_kind = FINDER_CONTEXT_NONE;
             } else {
                 context_item = finder_item_at(&state, event.width,
@@ -631,39 +725,22 @@ static int embedded_main(void)
                 }
             } else if (row >= 0 &&
                        menu_kind == FINDER_CONTEXT_BACKGROUND) {
-                char path[FINDER_PATH_MAX];
                 int result = -1;
 
-                path[0] = '\0';
-                if (row == 0 && make_new_path(path, state.path, 1) == 0) {
-                    create_kind = FINDER_CREATE_FOLDER;
-                    kui_input_dialog_open(&create_dialog, "New Folder",
-                                          "Folder name:", base_name(path),
-                                          FINDER_NAME_MAX - 1);
-                } else if (row == 1 &&
-                           make_new_path(path, state.path, 0) == 0) {
-                    create_kind = FINDER_CREATE_TEXT_FILE;
-                    kui_input_dialog_open(&create_dialog, "New Text File",
-                                          "File name:", base_name(path),
-                                          FINDER_NAME_MAX - 1);
-                } else if (row == 2 && event.clipboard[0] != '\0') {
-                    struct stat source_stat;
-
-                    if (stat(event.clipboard, &source_stat) < 0) {
-                        strcpy(status_message, "Copied file no longer exists");
-                    } else if (source_stat.st_mode == FINDER_ITEM_DIRECTORY) {
+                if (row == 0) {
+                    if (begin_create_dialog(&create_dialog, &create_kind,
+                                            &state, 1) < 0)
                         strcpy(status_message,
-                               "Folder copy is not supported yet");
-                    } else if (make_copy_path(path, state.path,
-                                              event.clipboard) < 0) {
-                        strcpy(status_message, "Could not choose a copy name");
-                    } else if (copy_file_contents(event.clipboard, path) < 0) {
-                        strcpy(status_message, "Paste failed");
-                    } else {
-                        result = 0;
-                        snprintf(status_message, sizeof(status_message),
-                                 "Pasted %s", base_name(path));
-                    }
+                               "Could not choose a folder name");
+                } else if (row == 1) {
+                    if (begin_create_dialog(&create_dialog, &create_kind,
+                                            &state, 0) < 0)
+                        strcpy(status_message,
+                               "Could not choose a file name");
+                } else if (row == 2 && event.clipboard[0] != '\0') {
+                    result = paste_clipboard_file(
+                        &state, event.clipboard, status_message,
+                        sizeof(status_message));
                 }
                 if (result == 0) {
                     reload_current_directory(&state);
@@ -671,7 +748,8 @@ static int embedded_main(void)
                 }
             }
         } else if (event.type == KUI_EVENT_POINTER && event.button == 1 &&
-                   event.y < 31) {
+                   event.y >= FINDER_TOOLBAR_TOP &&
+                   event.y < FINDER_TOOLBAR_TOP + 31) {
             if (event.x < 62 && state.can_back && history_index > 0) {
                 load_directory(history[history_index - 1], &response);
                 if (response.status == 0) { history_index--; state = response; }
@@ -714,10 +792,11 @@ static int embedded_main(void)
             scroll_row = finder_max_scroll(&state, event.width, event.height);
         kui_client_begin(&client, &event,
                          state.title[0] != '\0' ? state.title : "Finder");
-        kui_client_set_constraints(&client, 360, 220, 700, 481);
+        kui_client_set_constraints(&client, 360, 243, 700, 504);
         finder_render(&client, &event, &state, scroll_row,
                       context_kind, context_item, context_x, context_y,
                       status_message);
+        kui_menu_render(&client.surface, &menu_state, finder_menus, 1);
         kui_input_dialog_render(&client.surface, &event, &create_dialog);
         if (shell_action != KUI_ACTION_NONE)
             kui_client_set_action(&client, shell_action, action_path);

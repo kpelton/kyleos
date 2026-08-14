@@ -100,6 +100,7 @@ static int drag_dy;
 static int resize_window = -1;
 static int resize_right_gap;
 static int resize_bottom_gap;
+static int pointer_window = -1;
 static char clipboard_path[KUI_PROTOCOL_TEXT_MAX];
 
 static int get_directory_entries(int fd, struct kyleos_dirent *entries,
@@ -391,9 +392,30 @@ static int send_window_event(int index, uint32_t type, int x, int y,
         window->timer_ms = response.timer_ms;
         window->next_timer = kui_ticks_ms() + response.timer_ms;
     }
-    if ((response.flags & KUI_RESPONSE_DISPLAY) &&
-        ensure_content(window, width, height) == 0) {
-        kui_fill_rect(&window->content, 0, 0, width, height, KUI_WHITE);
+    if (response.flags & KUI_RESPONSE_DISPLAY) {
+        int partial = (response.flags & KUI_RESPONSE_PARTIAL) != 0;
+        int content_ready = window->content_pixels != NULL &&
+                            window->content_width == width &&
+                            window->content_height == height;
+
+        if (partial && (!content_ready || response.damage_x < 0 ||
+            response.damage_y < 0 || response.damage_width <= 0 ||
+            response.damage_height <= 0 ||
+            response.damage_x > width - response.damage_width ||
+            response.damage_y > height - response.damage_height)) {
+            free(display);
+            return -1;
+        }
+        if (ensure_content(window, width, height) < 0) {
+            free(display);
+            return -1;
+        }
+        if (partial)
+            kui_fill_rect(&window->content, response.damage_x,
+                          response.damage_y, response.damage_width,
+                          response.damage_height, KUI_WHITE);
+        else
+            kui_fill_rect(&window->content, 0, 0, width, height, KUI_WHITE);
         if (kui_display_replay(&window->content, display,
                                response.display_bytes) < 0) {
             free(display);
@@ -445,6 +467,7 @@ static void close_window_index(int index)
     int status;
 
     if (index < 0 || index >= MAX_WINDOWS || !windows[index].visible) return;
+    if (pointer_window == index) pointer_window = -1;
     window = &windows[index];
     send_window_event(index, KUI_EVENT_CLOSE, 0, 0, 0, 0, 0,
                       0, 0, 0, 0, 0, NULL, NULL);
@@ -567,6 +590,20 @@ static int is_text_file(const char *path)
     return 1;
 }
 
+static int is_kimg_file(const char *path)
+{
+    unsigned char header[8];
+    int fd = open(path, O_RDONLY);
+    int count;
+
+    if (fd < 0) return 0;
+    count = read(fd, header, sizeof(header));
+    close(fd);
+    return count == (int)sizeof(header) &&
+           memcmp(header, "KIMG", 4) == 0 && header[4] == 1 &&
+           header[5] == 0 && header[6] == 0 && header[7] == 0;
+}
+
 static void open_path(const char *path)
 {
     const struct shell_app *app;
@@ -576,6 +613,13 @@ static void open_path(const char *path)
         if (app != NULL) open_application(app, NULL);
         else run_exclusive(path);
         return;
+    }
+    if (is_kimg_file(path)) {
+        for (int i = 0; i < app_count; i++)
+            if (strcmp(apps[i].accepts, "image") == 0) {
+                open_application(&apps[i], path);
+                return;
+            }
     }
     if (is_text_file(path)) {
         for (int i = 0; i < app_count; i++)
@@ -923,6 +967,7 @@ static void activate_start_item(int x, int y)
 static void handle_mouse_down(int button)
 {
     int index;
+    pointer_window = -1;
     if (cursor_y >= screen_height - TASKBAR_HEIGHT) {
         if (button == 1 && cursor_x < 100)
             start_menu_open = !start_menu_open;
@@ -975,6 +1020,7 @@ static void handle_mouse_down(int button)
                                content_y(&windows[index]),
                                content_width(&windows[index]),
                                content_height(&windows[index]))) {
+            if (button == 1) pointer_window = index;
             dispatch_pointer(index, button, mouse_buttons | (uint8_t)button, 0);
         }
         return;
@@ -989,12 +1035,18 @@ static void handle_mouse_down(int button)
 static int handle_mouse(void)
 {
     int changed = 0;
+    int events_handled = 0;
+    int pointer_moved = 0;
     int dx;
     int dy;
     int wheel;
     uint8_t buttons;
-    while (kui_mouse_poll_wheel(&dx, &dy, &buttons, &wheel) > 0) {
+    while (events_handled < 32 &&
+           kui_mouse_poll_wheel(&dx, &dy, &buttons, &wheel) > 0) {
+        int pressed_left = (buttons & 1) && !(mouse_buttons & 1);
         int released_left = !(buttons & 1) && (mouse_buttons & 1);
+
+        events_handled++;
         cursor_x += kui_pointer_delta(dx);
         cursor_y -= kui_pointer_delta(dy);
         if (cursor_x < 0) cursor_x = 0;
@@ -1005,9 +1057,13 @@ static int handle_mouse(void)
             int index = window_at(cursor_x, cursor_y);
             if (index >= 0) dispatch_pointer(index, 0, buttons, wheel);
         }
-        if ((buttons & 1) && !(mouse_buttons & 1)) handle_mouse_down(1);
+        if (pressed_left) handle_mouse_down(1);
         if ((buttons & 2) && !(mouse_buttons & 2)) handle_mouse_down(2);
         mouse_buttons = buttons;
+        if (!pressed_left && (buttons & 1) && (dx != 0 || dy != 0) &&
+            pointer_window >= 0 && windows[pointer_window].visible &&
+            drag_window < 0 && resize_window < 0)
+            pointer_moved = 1;
         if (drag_window >= 0 && windows[drag_window].visible) {
             struct shell_window *window = &windows[drag_window];
             window->x = cursor_x - drag_dx;
@@ -1035,6 +1091,14 @@ static int handle_mouse(void)
             }
         }
         if (released_left) {
+            if (pointer_moved && pointer_window >= 0 &&
+                windows[pointer_window].visible) {
+                dispatch_pointer(pointer_window, 0, 1, 0);
+                pointer_moved = 0;
+            }
+            if (pointer_window >= 0 && windows[pointer_window].visible)
+                dispatch_pointer(pointer_window, 0, buttons, 0);
+            pointer_window = -1;
             if (drag_window >= 0 && windows[drag_window].visible) {
                 if (cursor_x <= 5) snap_window(drag_window, -1);
                 else if (cursor_x >= screen_width - 16)
@@ -1045,6 +1109,9 @@ static int handle_mouse(void)
         }
         changed = 1;
     }
+    if (pointer_moved && (mouse_buttons & 1) && pointer_window >= 0 &&
+        windows[pointer_window].visible)
+        dispatch_pointer(pointer_window, 0, mouse_buttons, 0);
     return changed;
 }
 

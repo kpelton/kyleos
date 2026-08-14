@@ -6,5 +6,7 @@ Welcome to the KyleOS Desktop.
 - Finder opens files through desktop file associations.
 - Text Editor has File > Open, Save, and Save As. Shortcuts are Ctrl-O,
   Ctrl-S, and Ctrl-Shift-S.
+- Paint draws and erases KIMG pictures with a 16-color palette. It has
+  File > Open, Save, and Save As, and scales its canvas with the window.
 - Terminal runs commands when you press Enter.
 - Alt-Q returns to the shell.

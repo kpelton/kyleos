@@ -70,6 +70,22 @@ void kui_client_set_timer(struct kui_client *client, uint32_t milliseconds)
     client->response.timer_ms = milliseconds;
 }
 
+void kui_client_set_damage(struct kui_client *client,
+                           int x, int y, int width, int height)
+{
+    client->response.flags |= KUI_RESPONSE_DISPLAY | KUI_RESPONSE_PARTIAL;
+    client->response.damage_x = x;
+    client->response.damage_y = y;
+    client->response.damage_width = width;
+    client->response.damage_height = height;
+}
+
+void kui_client_set_no_display(struct kui_client *client)
+{
+    client->response.flags &= ~(KUI_RESPONSE_DISPLAY | KUI_RESPONSE_PARTIAL);
+    kui_command_buffer_reset(&client->display);
+}
+
 int kui_client_send(struct kui_client *client)
 {
     if (client->display.failed) return -1;

@@ -20,6 +20,9 @@ void kui_client_set_constraints(struct kui_client *client,
 void kui_client_set_action(struct kui_client *client, uint32_t action,
                            const char *argument);
 void kui_client_set_timer(struct kui_client *client, uint32_t milliseconds);
+void kui_client_set_damage(struct kui_client *client,
+                           int x, int y, int width, int height);
+void kui_client_set_no_display(struct kui_client *client);
 int kui_client_send(struct kui_client *client);
 
 #endif

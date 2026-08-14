@@ -6,7 +6,18 @@
 
 #include "extras/kui/kui.h"
 #include "extras/kui/kui_client.h"
+#include "extras/kui/kui_menu.h"
 #include "extras/solitaire/solitaire.h"
+
+enum { SOLITAIRE_MENU_NEW_DEAL = 1 };
+
+static const struct kui_menu_item solitaire_game_items[] = {
+    { "New Deal", "R", SOLITAIRE_MENU_NEW_DEAL, 1 }
+};
+
+static const struct kui_menu solitaire_menus[] = {
+    { "Game", solitaire_game_items, 1 }
+};
 
 static uint32_t *framebuffer;
 static uint32_t framebuffer_bytes;
@@ -26,25 +37,43 @@ static int running = 1;
 static int embedded_main(void)
 {
     struct solitaire_game state;
+    struct kui_menu_state menu_state;
     struct kui_client client;
     struct kui_event event;
 
     memset(&state, 0, sizeof(state));
+    kui_menu_init(&menu_state);
     kui_client_init(&client);
     for (;;) {
         if (kui_client_read_event(&event) < 0) break;
         if (event.type == KUI_EVENT_CLOSE) break;
-        if (event.type == KUI_EVENT_INIT ||
-            (event.type == KUI_EVENT_KEY && event.key_pressed &&
-             !event.key_extended && event.key_code == 19))
+        if (event.type == KUI_EVENT_INIT) {
             solitaire_reset(&state, event.seed);
-        else if (event.type == KUI_EVENT_POINTER && event.button == 1)
-            solitaire_click(&state, 0, 0, event.width, event.height,
-                            event.x, event.y, event.seed);
+            kui_menu_close(&menu_state);
+        } else {
+            int consumed = 0;
+            int action = kui_menu_handle(&menu_state, &event,
+                                         solitaire_menus, 1, &consumed);
+
+            if (action == SOLITAIRE_MENU_NEW_DEAL ||
+                (!consumed && event.type == KUI_EVENT_KEY &&
+                 event.key_pressed && !event.key_extended &&
+                 event.key_code == 19)) {
+                solitaire_reset(&state, event.seed);
+            } else if (!consumed && event.type == KUI_EVENT_POINTER &&
+                       event.button == 1) {
+                solitaire_click(&state, 0, KUI_MENU_BAR_HEIGHT,
+                                event.width,
+                                event.height - KUI_MENU_BAR_HEIGHT,
+                                event.x, event.y, event.seed);
+            }
+        }
         kui_client_begin(&client, &event, "Solitaire");
-        kui_client_set_constraints(&client, 319, 226, 699, 481);
-        solitaire_draw(&client.surface, &state, 0, 0,
-                       event.width, event.height);
+        kui_client_set_constraints(&client, 319, 249, 699, 504);
+        solitaire_draw(&client.surface, &state,
+                       0, KUI_MENU_BAR_HEIGHT, event.width,
+                       event.height - KUI_MENU_BAR_HEIGHT);
+        kui_menu_render(&client.surface, &menu_state, solitaire_menus, 1);
         if (kui_client_send(&client) < 0) break;
     }
     kui_client_free(&client);

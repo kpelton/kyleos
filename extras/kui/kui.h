@@ -91,6 +91,16 @@ void kui_blit_image(struct kui_surface *surface,
 void kui_blit_image_scaled(struct kui_surface *surface,
                            const struct kui_image *image,
                            int x, int y, int width, int height);
+void kui_draw_bitmap_scaled(struct kui_surface *surface,
+                            const uint32_t *pixels,
+                            int source_width, int source_height,
+                            int x, int y, int width, int height);
+void kui_draw_bitmap_region_scaled(struct kui_surface *surface,
+                                   const uint32_t *pixels,
+                                   int source_width, int source_height,
+                                   int source_x, int source_y,
+                                   int region_width, int region_height,
+                                   int x, int y, int width, int height);
 
 void kui_draw_desktop(struct kui_surface *surface, int menu_height);
 void kui_draw_bevel(struct kui_surface *surface, int x, int y, int w, int h,

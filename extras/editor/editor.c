@@ -8,11 +8,25 @@
 #include "extras/kui/kui_client.h"
 #include "extras/kui/kui_dialog.h"
 #include "extras/kui/kui_file_dialog.h"
+#include "extras/kui/kui_menu.h"
 
-#define EDITOR_MENU_HEIGHT 23
-#define EDITOR_TEXT_TOP 28
-#define EDITOR_FILE_MENU_WIDTH 196
-#define EDITOR_FILE_MENU_ROW_HEIGHT 24
+#define EDITOR_TEXT_TOP (KUI_MENU_BAR_HEIGHT + 5)
+
+enum editor_menu_action {
+    EDITOR_MENU_OPEN = 1,
+    EDITOR_MENU_SAVE,
+    EDITOR_MENU_SAVE_AS
+};
+
+static const struct kui_menu_item editor_file_items[] = {
+    { "Open...", "Ctrl+O", EDITOR_MENU_OPEN, 1 },
+    { "Save", "Ctrl+S", EDITOR_MENU_SAVE, 1 },
+    { "Save As...", "Ctrl+Shift+S", EDITOR_MENU_SAVE_AS, 1 }
+};
+
+static const struct kui_menu editor_menus[] = {
+    { "File", editor_file_items, 3 }
+};
 
 struct editor_state {
     char path[EDITOR_PATH_MAX];
@@ -245,8 +259,7 @@ static int editor_position_at(const struct editor_state *state,
 
 static void editor_render(struct kui_client *client,
                           const struct kui_event *event,
-                          const struct editor_state *state, int scroll_row,
-                          int file_menu_open)
+                          const struct editor_state *state, int scroll_row)
 {
     int columns = editor_columns(event->width);
     int row = 0;
@@ -275,42 +288,6 @@ static void editor_render(struct kui_client *client,
     if (state->save_failed)
         kui_draw_text(&client->surface, 7, event->height - 18,
                       "Save failed", 0x00b00000U, KUI_WHITE, 0);
-    kui_fill_rect(&client->surface, 0, 0, event->width,
-                  EDITOR_MENU_HEIGHT, KUI_FACE);
-    kui_fill_rect(&client->surface, 0, EDITOR_MENU_HEIGHT - 1,
-                  event->width, 1, KUI_SHADOW);
-    kui_draw_text(&client->surface, 8, 7, "File",
-                  KUI_BLACK, KUI_FACE, 0);
-    if (file_menu_open) {
-        kui_fill_rect(&client->surface, 6, 5, 36, 17, 0x00d4d0c8U);
-        kui_outline_rect(&client->surface, 6, 4, 38, 19, KUI_SHADOW);
-        kui_draw_text(&client->surface, 8, 7, "File",
-                      KUI_BLACK, 0x00d4d0c8U, 0);
-        kui_fill_rect(&client->surface, 6, EDITOR_MENU_HEIGHT + 4,
-                      EDITOR_FILE_MENU_WIDTH, 76, 0x00505050U);
-        kui_fill_rect(&client->surface, 2, EDITOR_MENU_HEIGHT,
-                      EDITOR_FILE_MENU_WIDTH, 76, KUI_FACE);
-        kui_outline_rect(&client->surface, 2, EDITOR_MENU_HEIGHT,
-                         EDITOR_FILE_MENU_WIDTH, 76, KUI_BLACK);
-        kui_draw_text(&client->surface, 14, EDITOR_MENU_HEIGHT + 8,
-                      "Open...", KUI_BLACK, KUI_FACE, 0);
-        kui_draw_text(&client->surface, 117, EDITOR_MENU_HEIGHT + 8,
-                      "Ctrl+O", KUI_SHADOW, KUI_FACE, 0);
-        kui_draw_text(&client->surface, 14,
-                      EDITOR_MENU_HEIGHT + EDITOR_FILE_MENU_ROW_HEIGHT + 8,
-                      "Save", KUI_BLACK, KUI_FACE, 0);
-        kui_draw_text(&client->surface, 117,
-                      EDITOR_MENU_HEIGHT + EDITOR_FILE_MENU_ROW_HEIGHT + 8,
-                      "Ctrl+S", KUI_SHADOW, KUI_FACE, 0);
-        kui_draw_text(&client->surface, 14,
-                      EDITOR_MENU_HEIGHT +
-                      EDITOR_FILE_MENU_ROW_HEIGHT * 2 + 8,
-                      "Save As...", KUI_BLACK, KUI_FACE, 0);
-        kui_draw_text(&client->surface, 92,
-                      EDITOR_MENU_HEIGHT +
-                      EDITOR_FILE_MENU_ROW_HEIGHT * 2 + 8,
-                      "Ctrl+Shift+S", KUI_SHADOW, KUI_FACE, 0);
-    }
 }
 
 static const char *editor_path_name(const char *path)
@@ -324,20 +301,23 @@ int main(void)
     struct editor_state state;
     struct kui_file_dialog file_dialog;
     struct kui_confirm_dialog discard_dialog;
+    struct kui_menu_state menu_state;
     struct kui_client client;
     struct kui_event event;
     char pending_open_path[EDITOR_PATH_MAX];
     int scroll_row = 0;
-    int file_menu_open = 0;
 
     memset(&state, 0, sizeof(state));
     memset(&file_dialog, 0, sizeof(file_dialog));
     memset(&discard_dialog, 0, sizeof(discard_dialog));
     pending_open_path[0] = '\0';
+    kui_menu_init(&menu_state);
     kui_client_init(&client);
     for (;;) {
         struct editor_request request;
         int saved = 0;
+        int menu_action = 0;
+        int menu_consumed = 0;
         char title[KUI_PROTOCOL_TITLE_MAX];
 
         if (kui_client_read_event(&event) < 0) break;
@@ -350,7 +330,7 @@ int main(void)
                     event.argument[0] != '\0' ? event.argument : "/NOTE.TXT",
                     sizeof(request.path) - 1);
             scroll_row = 0;
-            file_menu_open = 0;
+            kui_menu_close(&menu_state);
             pending_open_path[0] = '\0';
             kui_file_dialog_close(&file_dialog);
             kui_confirm_dialog_close(&discard_dialog);
@@ -405,31 +385,20 @@ int main(void)
                                               "Save failed (try an 8.3 name)");
                 }
             }
-        } else if (event.type == KUI_EVENT_POINTER && event.button == 1 &&
-                   file_menu_open) {
-            file_menu_open = 0;
-            if (kui_in_rect(event.x, event.y, 2, EDITOR_MENU_HEIGHT,
-                            EDITOR_FILE_MENU_WIDTH,
-                            EDITOR_FILE_MENU_ROW_HEIGHT)) {
+        } else if ((menu_action = kui_menu_handle(
+                        &menu_state, &event, editor_menus, 1,
+                        &menu_consumed)) != 0) {
+            if (menu_action == EDITOR_MENU_OPEN) {
                 kui_file_dialog_open(&file_dialog, KUI_FILE_DIALOG_OPEN,
                                      state.path);
-            } else if (kui_in_rect(event.x, event.y, 2,
-                                   EDITOR_MENU_HEIGHT +
-                                   EDITOR_FILE_MENU_ROW_HEIGHT,
-                                   EDITOR_FILE_MENU_WIDTH,
-                                   EDITOR_FILE_MENU_ROW_HEIGHT)) {
+            } else if (menu_action == EDITOR_MENU_SAVE) {
                 if (save_document(&state) == 0) saved = 1;
-            } else if (kui_in_rect(event.x, event.y, 2,
-                                   EDITOR_MENU_HEIGHT +
-                                   EDITOR_FILE_MENU_ROW_HEIGHT * 2,
-                                   EDITOR_FILE_MENU_WIDTH,
-                                   EDITOR_FILE_MENU_ROW_HEIGHT)) {
+            } else if (menu_action == EDITOR_MENU_SAVE_AS) {
                 kui_file_dialog_open(&file_dialog, KUI_FILE_DIALOG_SAVE,
                                      state.path);
             }
-        } else if (event.type == KUI_EVENT_POINTER && event.button == 1 &&
-                   event.y < EDITOR_MENU_HEIGHT && event.x < 52) {
-            file_menu_open = 1;
+        } else if (menu_consumed) {
+            /* The shared menu owns this event. */
         } else if (event.type == KUI_EVENT_POINTER && event.wheel != 0) {
             scroll_row -= event.wheel * 3;
         } else if (event.type == KUI_EVENT_POINTER && event.button == 1 &&
@@ -441,7 +410,7 @@ int main(void)
             if ((event.modifiers & KUI_MOD_CTRL) &&
                 (event.modifiers & KUI_MOD_SHIFT) &&
                 !event.key_extended && event.key_code == 31) {
-                file_menu_open = 0;
+                kui_menu_close(&menu_state);
                 kui_file_dialog_open(&file_dialog, KUI_FILE_DIALOG_SAVE,
                                      state.path);
             } else if ((event.modifiers & KUI_MOD_CTRL) &&
@@ -449,14 +418,9 @@ int main(void)
                 if (save_document(&state) == 0) saved = 1;
             } else if ((event.modifiers & KUI_MOD_CTRL) &&
                        !event.key_extended && event.key_code == 24) {
-                file_menu_open = 0;
+                kui_menu_close(&menu_state);
                 kui_file_dialog_open(&file_dialog, KUI_FILE_DIALOG_OPEN,
                                      state.path);
-            } else if (file_menu_open && !event.key_extended &&
-                       event.key_code == 1) {
-                file_menu_open = 0;
-            } else if (file_menu_open) {
-                /* The open menu owns keyboard focus. */
             } else if (event.key_extended && event.key_code == 73) {
                 request.command = EDITOR_COMMAND_PAGE_UP;
                 request.repeat = editor_visible_rows(event.height);
@@ -500,7 +464,8 @@ int main(void)
                  editor_path_name(state.path), state.dirty ? " *" : "");
         kui_client_begin(&client, &event, title);
         kui_client_set_constraints(&client, 440, 300, 700, 481);
-        editor_render(&client, &event, &state, scroll_row, file_menu_open);
+        editor_render(&client, &event, &state, scroll_row);
+        kui_menu_render(&client.surface, &menu_state, editor_menus, 1);
         kui_file_dialog_render(&client.surface, &event, &file_dialog);
         kui_confirm_dialog_render(&client.surface, &event, &discard_dialog);
         if (saved)

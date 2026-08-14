@@ -12,6 +12,7 @@ KUI_OBJECT ?= $(USERLAND_STAGE)/kui.o
 KUI_CLIENT_OBJECT ?= $(USERLAND_STAGE)/kui_client.o
 KUI_FILE_DIALOG_OBJECT ?= $(USERLAND_STAGE)/kui_file_dialog.o
 KUI_DIALOG_OBJECT ?= $(USERLAND_STAGE)/kui_dialog.o
+KUI_MENU_OBJECT ?= $(USERLAND_STAGE)/kui_menu.o
 MINESWEEPER_WIDGET_OBJECT ?= $(USERLAND_STAGE)/minesweeper_widget.o
 SOLITAIRE_WIDGET_OBJECT ?= $(USERLAND_STAGE)/solitaire_widget.o
 CALCULATOR_WIDGET_OBJECT ?= $(USERLAND_STAGE)/calculator_widget.o
@@ -111,7 +112,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit kui gui-assets desktop finder sysmon editor kterm minesweeper solitaire calculator kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc bootstrap-cc doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
+.PHONY: toolchain userland userinit kui gui-assets desktop finder sysmon editor kterm minesweeper solitaire calculator paint kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc bootstrap-cc doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -120,7 +121,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit desktop finder sysmon editor kterm minesweeper solitaire calculator kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc
+	$(MAKE) userinit desktop finder sysmon editor kterm minesweeper solitaire calculator paint kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -159,7 +160,11 @@ $(KUI_DIALOG_OBJECT): extras/kui/kui_dialog.c extras/kui/kui_dialog.h extras/kui
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/kui/kui_dialog.c -o $@
 
-$(KUI_LIBRARY): $(KUI_OBJECT) $(KUI_CLIENT_OBJECT) $(KUI_FILE_DIALOG_OBJECT) $(KUI_DIALOG_OBJECT)
+$(KUI_MENU_OBJECT): extras/kui/kui_menu.c extras/kui/kui_menu.h extras/kui/kui.h extras/kui/kui_protocol.h
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/kui/kui_menu.c -o $@
+
+$(KUI_LIBRARY): $(KUI_OBJECT) $(KUI_CLIENT_OBJECT) $(KUI_FILE_DIALOG_OBJECT) $(KUI_DIALOG_OBJECT) $(KUI_MENU_OBJECT)
 	$(AR) rcs $@ $^
 
 $(MINESWEEPER_WIDGET_OBJECT): extras/minesweeper/minesweeper_widget.c extras/minesweeper/minesweeper.h $(KUI_LIBRARY)
@@ -205,6 +210,10 @@ solitaire: extras/solitaire/solitaire.c $(KUI_LIBRARY) $(SOLITAIRE_WIDGET_OBJECT
 calculator: extras/calculator/calculator.c $(KUI_LIBRARY) $(CALCULATOR_WIDGET_OBJECT)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(CALCULATOR_WIDGET_OBJECT) $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/calculator
+
+paint: extras/paint/paint.c $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/paint
 
 rm: extras/rm/rm.c
 	mkdir -p $(USERLAND_STAGE)

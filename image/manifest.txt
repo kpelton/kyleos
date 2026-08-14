@@ -29,6 +29,7 @@ minesweeper
 mv
 nushell
 oomtest
+paint
 rdwr
 rm
 rmdir

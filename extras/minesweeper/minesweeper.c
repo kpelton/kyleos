@@ -6,7 +6,18 @@
 
 #include "extras/kui/kui.h"
 #include "extras/kui/kui_client.h"
+#include "extras/kui/kui_menu.h"
 #include "extras/minesweeper/minesweeper.h"
+
+enum { MINESWEEPER_MENU_NEW_GAME = 1 };
+
+static const struct kui_menu_item minesweeper_game_items[] = {
+    { "New Game", "R", MINESWEEPER_MENU_NEW_GAME, 1 }
+};
+
+static const struct kui_menu minesweeper_menus[] = {
+    { "Game", minesweeper_game_items, 1 }
+};
 
 static uint32_t *framebuffer;
 static uint32_t framebuffer_bytes;
@@ -26,27 +37,45 @@ static int running = 1;
 static int embedded_main(void)
 {
     struct minesweeper_game embedded_game;
+    struct kui_menu_state menu_state;
     struct kui_client client;
     struct kui_event event;
 
     memset(&embedded_game, 0, sizeof(embedded_game));
+    kui_menu_init(&menu_state);
     kui_client_init(&client);
     for (;;) {
         if (kui_client_read_event(&event) < 0) break;
         if (event.type == KUI_EVENT_CLOSE) break;
-        if (event.type == KUI_EVENT_INIT ||
-            (event.type == KUI_EVENT_KEY && event.key_pressed &&
-             !event.key_extended && event.key_code == 19))
+        if (event.type == KUI_EVENT_INIT) {
             minesweeper_reset(&embedded_game, event.seed);
-        else if (event.type == KUI_EVENT_POINTER && event.button != 0)
-            minesweeper_click(&embedded_game, 0, 0,
-                              event.width, event.height,
-                              event.x, event.y, event.button == 2,
-                              event.seed);
+            kui_menu_close(&menu_state);
+        } else {
+            int consumed = 0;
+            int action = kui_menu_handle(&menu_state, &event,
+                                         minesweeper_menus, 1, &consumed);
+
+            if (action == MINESWEEPER_MENU_NEW_GAME ||
+                (!consumed && event.type == KUI_EVENT_KEY &&
+                 event.key_pressed && !event.key_extended &&
+                 event.key_code == 19)) {
+                minesweeper_reset(&embedded_game, event.seed);
+            } else if (!consumed && event.type == KUI_EVENT_POINTER &&
+                       event.button != 0) {
+                minesweeper_click(&embedded_game, 0, KUI_MENU_BAR_HEIGHT,
+                                  event.width,
+                                  event.height - KUI_MENU_BAR_HEIGHT,
+                                  event.x, event.y, event.button == 2,
+                                  event.seed);
+            }
+        }
         kui_client_begin(&client, &event, "Minesweeper");
-        kui_client_set_constraints(&client, 239, 181, 519, 581);
-        minesweeper_draw(&client.surface, &embedded_game, 0, 0,
-                         event.width, event.height);
+        kui_client_set_constraints(&client, 239, 204, 519, 604);
+        minesweeper_draw(&client.surface, &embedded_game,
+                         0, KUI_MENU_BAR_HEIGHT, event.width,
+                         event.height - KUI_MENU_BAR_HEIGHT);
+        kui_menu_render(&client.surface, &menu_state,
+                        minesweeper_menus, 1);
         if (kui_client_send(&client) < 0) break;
     }
     kui_client_free(&client);

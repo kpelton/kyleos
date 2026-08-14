@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define KUI_PROTOCOL_MAGIC 0x3149554bU /* "KUI1" */
-#define KUI_PROTOCOL_VERSION 2U
+#define KUI_PROTOCOL_VERSION 3U
 #define KUI_PROTOCOL_TEXT_MAX 128
 #define KUI_PROTOCOL_TITLE_MAX 64
 #define KUI_PROTOCOL_MAX_DISPLAY (256U * 1024U)
@@ -30,7 +30,8 @@ enum kui_response_flag {
     KUI_RESPONSE_TITLE = 2U,
     KUI_RESPONSE_CONSTRAINTS = 4U,
     KUI_RESPONSE_CLOSE = 8U,
-    KUI_RESPONSE_TIMER = 16U
+    KUI_RESPONSE_TIMER = 16U,
+    KUI_RESPONSE_PARTIAL = 32U
 };
 
 enum kui_shell_action {
@@ -75,6 +76,10 @@ struct kui_response {
     int preferred_height;
     uint32_t timer_ms;
     uint32_t display_bytes;
+    int damage_x;
+    int damage_y;
+    int damage_width;
+    int damage_height;
     uint32_t action;
     char title[KUI_PROTOCOL_TITLE_MAX];
     char action_argument[KUI_PROTOCOL_TEXT_MAX];
@@ -83,7 +88,9 @@ struct kui_response {
 enum kui_display_command_type {
     KUI_DISPLAY_FILL_RECT = 1,
     KUI_DISPLAY_LINE,
-    KUI_DISPLAY_TEXT
+    KUI_DISPLAY_TEXT,
+    KUI_DISPLAY_BITMAP_ROW,
+    KUI_DISPLAY_BITMAP_REGION_ROW
 };
 
 struct kui_display_command {
