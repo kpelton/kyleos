@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KyleOS System Stack and Interfaces</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08111f;
+      --panel: #101d31;
+      --panel-2: #14243b;
+      --ink: #e8f0fb;
+      --muted: #9eb0c8;
+      --line: #415574;
+      --user: #2d7ff9;
+      --ipc: #b66cff;
+      --kernel: #0dbf9b;
+      --fs: #f0a93b;
+      --driver: #ef6461;
+      --hardware: #8d99ae;
+      --warn: #ffd166;
+      --good: #50d890;
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 15% 0%, #13274a 0, transparent 34rem),
+        linear-gradient(180deg, #08111f, #0b1423 60%, #08111f);
+      color: var(--ink);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system,
+            BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main { width: min(1580px, calc(100% - 32px)); margin: 0 auto; }
+    header { padding: 42px 0 24px; }
+    h1 { margin: 0 0 8px; font-size: clamp(30px, 5vw, 56px); line-height: 1.05; }
+    h2 { margin: 0 0 18px; font-size: 25px; }
+    h3 { margin: 0 0 10px; font-size: 17px; }
+    p { margin: 0 0 12px; }
+    code {
+      padding: 2px 5px;
+      border: 1px solid #354967;
+      border-radius: 5px;
+      background: #091425;
+      color: #d9e8ff;
+      font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .subtitle { max-width: 1000px; color: var(--muted); font-size: 17px; }
+    .meta, .legend { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+    .pill, .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #0d192a;
+      color: #c8d5e7;
+      font-size: 13px;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      margin-bottom: 22px;
+      padding: 10px;
+      border: 1px solid #2d405d;
+      border-radius: 12px;
+      background: rgb(8 17 31 / 92%);
+      backdrop-filter: blur(12px);
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    nav a { color: #bcd3f3; text-decoration: none; margin: 0 9px; }
+    nav a:hover { color: white; }
+
+    section { margin: 0 0 26px; }
+    .panel {
+      padding: 22px;
+      border: 1px solid #2d405d;
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgb(17 31 52 / 96%), rgb(11 22 38 / 96%));
+      box-shadow: 0 20px 60px rgb(0 0 0 / 18%);
+    }
+    .diagram-wrap { overflow-x: auto; border-radius: 10px; background: #07101d; }
+    svg { display: block; min-width: 1180px; width: 100%; height: auto; }
+    svg text { fill: var(--ink); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    svg .layer-label { font-size: 16px; font-weight: 800; letter-spacing: 2px; }
+    svg .box-title { font-size: 18px; font-weight: 750; }
+    svg .box-copy { font-size: 13px; fill: #c5d2e4; }
+    svg .tiny { font-size: 11px; fill: #a9bad0; }
+    svg .edge-label { font-size: 12px; font-weight: 700; fill: #f4f8ff; }
+    svg .layer { stroke-width: 1.5; }
+    svg .box { stroke-width: 2; filter: url(#shadow); }
+    svg .edge { fill: none; stroke-width: 3; marker-end: url(#arrow); }
+    svg .edge.bi { marker-start: url(#arrow-start); }
+    svg .dash { stroke-dasharray: 9 7; }
+
+    .callout {
+      margin-top: 14px;
+      padding: 13px 15px;
+      border-left: 4px solid var(--warn);
+      border-radius: 7px;
+      background: #1c2632;
+      color: #dbe6f5;
+    }
+
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+    .card {
+      grid-column: span 6;
+      padding: 18px;
+      border: 1px solid #30445f;
+      border-radius: 12px;
+      background: var(--panel-2);
+    }
+    .card.full { grid-column: 1 / -1; }
+    .card.third { grid-column: span 4; }
+    .tag {
+      display: inline-block;
+      margin-bottom: 9px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      color: white;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+    .tag.user { background: var(--user); }
+    .tag.ipc { background: var(--ipc); }
+    .tag.kernel { background: var(--kernel); color: #04241d; }
+    .tag.fs { background: var(--fs); color: #2c1b00; }
+    .tag.driver { background: var(--driver); }
+
+    ul { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 5px 0; }
+    .muted { color: var(--muted); }
+
+    .table-wrap { overflow-x: auto; border: 1px solid #30445f; border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; min-width: 980px; background: #0c1829; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid #263a56; text-align: left; vertical-align: top; }
+    th { position: sticky; top: 0; background: #172844; color: white; font-size: 12px; letter-spacing: .5px; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #13243b; }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(150px, 1fr));
+      gap: 28px;
+      overflow-x: auto;
+      padding: 8px 3px;
+    }
+    .step {
+      position: relative;
+      min-width: 150px;
+      min-height: 110px;
+      padding: 14px;
+      border: 1px solid #38506f;
+      border-radius: 10px;
+      background: #112038;
+    }
+    .step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -23px;
+      top: 39px;
+      color: #7893b9;
+      font-size: 28px;
+    }
+    .step b { display: block; margin-bottom: 6px; }
+    .step small { color: var(--muted); }
+
+    .source-list a { color: #9dcbff; }
+    footer { padding: 8px 0 44px; color: var(--muted); }
+
+    @media (max-width: 900px) {
+      .card, .card.third { grid-column: 1 / -1; }
+      .panel { padding: 14px; }
+    }
+    @media print {
+      :root { color-scheme: light; }
+      body { background: white; color: #101828; }
+      nav { display: none; }
+      .panel, .card { break-inside: avoid; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>KyleOS whole-system stack</h1>
+    <p class="subtitle">A code-aligned block diagram of the current desktop, process,
+      IPC, syscall, filesystem, driver, scheduler, memory, interrupt, and hardware
+      boundaries. Arrows show the principal runtime data and control paths.</p>
+    <div class="meta">
+      <span class="pill">Architecture: x86-64 kernel + userspace</span>
+      <span class="pill">GUI protocol: KUI1, version 1</span>
+      <span class="pill">IPC: anonymous kernel pipes</span>
+      <span class="pill">Disk: FAT → ATA PIO LBA28</span>
+      <span class="pill">Shared-memory window buffers: none</span>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--user)"></i>Userspace</span>
+      <span><i class="dot" style="background:var(--ipc)"></i>IPC / ABI</span>
+      <span><i class="dot" style="background:var(--kernel)"></i>Kernel service</span>
+      <span><i class="dot" style="background:var(--fs)"></i>Storage / filesystem</span>
+      <span><i class="dot" style="background:var(--driver)"></i>Driver</span>
+      <span><i class="dot" style="background:var(--hardware)"></i>Hardware</span>
+    </div>
+  </header>
+
+  <nav aria-label="Document sections">
+    <a href="#diagram">Block diagram</a>
+    <a href="#interfaces">Interface matrix</a>
+    <a href="#kui">KUI protocol</a>
+    <a href="#syscalls">Syscalls</a>
+    <a href="#storage">Storage path</a>
+    <a href="#flows">Runtime flows</a>
+    <a href="#boot">Boot order</a>
+    <a href="#ownership">Ownership</a>
+  </nav>
+
+  <section id="diagram" class="panel">
+    <h2>System block diagram</h2>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 1600 1240" role="img" aria-labelledby="svgTitle svgDesc">
+        <title id="svgTitle">KyleOS whole-system architecture</title>
+        <desc id="svgDesc">Layered block diagram from userspace processes through
+          pipes, syscalls, kernel services, filesystems and device drivers to hardware.</desc>
+        <defs>
+          <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+            <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#000" flood-opacity=".3"/>
+          </filter>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="context-stroke"/>
+          </marker>
+          <marker id="arrow-start" markerWidth="10" markerHeight="10" refX="1" refY="3" orient="auto-start-reverse" markerUnits="strokeWidth">
+            <path d="M9,0 L9,6 L0,3 z" fill="context-stroke"/>
+          </marker>
+        </defs>
+
+        <!-- Layer bands -->
+        <rect class="layer" x="18" y="22" width="1564" height="374" rx="18" fill="#0d2240" stroke="#2d7ff9"/>
+        <text class="layer-label" x="42" y="54" fill="#73aaff">USERSPACE — ISOLATED PROCESS ADDRESS SPACES</text>
+        <rect class="layer" x="18" y="420" width="1564" height="565" rx="18" fill="#0c2728" stroke="#0dbf9b"/>
+        <text class="layer-label" x="42" y="453" fill="#65dfc6">KERNEL — PRIVILEGED ADDRESS SPACE</text>
+        <rect class="layer" x="18" y="1008" width="1564" height="204" rx="18" fill="#1c2431" stroke="#8d99ae"/>
+        <text class="layer-label" x="42" y="1040" fill="#c2cad7">HARDWARE / EMULATED DEVICES</text>
+
+        <!-- Userspace -->
+        <g>
+          <rect class="box" x="45" y="82" width="255" height="165" rx="12" fill="#173c71" stroke="#4f9aff"/>
+          <text class="box-title" x="65" y="113">PID 1 + CLI programs</text>
+          <text class="box-copy" x="65" y="140">/sbin/init → /bin/nushell</text>
+          <text class="box-copy" x="65" y="161">fork / exec / wait / fd table</text>
+          <text class="box-copy" x="65" y="182">terminal child stdout/stderr</text>
+          <text class="box-copy" x="65" y="203">ELF executables + libc wrappers</text>
+          <text class="tiny" x="65" y="229">Examples: fstest, cc, games, shell tools</text>
+
+          <rect class="box" x="340" y="72" width="455" height="185" rx="12" fill="#173c71" stroke="#4f9aff"/>
+          <text class="box-title" x="360" y="104">Desktop shell / compositor process</text>
+          <text class="box-copy" x="360" y="131">Window lifecycle, focus, z-order, resize, taskbar</text>
+          <text class="box-copy" x="360" y="152">Mouse + keyboard routing; timer dispatch</text>
+          <text class="box-copy" x="360" y="173">Replays client display commands into window surfaces</text>
+          <text class="box-copy" x="360" y="194">Composites wallpaper + windows + chrome + cursor</text>
+          <text class="tiny" x="360" y="221">Owns the full-screen userspace frame buffer</text>
+          <text class="tiny" x="360" y="239">Config/assets loaded through ordinary VFS calls</text>
+
+          <rect class="box" x="845" y="72" width="400" height="185" rx="12" fill="#173c71" stroke="#4f9aff"/>
+          <text class="box-title" x="865" y="104">Windowed application processes</text>
+          <text class="box-copy" x="865" y="131">Finder · Editor · Sysmon · Terminal</text>
+          <text class="box-copy" x="865" y="152">Minesweeper · Solitaire · Calculator</text>
+          <text class="box-copy" x="865" y="178">Linked KUI client + drawing command library</text>
+          <text class="box-copy" x="865" y="199">stdin = event pipe; stdout = response pipe</text>
+          <text class="tiny" x="865" y="227">Started with argv: executable, --kui-client</text>
+
+          <rect class="box" x="1290" y="82" width="245" height="165" rx="12" fill="#173c71" stroke="#4f9aff"/>
+          <text class="box-title" x="1310" y="113">Exclusive GUI apps</text>
+          <text class="box-copy" x="1310" y="140">Doom / Quake / Duke3D</text>
+          <text class="box-copy" x="1310" y="161">Shell waits for child</text>
+          <text class="box-copy" x="1310" y="182">Direct presentation path</text>
+          <text class="tiny" x="1310" y="211">Not a managed KUI window</text>
+
+          <rect class="box" x="430" y="292" width="720" height="73" rx="12" fill="#442465" stroke="#c68aff"/>
+          <text class="box-title" x="450" y="320">Per-window KUI1 IPC channel — two anonymous pipes</text>
+          <text class="box-copy" x="450" y="344">desktop → child: struct kui_event  |  child → desktop: struct kui_response + display command bytes</text>
+        </g>
+
+        <!-- Userspace edges -->
+        <path class="edge" d="M795 160 H845" stroke="#b66cff"/>
+        <path class="edge bi" d="M610 257 V292" stroke="#b66cff"/>
+        <path class="edge bi" d="M1010 257 V292" stroke="#b66cff"/>
+        <text class="edge-label" x="800" y="146">launch / supervise</text>
+
+        <!-- ABI boundary -->
+        <line x1="30" y1="397" x2="1570" y2="397" stroke="#b66cff" stroke-width="3" stroke-dasharray="10 8"/>
+        <rect x="570" y="379" width="460" height="36" rx="18" fill="#442465" stroke="#c68aff"/>
+        <text class="edge-label" x="615" y="402">USER ↔ KERNEL ABI: int $0x80, registers + user pointers</text>
+
+        <!-- Kernel services -->
+        <g>
+          <rect class="box" x="45" y="490" width="280" height="145" rx="12" fill="#103f43" stroke="#2ad3b0"/>
+          <text class="box-title" x="65" y="521">Syscall dispatcher</text>
+          <text class="box-copy" x="65" y="547">syscall number in RAX</text>
+          <text class="box-copy" x="65" y="568">args in x86-64 ABI registers</text>
+          <text class="box-copy" x="65" y="589">validates user-space pointers</text>
+          <text class="tiny" x="65" y="615">33 entries: 0 through 32</text>
+
+          <rect class="box" x="365" y="490" width="290" height="145" rx="12" fill="#103f43" stroke="#2ad3b0"/>
+          <text class="box-title" x="385" y="521">Scheduler + process model</text>
+          <text class="box-copy" x="385" y="547">ktask[1024], PID, state, cwd</text>
+          <text class="box-copy" x="385" y="568">64 per-task file descriptors</text>
+          <text class="box-copy" x="385" y="589">fork / exec / wait / sleep</text>
+          <text class="tiny" x="385" y="615">100 Hz preemption; mutex sleep/wakeup</text>
+
+          <rect class="box" x="695" y="490" width="355" height="145" rx="12" fill="#103f43" stroke="#2ad3b0"/>
+          <text class="box-title" x="715" y="521">FD layer + VFS</text>
+          <text class="box-copy" x="715" y="547">global file table → struct file</text>
+          <text class="box-copy" x="715" y="568">inode / dnode / mount resolution</text>
+          <text class="box-copy" x="715" y="589">vfs_ops dispatch by backing device</text>
+          <text class="tiny" x="715" y="615">read/write/seek/stat/getdents/create/rename</text>
+
+          <rect class="box" x="1090" y="490" width="445" height="145" rx="12" fill="#103f43" stroke="#2ad3b0"/>
+          <text class="box-title" x="1110" y="521">Display + input kernel APIs</text>
+          <text class="box-copy" x="1110" y="547">framebuffer present full/rect + screen size</text>
+          <text class="box-copy" x="1110" y="568">keyboard poll / raw TTY / mouse poll</text>
+          <text class="box-copy" x="1110" y="589">/dev/mouse exposes binary event records</text>
+          <text class="tiny" x="1110" y="615">syscalls 23–25, 27, 30–32</text>
+
+          <rect class="box" x="45" y="690" width="280" height="155" rx="12" fill="#103f43" stroke="#2ad3b0"/>
+          <text class="box-title" x="65" y="721">ELF loader + virtual memory</text>
+          <text class="box-copy" x="65" y="747">ELF program headers via VFS</text>
+          <text class="box-copy" x="65" y="768">per-process page tables + maps</text>
+          <text class="box-copy" x="65" y="789">heap sbrk; user/kernel boundary</text>
+          <text class="tiny" x="65" y="817">PMM, paging, VMM, FPU context</text>
+
+          <rect class="box" x="365" y="690" width="290" height="155" rx="12" fill="#103f43" stroke="#2ad3b0"/>
+          <text class="box-title" x="385" y="721">Kernel pipe implementation</text>
+          <text class="box-copy" x="385" y="747">4 KiB circular byte buffer</text>
+          <text class="box-copy" x="385" y="768">reader/writer refcounts + spinlock</text>
+          <text class="box-copy" x="385" y="789">blocking through read/write callers</text>
+          <text class="tiny" x="385" y="817">Used by KUI IPC and terminal redirection</text>
+
+          <rect class="box" x="695" y="690" width="250" height="155" rx="12" fill="#4a3615" stroke="#f0a93b"/>
+          <text class="box-title" x="715" y="721">FAT root filesystem</text>
+          <text class="box-copy" x="715" y="747">mounted at /</text>
+          <text class="box-copy" x="715" y="768">FAT table + directories</text>
+          <text class="box-copy" x="715" y="789">cluster read/write</text>
+          <text class="tiny" x="715" y="817">fat_lock protects FS mutation</text>
+
+          <rect class="box" x="980" y="690" width="250" height="155" rx="12" fill="#4a3615" stroke="#f0a93b"/>
+          <text class="box-title" x="1000" y="721">RAMFS instances</text>
+          <text class="box-copy" x="1000" y="747">/tmp and kernel devices</text>
+          <text class="box-copy" x="1000" y="768">/dev/console, /dev/mouse</text>
+          <text class="box-copy" x="1000" y="789">/proc-style reports</text>
+          <text class="tiny" x="1000" y="817">No ATA traffic</text>
+
+          <rect class="box" x="1265" y="690" width="270" height="155" rx="12" fill="#103f43" stroke="#2ad3b0"/>
+          <text class="box-title" x="1285" y="721">IRQ / timer routing</text>
+          <text class="box-copy" x="1285" y="747">IDT + PIC dispatch</text>
+          <text class="box-copy" x="1285" y="768">PIT scheduler tick: 100 Hz</text>
+          <text class="box-copy" x="1285" y="789">keyboard + PS/2 mouse IRQs</text>
+          <text class="tiny" x="1285" y="817">preemption keeps other tasks runnable</text>
+
+          <rect class="box" x="695" y="880" width="390" height="78" rx="12" fill="#54282a" stroke="#ef6461"/>
+          <text class="box-title" x="715" y="910">ATA PIO block driver</text>
+          <text class="box-copy" x="715" y="934">512 B sectors · LBA28 · bounded waits · read cache · batched writes</text>
+
+          <rect class="box" x="1125" y="880" width="185" height="78" rx="12" fill="#54282a" stroke="#ef6461"/>
+          <text class="box-title" x="1145" y="910">Framebuffer</text>
+          <text class="box-copy" x="1145" y="934">linear pixel output</text>
+
+          <rect class="box" x="1350" y="880" width="185" height="78" rx="12" fill="#54282a" stroke="#ef6461"/>
+          <text class="box-title" x="1370" y="910">PS/2 input</text>
+          <text class="box-copy" x="1370" y="934">key + mouse queues</text>
+        </g>
+
+        <!-- Kernel arrows -->
+        <path class="edge" d="M180 420 V490" stroke="#b66cff"/>
+        <path class="edge" d="M510 420 V490" stroke="#b66cff"/>
+        <path class="edge" d="M875 420 V490" stroke="#b66cff"/>
+        <path class="edge" d="M1315 420 V490" stroke="#b66cff"/>
+        <path class="edge" d="M325 560 H365" stroke="#0dbf9b"/>
+        <path class="edge" d="M655 560 H695" stroke="#0dbf9b"/>
+        <path class="edge" d="M1050 560 H1090" stroke="#0dbf9b"/>
+        <path class="edge" d="M185 635 V690" stroke="#0dbf9b"/>
+        <path class="edge" d="M510 635 V690" stroke="#0dbf9b"/>
+        <path class="edge" d="M820 635 V690" stroke="#f0a93b"/>
+        <path class="edge" d="M925 635 L1085 690" stroke="#f0a93b"/>
+        <path class="edge" d="M510 690 V650 H790 V635" stroke="#0dbf9b"/>
+        <path class="edge" d="M820 845 V880" stroke="#f0a93b"/>
+        <path class="edge" d="M1310 635 L1215 880" stroke="#ef6461"/>
+        <path class="edge" d="M1400 845 V880" stroke="#ef6461"/>
+        <path class="edge dash" d="M1265 760 H1205 V635" stroke="#0dbf9b"/>
+
+        <!-- Hardware -->
+        <g>
+          <rect class="box" x="60" y="1070" width="260" height="105" rx="12" fill="#303947" stroke="#aab4c3"/>
+          <text class="box-title" x="80" y="1102">CPU + MMU + FPU</text>
+          <text class="box-copy" x="80" y="1128">rings, page tables, context</text>
+          <text class="box-copy" x="80" y="1149">interrupt/syscall entry</text>
+
+          <rect class="box" x="360" y="1070" width="220" height="105" rx="12" fill="#303947" stroke="#aab4c3"/>
+          <text class="box-title" x="380" y="1102">Physical RAM</text>
+          <text class="box-copy" x="380" y="1128">kernel + processes</text>
+          <text class="box-copy" x="380" y="1149">pipes + page frames</text>
+
+          <rect class="box" x="620" y="1070" width="260" height="105" rx="12" fill="#303947" stroke="#aab4c3"/>
+          <text class="box-title" x="640" y="1102">IDE disk / QEMU drive</text>
+          <text class="box-copy" x="640" y="1128">ATA command/status/data ports</text>
+          <text class="box-copy" x="640" y="1149">MBR + FAT partition</text>
+
+          <rect class="box" x="920" y="1070" width="230" height="105" rx="12" fill="#303947" stroke="#aab4c3"/>
+          <text class="box-title" x="940" y="1102">Linear framebuffer</text>
+          <text class="box-copy" x="940" y="1128">Multiboot-provided address</text>
+          <text class="box-copy" x="940" y="1149">WC MTRR where possible</text>
+
+          <rect class="box" x="1190" y="1070" width="200" height="105" rx="12" fill="#303947" stroke="#aab4c3"/>
+          <text class="box-title" x="1210" y="1102">Keyboard + mouse</text>
+          <text class="box-copy" x="1210" y="1128">PS/2 packets</text>
+          <text class="box-copy" x="1210" y="1149">buttons + wheel</text>
+
+          <rect class="box" x="1430" y="1070" width="115" height="105" rx="12" fill="#303947" stroke="#aab4c3"/>
+          <text class="box-title" x="1450" y="1102">PIT/PIC</text>
+          <text class="box-copy" x="1450" y="1128">ticks</text>
+          <text class="box-copy" x="1450" y="1149">IRQs</text>
+        </g>
+        <path class="edge" d="M185 845 L185 1070" stroke="#8d99ae"/>
+        <path class="edge" d="M475 845 V1070" stroke="#8d99ae"/>
+        <path class="edge" d="M850 958 L750 1070" stroke="#ef6461"/>
+        <path class="edge" d="M1215 958 L1035 1070" stroke="#ef6461"/>
+        <path class="edge" d="M1440 958 L1290 1070" stroke="#ef6461"/>
+        <path class="edge" d="M1425 845 L1485 1070" stroke="#8d99ae"/>
+      </svg>
+    </div>
+    <div class="callout"><strong>Important blocking boundary:</strong> KUI is a synchronous
+      request/response protocol. While the desktop waits for one client response, that desktop
+      event-loop iteration is blocked. Disk PIO is also synchronous for the calling process,
+      but bounded ATA waits and the preemptive scheduler allow other runnable processes to execute.</div>
+  </section>
+
+  <section id="interfaces" class="panel">
+    <h2>Interface matrix</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Producer</th><th>Consumer</th><th>Transport / entry</th><th>Payload / contract</th><th>Blocking</th><th>Ownership</th></tr></thead>
+        <tbody>
+          <tr><td>Desktop shell</td><td>Window client</td><td>Anonymous pipe mapped to child fd 0</td><td>Exactly one <code>struct kui_event</code>; magic/version/serial validated</td><td>Desktop writes event, then waits for response</td><td>Kernel pipe copies bytes; client owns its decoded event</td></tr>
+          <tr><td>Window client</td><td>Desktop shell</td><td>Anonymous pipe mapped to child fd 1</td><td><code>struct kui_response</code>, followed by <code>display_bytes</code> command stream, max 256 KiB</td><td>Client writes; desktop reads complete header and stream</td><td>Client buffer is copied through pipe; desktop replays into its own surface</td></tr>
+          <tr><td>Desktop / apps</td><td>Kernel</td><td><code>int $0x80</code></td><td>RAX syscall number; arguments in normal x86-64 C ABI registers; integer/pointer result in RAX</td><td>Synchronous syscall</td><td>Kernel validates user pointers before access</td></tr>
+          <tr><td>Desktop compositor</td><td>Framebuffer driver</td><td>Syscall 23 or 32</td><td>Full pixel buffer, or pointer plus <code>kyleos_framebuffer_rect</code></td><td>Copy/present completes before return</td><td>Desktop owns source pixels; kernel owns hardware mapping</td></tr>
+          <tr><td>Mouse driver</td><td>Desktop/KUI</td><td><code>read("/dev/mouse")</code></td><td>Array of <code>kyleos_mouse_event</code>: dx, dy, buttons, wheel</td><td>Polled from shell loop</td><td>Driver queue → userspace records</td></tr>
+          <tr><td>Keyboard input</td><td>Desktop/KUI</td><td>Syscall 24; raw mode syscall 27</td><td>pressed, scancode, extended; KUI translates to key event fields/modifiers</td><td>Polling call</td><td>Kernel input queue → desktop event</td></tr>
+          <tr><td>Syscall file API</td><td>Per-task FD layer</td><td>open/read/write/seek/stat/etc.</td><td>FD indexes <code>ktask.open_fds[64]</code>; resolves to shared <code>struct file</code></td><td>Call-dependent</td><td>File object is refcounted; fd belongs to task</td></tr>
+          <tr><td>VFS</td><td>FAT or RAMFS</td><td><code>struct vfs_ops</code></td><td>inode, dnode, file, mount device and operation-specific arguments</td><td>Synchronous</td><td>VFS owns generic objects; filesystem owns backing metadata</td></tr>
+          <tr><td>FAT</td><td>ATA</td><td><code>read_sec</code>, <code>write_sec</code>, <code>write_sectors</code></td><td>28-bit LBA, 1–255 sectors, caller buffer, 512 bytes/sector</td><td>Synchronous PIO; mutex serialized</td><td>ATA read cache owns cached copies; writes invalidate affected entries</td></tr>
+          <tr><td>PIT / device IRQ</td><td>Scheduler / input drivers</td><td>IDT → IRQ dispatcher</td><td>Timer tick or device packet/status</td><td>Preemptive interrupt</td><td>Kernel only</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="kui" class="panel">
+    <h2>KUI1 window protocol</h2>
+    <div class="grid">
+      <article class="card">
+        <span class="tag ipc">Desktop → client</span>
+        <h3><code>struct kui_event</code></h3>
+        <ul>
+          <li>Envelope: magic <code>0x3149554b</code> (“KUI1”), version <code>1</code>, monotonic per-window serial.</li>
+          <li>Geometry: content width/height and pointer x/y.</li>
+          <li>Pointer: changed button, current buttons, signed wheel delta.</li>
+          <li>Keyboard: key code, extended flag, pressed flag, modifiers, character.</li>
+          <li>Other: seed and 128-byte action argument.</li>
+          <li>Types: INIT, POINTER, KEY, RESIZE, TIMER, REFRESH, CLOSE.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <span class="tag ipc">Client → desktop</span>
+        <h3><code>struct kui_response</code> + byte stream</h3>
+        <ul>
+          <li>Must echo magic, version, and event serial.</li>
+          <li>Flags select display, title, size constraints, close, and timer updates.</li>
+          <li>Metadata: status, min/preferred size, timer period, title.</li>
+          <li>Shell actions: OPEN_PATH, LAUNCH, FILE_SAVED with 128-byte argument.</li>
+          <li><code>display_bytes</code> is bounded to 256 KiB and follows the response header.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <span class="tag user">Display command stream</span>
+        <h3>Retained only for one response</h3>
+        <p>Each command begins with type and size, followed by coordinates, foreground,
+          background, and flags. Current commands are FILL_RECT, LINE, and TEXT.</p>
+        <p class="muted">The desktop validates and replays commands into a desktop-owned
+          per-window pixel surface. Clients never receive a pointer to compositor memory.</p>
+      </article>
+      <article class="card">
+        <span class="tag kernel">Process launch contract</span>
+        <h3>Two pipes + fork/exec</h3>
+        <p>The desktop creates <code>to_child</code> and <code>from_child</code>, forks,
+          maps the read side of the first to fd 0 and the write side of the second to fd 1
+          using <code>dup2</code>, then executes the app with <code>--kui-client</code>.</p>
+        <p class="muted">The desktop retains the opposite pipe ends, child PID, window
+          geometry, cached pixels, serial, title, constraints, timer state, and z-order.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="syscalls" class="panel">
+    <h2>System-call ABI</h2>
+    <p class="muted">Current dispatch table in <code>init/syscall.c</code>. Userspace invokes
+      these through <code>int $0x80</code>.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Numbers</th><th>Category</th><th>Entries</th><th>Primary kernel destination</th></tr></thead>
+        <tbody>
+          <tr><td>0–1, 10</td><td>Timing / debug</td><td>sleep, debugprint, debug_read_input</td><td>timer scheduler; console/input</td></tr>
+          <tr><td>2–4, 12–18, 21–22, 28–29</td><td>Files / directories</td><td>open, close, read, write, creat, stat, fstat, getdents, chdir, mkdir, unlink, lseek, rename, rmdir</td><td>per-task FD helpers → VFS → filesystem ops</td></tr>
+          <tr><td>5–8, 11</td><td>Processes</td><td>fork, exit, wait, exec, exec_args</td><td>scheduler, process model, ELF loader, VMM</td></tr>
+          <tr><td>9</td><td>Memory</td><td>sbrk</td><td>process heap / VMM</td></tr>
+          <tr><td>19–20, 26</td><td>Descriptors / IPC</td><td>dup, dup2, pipe</td><td>task fd table, VFS file table, pipe buffer</td></tr>
+          <tr><td>23, 31–32</td><td>Graphics</td><td>present full, screen size, present rectangle</td><td>framebuffer driver</td></tr>
+          <tr><td>24–25, 27, 30</td><td>Desktop input/time</td><td>key poll, ticks ms, tty raw, mouse poll</td><td>keyboard/mouse queues and PIT jiffies</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="storage" class="panel">
+    <h2>Storage and filesystem path</h2>
+    <div class="grid">
+      <article class="card third">
+        <span class="tag kernel">VFS boundary</span>
+        <h3>Generic objects</h3>
+        <ul>
+          <li><code>vfs_device</code>: mount and filesystem ops.</li>
+          <li><code>inode</code>: identity, type, size, FAT directory location.</li>
+          <li><code>dnode</code>: directory traversal result.</li>
+          <li><code>file</code>: refcount, position, flags, optional pipe.</li>
+        </ul>
+      </article>
+      <article class="card third">
+        <span class="tag fs">FAT boundary</span>
+        <h3>Root disk filesystem</h3>
+        <ul>
+          <li>MBR selects partition start and size.</li>
+          <li>Boot sector configures FAT geometry.</li>
+          <li>FAT table maps cluster chains.</li>
+          <li><code>fat_lock</code> serializes mutation.</li>
+          <li>Cluster writes use multi-sector ATA batches.</li>
+        </ul>
+      </article>
+      <article class="card third">
+        <span class="tag driver">ATA boundary</span>
+        <h3>PIO LBA28 contract</h3>
+        <ul>
+          <li>512-byte sectors; up to 255 sectors per command.</li>
+          <li>DRQ checked once per sector, then 256 word transfers.</li>
+          <li>BSY/DRQ waits are bounded and detect ERR/DF.</li>
+          <li>Long runtime waits voluntarily schedule.</li>
+          <li>Read-through cache; writes invalidate and flush once per batch.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section id="flows" class="panel">
+    <h2>Principal runtime flows</h2>
+    <h3>Launch and render one KUI window</h3>
+    <div class="flow">
+      <div class="step"><b>1. Launch</b><small>Desktop creates two pipes, forks, remaps fd 0/1, and execs the app.</small></div>
+      <div class="step"><b>2. Event</b><small>Desktop fills KUI1 INIT/INPUT/TIMER event and writes it to the child.</small></div>
+      <div class="step"><b>3. Draw</b><small>Client records fill/line/text commands in a private command buffer.</small></div>
+      <div class="step"><b>4. Respond</b><small>Client writes response header and bounded command bytes to stdout pipe.</small></div>
+      <div class="step"><b>5. Composite</b><small>Desktop replays into its window surface, then draws chrome, taskbar and cursor.</small></div>
+      <div class="step"><b>6. Present</b><small>Desktop invokes framebuffer syscall 23/32 to update hardware pixels.</small></div>
+    </div>
+
+    <h3 style="margin-top:24px">Write a file to FAT</h3>
+    <div class="flow">
+      <div class="step"><b>1. libc write</b><small>Userspace supplies fd, buffer and byte count through syscall 12.</small></div>
+      <div class="step"><b>2. FD lookup</b><small>Current ktask resolves fd to a refcounted struct file and position.</small></div>
+      <div class="step"><b>3. VFS dispatch</b><small>vfs_write_file selects the mounted filesystem's write_file operation.</small></div>
+      <div class="step"><b>4. FAT mapping</b><small>Bytes map to clusters; chain and directory metadata are maintained under fat_lock.</small></div>
+      <div class="step"><b>5. ATA batch</b><small>write_sectors programs LBA/count, waits for DRQ once per sector, outputs words.</small></div>
+      <div class="step"><b>6. Commit</b><small>One CACHE FLUSH completes the batch; return values propagate to userspace.</small></div>
+    </div>
+  </section>
+
+  <section id="boot" class="panel">
+    <h2>Boot and initialization order</h2>
+    <div class="flow">
+      <div class="step"><b>1. CPU tables</b><small>Multiboot entry, GDT, TSS, IDT, early physical memory discovery.</small></div>
+      <div class="step"><b>2. Memory</b><small>PMM, paging, heap/VMM, framebuffer mapping and kernel stack.</small></div>
+      <div class="step"><b>3. Devices</b><small>PIC and mouse initialize; ATA probes ports and mounts the FAT root.</small></div>
+      <div class="step"><b>4. Runtime</b><small>Timer, ELF exec subsystem, scheduler, FPU and RAMFS initialize.</small></div>
+      <div class="step"><b>5. PID 1</b><small>Idle task is registered; /sbin/init loads from VFS, with shell fallbacks.</small></div>
+      <div class="step"><b>6. Desktop</b><small>Userspace init/shell launches desktop; desktop loads app config and autostarts clients.</small></div>
+    </div>
+  </section>
+
+  <section id="ownership" class="panel">
+    <h2>Memory, ownership, and concurrency boundaries</h2>
+    <div class="grid">
+      <article class="card">
+        <span class="tag user">No GUI SHM</span>
+        <h3>Current window transport copies commands</h3>
+        <p>Application pixels are not shared with the desktop. A client owns a temporary
+          command buffer; kernel pipes copy its serialized commands; the desktop owns a
+          replayed pixel surface for each window and the final full-screen surface.</p>
+      </article>
+      <article class="card">
+        <span class="tag kernel">Scheduling</span>
+        <h3>Processes remain isolated and independently schedulable</h3>
+        <p>The PIT invokes the scheduler at 100 Hz. Mutex contention sleeps tasks on a wait
+          channel. ATA's long status waits yield only after scheduling has started, keeping
+          boot-time disk probing safe.</p>
+      </article>
+      <article class="card">
+        <span class="tag ipc">Synchronous desktop IPC</span>
+        <h3>One slow client can delay a shell iteration</h3>
+        <p>The desktop sends an event and immediately reads that client's response. The
+          protocol is simple and deterministic, but there is no poll/select-based fan-out or
+          response deadline yet.</p>
+      </article>
+      <article class="card">
+        <span class="tag fs">Storage serialization</span>
+        <h3>Correctness locks remain narrower than the scheduler</h3>
+        <p><code>fat_lock</code> protects FAT mutations and <code>ata_mutex</code> serializes
+          the controller. They can block competing filesystem users, but do not disable
+          timer interrupts or globally stop unrelated runnable tasks.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel source-list">
+    <h2>Code anchors</h2>
+    <p>This document is derived from the current implementation:</p>
+    <ul>
+      <li><a href="../extras/desktop/shell.c">Desktop shell, process launch, IPC, composition</a></li>
+      <li><a href="../extras/kui/kui_protocol.h">KUI1 wire structures and enums</a></li>
+      <li><a href="../extras/kui/kui_client.c">Client-side request/response adapter</a></li>
+      <li><a href="../extras/kui/kui.c">Drawing, input, and framebuffer syscall wrappers</a></li>
+      <li><a href="../init/syscall.c">System-call dispatch table and kernel ABI handlers</a></li>
+      <li><a href="../sched/sched.c">Scheduler and process state</a></li>
+      <li><a href="../fs/vfs.c">VFS and global file table</a></li>
+      <li><a href="../fs/pipe.c">Anonymous pipe byte transport</a></li>
+      <li><a href="../fs/fat.c">FAT filesystem and cluster I/O</a></li>
+      <li><a href="../block/ata.c">ATA PIO driver, cache, bounded waits, batching</a></li>
+      <li><a href="../init/kernel.c">Kernel initialization and PID 1 launch</a></li>
+    </ul>
+  </section>
+
+  <footer>Standalone document: no JavaScript, fonts, images, or network resources required.</footer>
+</main>
+</body>
+</html>

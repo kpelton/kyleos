@@ -1,6 +1,6 @@
 CC	?= gcc
 .DEFAULT_GOAL := all
-OPT ?= -O0
+OPT ?= -O3
 AS = nasm
 ASFLAGS = -f elf64
 KERNEL_ROOT=$(shell pwd)
@@ -10,6 +10,8 @@ USERLAND_STAGE ?= $(KERNEL_ROOT)/build/userland
 KUI_LIBRARY ?= $(USERLAND_STAGE)/libkui.a
 KUI_OBJECT ?= $(USERLAND_STAGE)/kui.o
 KUI_CLIENT_OBJECT ?= $(USERLAND_STAGE)/kui_client.o
+KUI_FILE_DIALOG_OBJECT ?= $(USERLAND_STAGE)/kui_file_dialog.o
+KUI_DIALOG_OBJECT ?= $(USERLAND_STAGE)/kui_dialog.o
 MINESWEEPER_WIDGET_OBJECT ?= $(USERLAND_STAGE)/minesweeper_widget.o
 SOLITAIRE_WIDGET_OBJECT ?= $(USERLAND_STAGE)/solitaire_widget.o
 CALCULATOR_WIDGET_OBJECT ?= $(USERLAND_STAGE)/calculator_widget.o
@@ -149,7 +151,15 @@ $(KUI_CLIENT_OBJECT): extras/kui/kui_client.c extras/kui/kui_client.h extras/kui
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/kui/kui_client.c -o $@
 
-$(KUI_LIBRARY): $(KUI_OBJECT) $(KUI_CLIENT_OBJECT)
+$(KUI_FILE_DIALOG_OBJECT): extras/kui/kui_file_dialog.c extras/kui/kui_file_dialog.h extras/kui/kui.h extras/kui/kui_protocol.h
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/kui/kui_file_dialog.c -o $@
+
+$(KUI_DIALOG_OBJECT): extras/kui/kui_dialog.c extras/kui/kui_dialog.h extras/kui/kui.h extras/kui/kui_protocol.h
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/kui/kui_dialog.c -o $@
+
+$(KUI_LIBRARY): $(KUI_OBJECT) $(KUI_CLIENT_OBJECT) $(KUI_FILE_DIALOG_OBJECT) $(KUI_DIALOG_OBJECT)
 	$(AR) rcs $@ $^
 
 $(MINESWEEPER_WIDGET_OBJECT): extras/minesweeper/minesweeper_widget.c extras/minesweeper/minesweeper.h $(KUI_LIBRARY)

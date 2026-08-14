@@ -1,0 +1,10 @@
+id=editor
+name=Text Editor
+exec=/bin/editor
+icon=/usr/share/gui/editor.kimg
+argument=/NOTE.TXT
+accepts=text
+desktop=true
+start_menu=true
+width=700
+height=481

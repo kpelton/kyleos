@@ -1,0 +1,10 @@
+id=system-disk
+name=System Disk
+exec=/bin/finder
+icon=/usr/share/gui/system-disk.kimg
+argument=/
+desktop=true
+start_menu=true
+autostart=true
+width=700
+height=481

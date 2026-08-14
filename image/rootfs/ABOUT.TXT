@@ -1,0 +1,5 @@
+KyleOS Desktop
+Version 0.1
+
+A small computer with big ideas.
+Copyright 2026 KyleOS

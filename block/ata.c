@@ -42,7 +42,6 @@ static int PRIMARY = 0;
 #define STAT_DRIVE_BUSY 0x80
 #define STAT_PIO_READY 0x8
 #define ATA_MAX_LBA 0x0fffffffU
-#define ATA_MAX_SECTORS_PER_COMMAND 255U
 #define ATA_POLL_LIMIT 10000000U
 #define ATA_YIELD_INTERVAL 65536U
 //#define ATA_DEBUG
@@ -56,7 +55,6 @@ struct ata_cache_entry {
     uint8_t data[ATA_SECTOR_SIZE];
 };
 static struct ata_cache_entry ata_read_cache[ATA_READ_CACHE_ENTRIES];
-static uint32_t ata_cache_next;
 
 
 struct mbr_info fs1;
@@ -68,15 +66,35 @@ static void ata_cache_reset(void)
 {
     for (uint32_t i = 0; i < ATA_READ_CACHE_ENTRIES; i++)
         ata_read_cache[i].valid = 0;
-    ata_cache_next = 0;
 }
 
 static void ata_cache_invalidate(uint32_t sector)
 {
-    for (uint32_t i = 0; i < ATA_READ_CACHE_ENTRIES; i++) {
-        if (ata_read_cache[i].valid && ata_read_cache[i].sector == sector)
-            ata_read_cache[i].valid = 0;
-    }
+    struct ata_cache_entry *entry =
+        &ata_read_cache[sector % ATA_READ_CACHE_ENTRIES];
+
+    if (entry->valid && entry->sector == sector)
+        entry->valid = 0;
+}
+
+static struct ata_cache_entry *ata_cache_find(uint32_t sector)
+{
+    struct ata_cache_entry *entry =
+        &ata_read_cache[sector % ATA_READ_CACHE_ENTRIES];
+
+    if (!entry->valid || entry->sector != sector)
+        return NULL;
+    return entry;
+}
+
+static void ata_cache_store(uint32_t sector, const void *data)
+{
+    struct ata_cache_entry *entry =
+        &ata_read_cache[sector % ATA_READ_CACHE_ENTRIES];
+
+    entry->sector = sector;
+    memcpy(entry->data, data, ATA_SECTOR_SIZE);
+    entry->valid = 1;
 }
 
 static void ata_poll_relax(uint32_t poll_count)
@@ -208,9 +226,28 @@ int write_sec(uint32_t sec, const void *buffer)
     return write_sectors(sec, 1, buffer);
 }
 
+int read_sectors(uint32_t sec, uint32_t count, void *buffer)
+{
+    int result;
+
+    if (buffer == NULL || count == 0 ||
+        count > ATA_MAX_SECTORS_PER_COMMAND)
+        return -1;
+
+    acquire_mutex(&ata_mutex);
+    result = ata_read_locked(sec, count, buffer);
+    if (result == 0) {
+        for (uint32_t i = 0; i < count; i++)
+            ata_cache_store(sec + i,
+                            (const uint8_t *)buffer + i * ATA_SECTOR_SIZE);
+    }
+    release_mutex(&ata_mutex);
+    return result;
+}
+
 int read_sec(uint32_t sec, void *buffer)
 {
-    int cache_entry;
+    struct ata_cache_entry *cache_entry;
     int result;
 
     if (buffer == NULL)
@@ -220,13 +257,11 @@ int read_sec(uint32_t sec, void *buffer)
 #endif
     acquire_mutex(&ata_mutex);
 
-    for (cache_entry = 0; cache_entry < ATA_READ_CACHE_ENTRIES; cache_entry++) {
-        if (ata_read_cache[cache_entry].valid &&
-            ata_read_cache[cache_entry].sector == sec) {
-            memcpy(buffer, ata_read_cache[cache_entry].data, ATA_SECTOR_SIZE);
-            release_mutex(&ata_mutex);
-            return 0;
-        }
+    cache_entry = ata_cache_find(sec);
+    if (cache_entry != NULL) {
+        memcpy(buffer, cache_entry->data, ATA_SECTOR_SIZE);
+        release_mutex(&ata_mutex);
+        return 0;
     }
 
     result = ata_read_locked(sec, 1, buffer);
@@ -235,11 +270,7 @@ int read_sec(uint32_t sec, void *buffer)
         return result;
     }
 
-    cache_entry = (int)ata_cache_next;
-    ata_cache_next = (ata_cache_next + 1) % ATA_READ_CACHE_ENTRIES;
-    ata_read_cache[cache_entry].sector = sec;
-    memcpy(ata_read_cache[cache_entry].data, buffer, ATA_SECTOR_SIZE);
-    ata_read_cache[cache_entry].valid = 1;
+    ata_cache_store(sec, buffer);
     release_mutex(&ata_mutex);
 
     return 0;

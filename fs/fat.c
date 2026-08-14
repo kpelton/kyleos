@@ -66,20 +66,20 @@ static void read_fat_to_mem(struct fatFS *fs)
 {
     kprintf("reading in 0x%x sectors\n", fs->fat_size);
     fs->fat_ptr = kmalloc(ATA_SECTOR_SIZE * fs->fat_size);
-    uint32_t *FAT_table = kmalloc(ATA_SECTOR_SIZE);
-    int k = 0;
+    for (uint32_t i = 0; i < fs->fat_size; ) {
+        uint32_t sectors = fs->fat_size - i;
 
-    for (uint32_t i = 0; i < fs->fat_size; i++)
-    {
-        read_sec(fs->first_fat_sector + i, FAT_table);
-        for (uint32_t j = 0; j < ATA_SECTOR_SIZE / sizeof(uint32_t); j++)
-        {
-            fs->fat_ptr[k] = FAT_table[j] & 0x0fffffff;
-            k++;
-        }
+        if (sectors > ATA_MAX_SECTORS_PER_COMMAND)
+            sectors = ATA_MAX_SECTORS_PER_COMMAND;
+        if (read_sectors(fs->first_fat_sector + i, sectors,
+                         (uint8_t *)fs->fat_ptr + i * ATA_SECTOR_SIZE) < 0)
+            panic("FAT table read failed");
+        i += sectors;
     }
-    fs->cluster_count = k;
-    kfree(FAT_table);
+    fs->cluster_count =
+        fs->fat_size * ATA_SECTOR_SIZE / sizeof(*fs->fat_ptr);
+    for (uint32_t i = 0; i < fs->cluster_count; i++)
+        fs->fat_ptr[i] &= 0x0fffffff;
 }
 
 int fat_init(struct mbr_info mbr_entry)
@@ -303,11 +303,21 @@ void cat_inode_file(struct inode *i_node)
               i_node->dev->finfo.fat->first_data_sector,
               i_node->dev->finfo.fat->fat_boot.sectors_per_cluster);
 }
-static void read_cluster(uint32_t sector_start, uint32_t sectors_per_cluster, uint8_t *dest)
+static int read_cluster(uint32_t sector_start, uint32_t sectors_per_cluster,
+                        uint8_t *dest)
 {
-    uint32_t i;
-    for (i = 0; i < sectors_per_cluster; i++)
-        read_sec(sector_start + i, dest + (ATA_SECTOR_SIZE * i));
+    while (sectors_per_cluster > 0) {
+        uint32_t sectors = sectors_per_cluster;
+
+        if (sectors > ATA_MAX_SECTORS_PER_COMMAND)
+            sectors = ATA_MAX_SECTORS_PER_COMMAND;
+        if (read_sectors(sector_start, sectors, dest) < 0)
+            return -1;
+        sector_start += sectors;
+        sectors_per_cluster -= sectors;
+        dest += sectors * ATA_SECTOR_SIZE;
+    }
+    return 0;
 }
 
 static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector)
@@ -333,55 +343,92 @@ static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector)
 
 int read_inode_file(struct file *rfile, void *buf, uint32_t count)
 {
+    struct fatFS *fs = rfile->dev->finfo.fat;
     uint32_t cluster = rfile->i_node.i_ino;
-    uint32_t first_data_sector = rfile->dev->finfo.fat->first_data_sector;
-    uint32_t sectors_per_cluster = rfile->dev->finfo.fat->fat_boot.sectors_per_cluster;
-    uint8_t cluster_dest[sectors_per_cluster * ATA_SECTOR_SIZE];
+    uint32_t sectors_per_cluster = fs->fat_boot.sectors_per_cluster;
+    uint32_t cluster_size = sectors_per_cluster * ATA_SECTOR_SIZE;
     uint8_t *buffer = (uint8_t *)buf;
     uint32_t bytes_read = 0;
-    uint32_t j = 0;
-    uint32_t i = 0;
-    uint64_t total_read = 0;
+    uint32_t remaining;
+    uint32_t cluster_offset;
+    uint8_t *cluster_buffer = NULL;
 
-    if(rfile->pos >= rfile->i_node.file_size)
+    if (buf == NULL || sectors_per_cluster == 0)
+        return -1;
+    if (count == 0 || rfile->pos >= rfile->i_node.file_size)
         return 0;
+    remaining = count;
+    if ((uint64_t)remaining > rfile->i_node.file_size - rfile->pos)
+        remaining = rfile->i_node.file_size - rfile->pos;
 
-    memzero8((uint8_t *) buf,count);
-    // Need to cache which cluster we are on for next call
-    while (cluster < FAT_END_OF_CHAIN && bytes_read < count)
-    {
-        j = 0;
-        //optimization to skip reading data cluster if we are below file pos
-        if (total_read / (sectors_per_cluster * ATA_SECTOR_SIZE) < rfile->pos / (sectors_per_cluster * ATA_SECTOR_SIZE))
-        {
-            total_read += sectors_per_cluster * ATA_SECTOR_SIZE;
-            //kprintf("%d\n",total_read);
-            //read next cluster
-            cluster = rfile->dev->finfo.fat->fat_ptr[cluster];
+    /* Walk to the cluster containing the requested file position. */
+    for (uint64_t skip = rfile->pos / cluster_size; skip > 0; skip--) {
+        if (cluster < 2 || cluster >= fs->cluster_count ||
+            fat_is_eoc(cluster))
+            return bytes_read;
+        cluster = fs->fat_ptr[cluster];
+    }
+    cluster_offset = rfile->pos % cluster_size;
 
+    while (remaining > 0 && cluster >= 2 &&
+           cluster < fs->cluster_count && !fat_is_eoc(cluster)) {
+        /* Partial clusters need a bounce buffer.  Full, physically adjacent
+         * FAT clusters can be transferred straight into the caller's buffer
+         * with one ATA command. */
+        if (cluster_offset != 0 || remaining < cluster_size) {
+            uint32_t bytes = cluster_size - cluster_offset;
+
+            if (bytes > remaining)
+                bytes = remaining;
+            if (cluster_buffer == NULL)
+                cluster_buffer = kmalloc(cluster_size);
+            if (read_cluster(clust2sec(cluster, fs), sectors_per_cluster,
+                             cluster_buffer) < 0) {
+                if (cluster_buffer != NULL) kfree(cluster_buffer);
+                return bytes_read > 0 ? (int)bytes_read : -1;
+            }
+            memcpy(buffer + bytes_read, cluster_buffer + cluster_offset,
+                   bytes);
+            bytes_read += bytes;
+            remaining -= bytes;
+            cluster_offset = 0;
+            cluster = fs->fat_ptr[cluster];
             continue;
         }
-        else
-        {
-            read_cluster((cluster - 2) * sectors_per_cluster + first_data_sector, sectors_per_cluster, cluster_dest);
-            cluster = rfile->dev->finfo.fat->fat_ptr[cluster];
-        }
 
-        while (j < sectors_per_cluster * ATA_SECTOR_SIZE && rfile->pos+bytes_read < rfile->i_node.file_size && bytes_read < count)
         {
-            if (total_read >= rfile->pos)
-            {
-                bytes_read++;
-                buffer[i] = cluster_dest[j];
-                // kprintf("%d, %d %d\n",i,j, rfile->pos);
-                i++;
+            uint32_t max_clusters =
+                ATA_MAX_SECTORS_PER_COMMAND / sectors_per_cluster;
+            uint32_t wanted_clusters = remaining / cluster_size;
+            uint32_t run_clusters = 1;
+            uint32_t last_cluster = cluster;
+            uint32_t next_cluster;
+
+            if (wanted_clusters < max_clusters)
+                max_clusters = wanted_clusters;
+            while (run_clusters < max_clusters) {
+                next_cluster = fs->fat_ptr[last_cluster];
+                if (next_cluster != last_cluster + 1 ||
+                    next_cluster >= fs->cluster_count ||
+                    fat_is_eoc(next_cluster))
+                    break;
+                last_cluster = next_cluster;
+                run_clusters++;
             }
-            j++;
-            total_read++;
+            next_cluster = fs->fat_ptr[last_cluster];
+            if (read_sectors(clust2sec(cluster, fs),
+                             run_clusters * sectors_per_cluster,
+                             buffer + bytes_read) < 0) {
+                if (cluster_buffer != NULL) kfree(cluster_buffer);
+                return bytes_read > 0 ? (int)bytes_read : -1;
+            }
+            bytes_read += run_clusters * cluster_size;
+            remaining -= run_clusters * cluster_size;
+            cluster = next_cluster;
         }
     }
-    //kfree(cluster_dest);
-    //kprintf("read inode total bytes read %d file->size %d file->pos %d\n",bytes_read,rfile->i_node.file_size,rfile->pos);
+    if (cluster_buffer != NULL)
+        kfree(cluster_buffer);
     return bytes_read;
 }
 
