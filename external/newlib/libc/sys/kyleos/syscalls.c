@@ -5,6 +5,12 @@
 #include <sys/times.h>
 #include <sys/types.h>
 
+/* Keep the syscall helper and the public getdents declaration on the same
+ * file-scope dirent tag.  Without this forward declaration, C gives the
+ * parameter-list tag prototype scope and treats the two pointers as distinct
+ * incompatible types under newer compilers. */
+struct dirent;
+
 static int sys_sleep(unsigned int msec)
 {
     long val = 0;

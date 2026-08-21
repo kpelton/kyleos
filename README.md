@@ -197,9 +197,9 @@ No build target should require `/tmp/z` or a sibling checkout.
 See [`userspace/README.md`](userspace/README.md) for the ownership boundary
 between the core userspace tree and the additional programs tree.
 
-`config.mk` is ignored by Git. The checked-in `toolchain/newlib-build` metadata
-keeps the Newlib build self-contained; generated libraries and headers are
-installed under `build/sysroot`.
+`config.mk` is ignored by Git. The configured Newlib build tree is kept
+in-tree to reproduce the existing KyleOS sysroot; generated libraries and
+headers are installed under `build/sysroot`.
 
 ## Build and boot
 
