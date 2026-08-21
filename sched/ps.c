@@ -68,6 +68,15 @@ int user_process_seek_fd(struct ktask *t, int fd, long offset, int whence)
     return -1;
 }
 
+int user_process_fd_status(struct ktask *t, int fd, uint32_t *readable,
+                           uint32_t *writable, uint32_t *hung_up)
+{
+    if (t == NULL || fd < 0 || fd >= MAX_TASK_OPEN_FILES ||
+        t->open_fds[fd] == NULL)
+        return -1;
+    return vfs_file_status(t->open_fds[fd], readable, writable, hung_up);
+}
+
 int user_process_pipe(struct ktask *t, int pipefd[2])
 {
     struct file *reader;

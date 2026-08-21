@@ -2,9 +2,10 @@
 #define KYLEOS_KUI_PROTOCOL_H
 
 #include <stdint.h>
+#include "extras/kui/kui_style.h"
 
 #define KUI_PROTOCOL_MAGIC 0x3149554bU /* "KUI1" */
-#define KUI_PROTOCOL_VERSION 3U
+#define KUI_PROTOCOL_VERSION 7U
 #define KUI_PROTOCOL_TEXT_MAX 128
 #define KUI_PROTOCOL_TITLE_MAX 64
 #define KUI_PROTOCOL_MAX_DISPLAY (256U * 1024U)
@@ -60,6 +61,7 @@ struct kui_event {
     uint32_t modifiers;
     uint32_t seed;
     char character;
+    struct kui_style style;
     char argument[KUI_PROTOCOL_TEXT_MAX];
     char clipboard[KUI_PROTOCOL_TEXT_MAX];
 };
@@ -90,7 +92,14 @@ enum kui_display_command_type {
     KUI_DISPLAY_LINE,
     KUI_DISPLAY_TEXT,
     KUI_DISPLAY_BITMAP_ROW,
-    KUI_DISPLAY_BITMAP_REGION_ROW
+    KUI_DISPLAY_BITMAP_REGION_ROW,
+    KUI_DISPLAY_BITMAP_ALPHA_ROW,
+    KUI_DISPLAY_FILL_RECT_ALPHA
+};
+
+enum kui_text_flag {
+    KUI_TEXT_OPAQUE = 1U,
+    KUI_TEXT_MONOSPACE = 2U
 };
 
 struct kui_display_command {

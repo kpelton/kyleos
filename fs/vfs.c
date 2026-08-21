@@ -482,6 +482,28 @@ int vfs_write_file(struct file *rfile, void *buf, int count)
 
 }
 
+int vfs_file_status(struct file *file, uint32_t *readable,
+                    uint32_t *writable, uint32_t *hung_up)
+{
+    uint64_t available;
+
+    if (file == NULL || readable == NULL || writable == NULL ||
+        hung_up == NULL)
+        return -1;
+    if (file->pipe != NULL) {
+        pipe_status((struct pipe_data *)file->pipe, file->pipe_writer,
+                    readable, writable, hung_up);
+        return 0;
+    }
+    available = file->i_node.file_size > file->pos ?
+                file->i_node.file_size - file->pos : 0;
+    *readable = available > 0xffffffffULL ? 0xffffffffU :
+                (uint32_t)available;
+    *writable = 1;
+    *hung_up = 0;
+    return 0;
+}
+
 int vfs_rename(struct inode *i_node, struct inode *new_parent, char *new_name)
 {
     struct dnode *dir;

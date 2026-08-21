@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "include/uapi/fd.h"
 #include "extras/kui/kui_protocol.h"
 
 #define KUI_SCREEN_WIDTH 1280
@@ -10,12 +11,12 @@
 
 #define KUI_BLACK 0x00000000U
 #define KUI_WHITE 0x00ffffffU
-#define KUI_LIGHT 0x00f1f5f9U
-#define KUI_FACE 0x00ece9d8U
-#define KUI_SHADOW 0x00716686U
-#define KUI_TITLE_BLUE 0x000057c9U
-#define KUI_DESKTOP_TEAL 0x002d79cfU
-#define KUI_DESKTOP_DARK 0x001e5aa8U
+#define KUI_LIGHT (kui_style_current()->light)
+#define KUI_FACE (kui_style_current()->face)
+#define KUI_SHADOW (kui_style_current()->shadow)
+#define KUI_TITLE_BLUE (kui_style_current()->title_active)
+#define KUI_DESKTOP_TEAL (kui_style_current()->desktop)
+#define KUI_DESKTOP_DARK (kui_style_current()->desktop_dark)
 
 #define KUI_KIMG_FLAG_OPAQUE 1U
 
@@ -52,7 +53,10 @@ void kui_surface_init_commands(struct kui_surface *surface,
 int kui_display_replay(struct kui_surface *surface,
                        const void *commands, uint32_t bytes);
 int kui_read_all(int fd, void *buffer, uint32_t bytes);
+int kui_read_all_timeout(int fd, void *buffer, uint32_t bytes,
+                         uint32_t timeout_ms);
 int kui_write_all(int fd, const void *buffer, uint32_t bytes);
+int kui_fd_status(int fd, struct kyleos_fd_status *status);
 
 int kui_present(const struct kui_surface *surface);
 int kui_present_rect(const struct kui_surface *surface,
@@ -72,6 +76,8 @@ int kui_in_rect(int px, int py, int x, int y, int w, int h);
 void kui_pixel(struct kui_surface *surface, int x, int y, uint32_t color);
 void kui_fill_rect(struct kui_surface *surface, int x, int y, int w, int h,
                    uint32_t color);
+void kui_fill_rect_alpha(struct kui_surface *surface, int x, int y,
+                         int w, int h, uint32_t color);
 void kui_outline_rect(struct kui_surface *surface, int x, int y, int w, int h,
                       uint32_t color);
 void kui_line(struct kui_surface *surface, int x0, int y0, int x1, int y1,
@@ -83,6 +89,15 @@ void kui_draw_text(struct kui_surface *surface, int x, int y,
                    const char *text, uint32_t foreground,
                    uint32_t background, int opaque);
 int kui_text_width(const char *text);
+int kui_text_ellipsize(char *destination, int capacity, const char *text,
+                       int maximum_width);
+void kui_draw_mono_char(struct kui_surface *surface, int x, int y,
+                        unsigned char ch, uint32_t foreground,
+                        uint32_t background, int opaque);
+void kui_draw_mono_text(struct kui_surface *surface, int x, int y,
+                        const char *text, uint32_t foreground,
+                        uint32_t background, int opaque);
+int kui_mono_text_width(const char *text);
 
 int kui_image_load(const char *path, struct kui_image *image);
 void kui_image_free(struct kui_image *image);

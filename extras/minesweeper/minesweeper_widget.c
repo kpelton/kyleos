@@ -158,7 +158,7 @@ static void reveal_cell(struct minesweeper_game *game, int start_col,
 
 static uint32_t number_color(int number)
 {
-    static const uint32_t colors[] = {
+    const uint32_t colors[] = {
         KUI_BLACK, BLUE, GREEN, RED, KUI_TITLE_BLUE, BROWN, CYAN,
         KUI_BLACK, KUI_SHADOW
     };
@@ -210,7 +210,8 @@ static void draw_cell(struct kui_surface *surface,
         draw_mine(surface, x, y, size);
     } else if (cell->adjacent > 0 && size >= 16) {
         char label[2] = { (char)('0' + cell->adjacent), '\0' };
-        kui_draw_text(surface, x + (size - 8) / 2, y + (size - 16) / 2,
+        kui_draw_text(surface, x + (size - kui_text_width(label)) / 2,
+                      y + (size - 16) / 2,
                       label, number_color(cell->adjacent), KUI_LIGHT, 0);
     }
 }

@@ -10,14 +10,15 @@
 
 #include "extras/kui/kui.h"
 #include "extras/kui/kui_protocol.h"
+#include "extras/kuid/shell_protocol.h"
 
 #define MAX_APPS 24
 #define MAX_WINDOWS 10
 #define MANIFEST_PATH_MAX 160
-#define TASKBAR_HEIGHT 32
-#define WINDOW_BORDER 4
-#define WINDOW_TITLE_HEIGHT 24
-#define WINDOW_BOTTOM 4
+#define TASKBAR_HEIGHT (kui_style_current()->panel_bottom)
+#define WINDOW_BORDER (kui_style_current()->window_border)
+#define WINDOW_TITLE_HEIGHT (kui_style_current()->title_height)
+#define WINDOW_BOTTOM (kui_style_current()->window_bottom)
 #define MIN_OUTER_WIDTH 268
 #define MIN_OUTER_HEIGHT 178
 
@@ -41,6 +42,8 @@ struct shell_app {
     int exclusive;
     int width;
     int height;
+    int position_x;
+    int position_y;
     struct kui_image icon;
 };
 
@@ -60,6 +63,8 @@ struct shell_window {
     int minimum_width;
     int minimum_height;
     char title[KUI_PROTOCOL_TITLE_MAX];
+    char application[32];
+    char icon_path[128];
     int pid;
     int input_fd;
     int output_fd;
@@ -67,6 +72,8 @@ struct shell_window {
     uint32_t timer_ms;
     uint32_t next_timer;
     uint32_t *content_pixels;
+    unsigned char *display_commands;
+    uint32_t display_capacity;
     int content_width;
     int content_height;
     struct kui_surface content;
@@ -102,6 +109,108 @@ static int resize_right_gap;
 static int resize_bottom_gap;
 static int pointer_window = -1;
 static char clipboard_path[KUI_PROTOCOL_TEXT_MAX];
+static int shell_pid = -1;
+static int shell_input = -1;
+static int shell_output = -1;
+static char shell_name[32];
+static uint32_t shell_serial;
+/* Shell frames are bounded by the protocol. Reuse storage while dragging so
+ * redraws never churn or extend the userspace heap. */
+static unsigned char shell_display[KUI_PROTOCOL_MAX_DISPLAY];
+static uint32_t shell_display_bytes;
+static struct kui_shell_request shell_cached_request;
+static int shell_cache_valid;
+static void copy_text(char *destination, size_t capacity, const char *source);
+
+static int start_shell(const char *path)
+{
+    struct kui_shell_profile profile;
+    int to_shell[2];
+    int from_shell[2];
+    int child;
+
+    if (path == NULL || pipe(to_shell) < 0)
+        return -1;
+    if (pipe(from_shell) < 0) {
+        close(to_shell[0]);
+        close(to_shell[1]);
+        return -1;
+    }
+    child = fork();
+    if (child == 0) {
+        char *argv[] = { (char *)path, NULL };
+
+        close(to_shell[1]);
+        close(from_shell[0]);
+        dup2(to_shell[0], 0);
+        dup2(from_shell[1], 1);
+        close(to_shell[0]);
+        close(from_shell[1]);
+        execve(path, argv, NULL);
+        _exit(127);
+    }
+    close(to_shell[0]);
+    close(from_shell[1]);
+    if (child < 0) {
+        close(to_shell[1]);
+        close(from_shell[0]);
+        return -1;
+    }
+    if (kui_read_all_timeout(from_shell[0], &profile, sizeof(profile),
+                             1000) < 0 ||
+        profile.magic != KUI_SHELL_MAGIC ||
+        profile.version != KUI_SHELL_VERSION ||
+        profile.style.window_border < 1 || profile.style.window_border > 16 ||
+        profile.style.title_height < 18 || profile.style.title_height > 64 ||
+        profile.style.panel_top < 0 || profile.style.panel_top > 128 ||
+        profile.style.panel_bottom < 0 || profile.style.panel_bottom > 128) {
+        close(to_shell[1]);
+        close(from_shell[0]);
+        waitpid(child, NULL, 0);
+        return -1;
+    }
+    profile.name[sizeof(profile.name) - 1] = '\0';
+    shell_pid = child;
+    shell_input = to_shell[1];
+    shell_output = from_shell[0];
+    copy_text(shell_name, sizeof(shell_name), profile.name);
+    kui_style_apply(&profile.style);
+    shell_cache_valid = 0;
+    return 0;
+}
+
+static void stop_shell(void)
+{
+    int status;
+
+    if (shell_input >= 0) close(shell_input);
+    if (shell_output >= 0) close(shell_output);
+    if (shell_pid > 0) waitpid(shell_pid, &status, 0);
+    shell_input = -1;
+    shell_output = -1;
+    shell_pid = -1;
+    shell_cache_valid = 0;
+}
+
+static int aqua_shell(void)
+{
+    return (kui_style_current()->flags & KUI_STYLE_AQUA) != 0;
+}
+
+static int work_top(void)
+{
+    return kui_style_current()->panel_top;
+}
+
+static int work_bottom(void)
+{
+    return screen_height - kui_style_current()->panel_bottom;
+}
+
+static int work_height(void)
+{
+    return work_bottom() - work_top();
+}
 
 static int get_directory_entries(int fd, struct kyleos_dirent *entries,
                                  int count)
@@ -157,6 +266,8 @@ static int load_manifest(const char *path, struct shell_app *app)
     memset(app, 0, sizeof(*app));
     app->width = 700;
     app->height = 481;
+    app->position_x = -1;
+    app->position_y = -1;
     fd = open(path, O_RDONLY);
     if (fd < 0) return -1;
     count = read(fd, data, sizeof(data) - 1);
@@ -199,6 +310,10 @@ static int load_manifest(const char *path, struct shell_app *app)
             app->width = atoi(value);
         else if (strcmp(key, "height") == 0)
             app->height = atoi(value);
+        else if (strcmp(key, "x") == 0)
+            app->position_x = atoi(value);
+        else if (strcmp(key, "y") == 0)
+            app->position_y = atoi(value);
         line = strtok(NULL, "\n");
     }
     if (app->executable[0] == '\0') return -1;
@@ -354,24 +469,31 @@ static int send_window_event(int index, uint32_t type, int x, int y,
     event.modifiers = modifiers;
     event.character = character;
     event.seed = kui_ticks_ms() ^ ((uint32_t)x << 16) ^ (uint32_t)y;
+    event.style = *kui_style_current();
     if (argument != NULL)
         copy_text(event.argument, sizeof(event.argument), argument);
     copy_text(event.clipboard, sizeof(event.clipboard), clipboard_path);
     if (kui_write_all(window->input_fd, &event, sizeof(event)) < 0)
         return -1;
     if (type == KUI_EVENT_CLOSE) return 0;
-    if (kui_read_all(window->output_fd, &response, sizeof(response)) < 0 ||
+    if (kui_read_all_timeout(window->output_fd, &response,
+                             sizeof(response), 500) < 0 ||
         response.magic != KUI_PROTOCOL_MAGIC ||
         response.version != KUI_PROTOCOL_VERSION ||
         response.serial != event.serial ||
         response.display_bytes > KUI_PROTOCOL_MAX_DISPLAY)
         return -1;
     if (response.display_bytes != 0) {
-        display = malloc(response.display_bytes);
-        if (display == NULL ||
-            kui_read_all(window->output_fd, display,
-                         response.display_bytes) < 0) {
-            free(display);
+        if (response.display_bytes > window->display_capacity) {
+            display = realloc(window->display_commands,
+                              response.display_bytes);
+            if (display == NULL) return -1;
+            window->display_commands = display;
+            window->display_capacity = response.display_bytes;
+        }
+        display = window->display_commands;
+        if (kui_read_all_timeout(window->output_fd, display,
+                                 response.display_bytes, 500) < 0) {
             return -1;
         }
     }
@@ -403,11 +525,9 @@ static int send_window_event(int index, uint32_t type, int x, int y,
             response.damage_height <= 0 ||
             response.damage_x > width - response.damage_width ||
             response.damage_y > height - response.damage_height)) {
-            free(display);
             return -1;
         }
         if (ensure_content(window, width, height) < 0) {
-            free(display);
             return -1;
         }
         if (partial)
@@ -418,11 +538,9 @@ static int send_window_event(int index, uint32_t type, int x, int y,
             kui_fill_rect(&window->content, 0, 0, width, height, KUI_WHITE);
         if (kui_display_replay(&window->content, display,
                                response.display_bytes) < 0) {
-            free(display);
             return -1;
         }
     }
-    free(display);
     if (action != NULL && response.action != KUI_ACTION_NONE) {
         action->type = response.action;
         response.action_argument[sizeof(response.action_argument) - 1] = '\0';
@@ -450,13 +568,13 @@ static int raise_window(int index)
 static void position_window(struct shell_window *window)
 {
     int max_x = screen_width - window->width - 10;
-    int max_y = screen_height - TASKBAR_HEIGHT - window->height - 10;
+    int max_y = work_bottom() - window->height - 10;
     int position = next_window_position++;
 
     if (max_x < 0) max_x = 0;
     if (max_y < 0) max_y = 0;
     window->x = 30 + (position % 12) * 26;
-    window->y = 24 + (position % 10) * 22;
+    window->y = work_top() + 24 + (position % 10) * 22;
     if (window->x > max_x) window->x = max_x;
     if (window->y > max_y) window->y = max_y;
 }
@@ -475,6 +593,7 @@ static void close_window_index(int index)
     close(window->output_fd);
     waitpid(window->pid, &status, 0);
     free(window->content_pixels);
+    free(window->display_commands);
     memset(window, 0, sizeof(*window));
 }
 
@@ -504,6 +623,15 @@ static int run_exclusive(const char *path)
     return child < 0 ? -1 : 0;
 }
 
+static const char *application_name(const struct shell_app *app)
+{
+    if (strcmp(app->executable, "/bin/finder") == 0) return "Finder";
+    if (strcmp(app->executable, "/bin/editor") == 0) return "TextEdit";
+    if (strcmp(app->executable, "/bin/cide") == 0) return "C IDE";
+    if (strcmp(app->executable, "/bin/kterm") == 0) return "Terminal";
+    return app->name;
+}
+
 static int open_application(const struct shell_app *app, const char *argument)
 {
     int slot = -1;
@@ -523,12 +651,24 @@ static int open_application(const struct shell_app *app, const char *argument)
     windows[slot].height = app->height + WINDOW_TITLE_HEIGHT + WINDOW_BOTTOM;
     if (windows[slot].width > screen_width)
         windows[slot].width = screen_width;
-    if (windows[slot].height > screen_height - TASKBAR_HEIGHT)
-        windows[slot].height = screen_height - TASKBAR_HEIGHT;
+    if (windows[slot].height > work_height())
+        windows[slot].height = work_height();
     windows[slot].minimum_width = MIN_OUTER_WIDTH;
     windows[slot].minimum_height = MIN_OUTER_HEIGHT;
     copy_text(windows[slot].title, sizeof(windows[slot].title), app->name);
+    copy_text(windows[slot].application,
+              sizeof(windows[slot].application), application_name(app));
+    copy_text(windows[slot].icon_path, sizeof(windows[slot].icon_path),
+              app->icon_path);
     position_window(&windows[slot]);
+    if (app->position_x >= 0) windows[slot].x = app->position_x;
+    if (app->position_y >= 0) windows[slot].y = app->position_y;
+    if (windows[slot].x + windows[slot].width > screen_width)
+        windows[slot].x = screen_width - windows[slot].width;
+    if (windows[slot].y < work_top()) windows[slot].y = work_top();
+    if (windows[slot].y + windows[slot].height > work_bottom())
+        windows[slot].y = work_bottom() - windows[slot].height;
+    if (windows[slot].x < 0) windows[slot].x = 0;
     if (start_process(&windows[slot], app->executable) < 0) {
         memset(&windows[slot], 0, sizeof(windows[slot]));
         return -1;
@@ -604,6 +744,17 @@ static int is_kimg_file(const char *path)
            header[5] == 0 && header[6] == 0 && header[7] == 0;
 }
 
+static int is_c_source_file(const char *path)
+{
+    size_t length = strlen(path);
+    char extension;
+
+    if (length < 2 || path[length - 2] != '.') return 0;
+    extension = path[length - 1];
+    return extension == 'c' || extension == 'C' ||
+           extension == 'h' || extension == 'H';
+}
+
 static void open_path(const char *path)
 {
     const struct shell_app *app;
@@ -622,6 +773,13 @@ static void open_path(const char *path)
             }
     }
     if (is_text_file(path)) {
+        if (is_c_source_file(path)) {
+            for (int i = 0; i < app_count; i++)
+                if (strcmp(apps[i].accepts, "c") == 0) {
+                    open_application(&apps[i], path);
+                    return;
+                }
+        }
         for (int i = 0; i < app_count; i++)
             if (strcmp(apps[i].accepts, "text") == 0) {
                 open_application(&apps[i], path);
@@ -671,14 +829,17 @@ static int window_at(int x, int y)
 static int desktop_app_at(int x, int y)
 {
     int icon = 0;
-    int rows = (screen_height - TASKBAR_HEIGHT - 12) / 82;
+    int rows = (work_height() - 12) / 82;
     if (rows < 1) rows = 1;
     for (int i = 0; i < app_count; i++) {
         int ix;
         int iy;
-        if (!apps[i].desktop) continue;
-        ix = 12 + (icon / rows) * 94;
-        iy = 8 + (icon % rows) * 82;
+        if (!apps[i].desktop ||
+            (aqua_shell() && strcmp(apps[i].id, "system-disk") != 0))
+            continue;
+        ix = aqua_shell() ? screen_width - 94 :
+                            12 + (icon / rows) * 94;
+        iy = work_top() + 8 + (icon % rows) * 82;
         if (kui_in_rect(x, y, ix, iy, 82, 77)) return i;
         icon++;
     }
@@ -710,8 +871,34 @@ static void draw_window(const struct shell_window *window, int active)
     int height = window->height;
 
     kui_draw_window(&frame, x, y, width, height, window->title, active);
-    kui_draw_button(&frame, x + width - 47, y + 4, 19, 17, "_", 0);
-    kui_draw_button(&frame, x + width - 24, y + 4, 19, 17, "X", 0);
+    if (aqua_shell()) {
+        static const uint32_t colors[] = {
+            0x00ef5b54U, 0x00f2c14eU, 0x0058c75eU
+        };
+        static const uint32_t edges[] = {
+            0x0099332fU, 0x009b7a24U, 0x002c8730U
+        };
+
+        for (int control = 0; control < 3; control++) {
+            int cx = x + 8 + control * 19;
+            uint32_t face = active ? colors[control] : 0x00c2c5c8U;
+            uint32_t edge = active ? edges[control] : 0x00878b8fU;
+
+            kui_fill_rect(&frame, cx + 4, y + 6, 6, 1, edge);
+            kui_fill_rect(&frame, cx + 2, y + 7, 10, 1, edge);
+            kui_fill_rect(&frame, cx + 1, y + 8, 12, 8, edge);
+            kui_fill_rect(&frame, cx + 2, y + 16, 10, 1, edge);
+            kui_fill_rect(&frame, cx + 4, y + 17, 6, 1, edge);
+            kui_fill_rect(&frame, cx + 4, y + 7, 6, 1, face);
+            kui_fill_rect(&frame, cx + 3, y + 8, 8, 8, face);
+            kui_fill_rect(&frame, cx + 2, y + 10, 10, 4, face);
+            kui_fill_rect_alpha(&frame, cx + 4, y + 8, 5, 3,
+                                0x80ffffffU);
+        }
+    } else {
+        kui_draw_button(&frame, x + width - 47, y + 4, 19, 17, "_", 0);
+        kui_draw_button(&frame, x + width - 24, y + 4, 19, 17, "X", 0);
+    }
     kui_fill_rect(&frame, content_x(window), content_y(window),
                   content_width(window), content_height(window), KUI_WHITE);
     blit_content(window);
@@ -756,8 +943,84 @@ static int taskbar_button_width(void)
     return width;
 }
 
-static void draw_taskbar(void)
+static int start_entry_count(void);
+static int start_app_by_rank(int rank);
+
+static void __attribute__((unused)) draw_taskbar(void)
 {
+    if (aqua_shell()) {
+        int app_icons = start_entry_count();
+        int window_icons = taskbar_window_count();
+        int dock_count;
+        int dock_width;
+        int dock_x;
+        int dock_y = screen_height - 58;
+        char clock[16];
+        uint32_t minutes = kui_ticks_ms() / 60000U;
+        int active = top_window();
+
+        if (app_icons > 12) app_icons = 12;
+        dock_count = app_icons + window_icons;
+        if (dock_count > (screen_width - 20) / 48)
+            dock_count = (screen_width - 20) / 48;
+        dock_width = 20 + dock_count * 48;
+        dock_x = (screen_width - dock_width) / 2;
+        kui_fill_rect(&frame, 0, 0, screen_width, 24,
+                      kui_style_current()->panel);
+        kui_fill_rect(&frame, 0, 23, screen_width, 1, 0x00787878U);
+        kui_draw_text(&frame, 12, 4, "K", KUI_BLACK,
+                      kui_style_current()->panel, 0);
+        kui_draw_text(&frame, 38, 4,
+                      active >= 0 ? windows[active].title : shell_name,
+                      KUI_BLACK, kui_style_current()->panel, 0);
+        snprintf(clock, sizeof(clock), "%02u:%02u",
+                 (unsigned)((minutes / 60U) % 24U),
+                 (unsigned)(minutes % 60U));
+        kui_draw_text(&frame, screen_width - 68, 4, clock, KUI_BLACK,
+                      kui_style_current()->panel, 0);
+        kui_fill_rect(&frame, dock_x + 5, dock_y + 5,
+                      dock_width, 52, 0x005d7187U);
+        kui_fill_rect(&frame, dock_x, dock_y, dock_width, 52, 0x00cbd5dfU);
+        kui_outline_rect(&frame, dock_x, dock_y, dock_width, 52,
+                         0x006b7f93U);
+        for (int rank = 0; rank < app_icons && rank < dock_count; rank++) {
+            int app = start_app_by_rank(rank);
+            int x = dock_x + 10 + rank * 48;
+
+            if (app < 0) continue;
+            if (apps[app].icon.pixels != NULL)
+                kui_blit_image_scaled(&frame, &apps[app].icon,
+                                      x + 4, dock_y + 5, 36, 36);
+            else {
+                kui_fill_rect(&frame, x + 4, dock_y + 5, 36, 36,
+                              0x00f4f7fbU);
+                kui_outline_rect(&frame, x + 4, dock_y + 5, 36, 36,
+                                 0x006b7f93U);
+                kui_draw_text(&frame, x + 18, dock_y + 15,
+                              apps[app].name, KUI_BLACK, 0x00f4f7fbU, 0);
+            }
+        }
+        for (int rank = 0; rank < window_icons && app_icons + rank < dock_count;
+             rank++) {
+            int index = taskbar_window_by_rank(rank);
+            int x = dock_x + 10 + (app_icons + rank) * 48;
+            char label[2] = { '?', '\0' };
+
+            if (index < 0) continue;
+            if (windows[index].title[0] != '\0')
+                label[0] = windows[index].title[0];
+            kui_fill_rect(&frame, x + 4, dock_y + 5, 36, 36,
+                          index == active ? 0x008ab7e8U : 0x00eef2f6U);
+            kui_outline_rect(&frame, x + 4, dock_y + 5, 36, 36,
+                             0x006b7f93U);
+            kui_draw_text(&frame, x + 18, dock_y + 15, label, KUI_BLACK,
+                          index == active ? 0x008ab7e8U : 0x00eef2f6U, 0);
+            if (windows[index].minimized)
+                kui_fill_rect(&frame, x + 12, dock_y + 45, 20, 2,
+                              0x004f5963U);
+        }
+        return;
+    }
     int y = screen_height - TASKBAR_HEIGHT;
     int count = taskbar_window_count();
     int button_width = taskbar_button_width();
@@ -805,7 +1068,168 @@ static int start_app_by_rank(int rank)
     return -1;
 }
 
-static void draw_start_menu(void)
+static int app_rank_for_window(int window)
+{
+    int fallback = -1;
+
+    for (int rank = 0; rank < start_entry_count(); rank++) {
+        int app = start_app_by_rank(rank);
+
+        if (app < 0 || strcmp(application_name(&apps[app]),
+                              windows[window].application) != 0)
+            continue;
+        if (strcmp(apps[app].icon_path, windows[window].icon_path) == 0)
+            return rank;
+        if (fallback < 0) fallback = rank;
+    }
+    return fallback;
+}
+
+static int shell_exchange(uint32_t type, int x, int y,
+                          struct kui_shell_response *result)
+{
+    struct kui_shell_request request;
+    struct kui_shell_response response;
+    int timeout_ms = type == KUI_SHELL_RENDER ? 1500 : 250;
+
+    memset(&request, 0, sizeof(request));
+    request.magic = KUI_SHELL_MAGIC;
+    request.version = KUI_SHELL_VERSION;
+    request.serial = ++shell_serial;
+    request.type = type;
+    request.screen_width = screen_width;
+    request.screen_height = screen_height;
+    request.ticks_ms = kui_ticks_ms();
+    if (type == KUI_SHELL_RENDER)
+        request.ticks_ms = request.ticks_ms / 60000U * 60000U;
+    request.x = x;
+    request.y = y;
+    if (type == KUI_SHELL_RENDER &&
+        (!aqua_shell() || y < work_bottom() - 24)) {
+        /* Pointer position only changes Aqua's Dock while it is close enough
+         * to magnify an icon. Keep every other shell frame cacheable. */
+        request.x = -1;
+        request.y = -1;
+    }
+    request.button = 1;
+    request.app_count = start_entry_count();
+    if (request.app_count > KUI_SHELL_MAX_APPS)
+        request.app_count = KUI_SHELL_MAX_APPS;
+    for (int rank = 0; rank < request.app_count; rank++) {
+        int app = start_app_by_rank(rank);
+
+        if (app >= 0)
+            copy_text(request.apps[rank].title,
+                      sizeof(request.apps[rank].title), apps[app].name);
+        if (app >= 0)
+            copy_text(request.apps[rank].icon_path,
+                      sizeof(request.apps[rank].icon_path),
+                      apps[app].icon_path);
+    }
+    request.window_count = taskbar_window_count();
+    {
+        int active = top_window();
+
+        copy_text(request.active_application,
+                  sizeof(request.active_application),
+                  active >= 0 ? windows[active].application : "Finder");
+    }
+    if (request.window_count > KUI_SHELL_MAX_WINDOWS)
+        request.window_count = KUI_SHELL_MAX_WINDOWS;
+    for (int rank = 0; rank < request.window_count; rank++) {
+        int index = taskbar_window_by_rank(rank);
+
+        if (index < 0) continue;
+        /* Aqua identifies Dock entries with app_index and never renders the
+         * document title. Keep its shell request stable across dirty-marker
+         * and status-title changes so those changes do not regenerate the
+         * large translucent Dock while an application starts heavy work. */
+        copy_text(request.windows[rank].title,
+                  sizeof(request.windows[rank].title),
+                  aqua_shell() ? windows[index].application :
+                                 windows[index].title);
+        copy_text(request.windows[rank].icon_path,
+                  sizeof(request.windows[rank].icon_path),
+                  windows[index].icon_path);
+        request.windows[rank].minimized = windows[index].minimized;
+        request.windows[rank].active = index == top_window();
+        request.windows[rank].app_index = app_rank_for_window(index);
+    }
+    if (type == KUI_SHELL_RENDER && shell_cache_valid) {
+        uint32_t serial = request.serial;
+
+        request.serial = 0;
+        if (memcmp(&request, &shell_cached_request, sizeof(request)) == 0) {
+            request.serial = serial;
+            return shell_display_bytes == 0 ? 0 :
+                   kui_display_replay(&frame, shell_display,
+                                      shell_display_bytes);
+        }
+        request.serial = serial;
+    }
+    if (kui_write_all(shell_input, &request, sizeof(request)) < 0 ||
+        kui_read_all_timeout(shell_output, &response, sizeof(response),
+                             timeout_ms) < 0 ||
+        response.magic != KUI_SHELL_MAGIC ||
+        response.version != KUI_SHELL_VERSION ||
+        response.serial != request.serial ||
+        response.display_bytes > KUI_PROTOCOL_MAX_DISPLAY)
+        return -1;
+    if (response.display_bytes != 0) {
+        if (kui_read_all_timeout(shell_output, shell_display,
+                                 response.display_bytes, timeout_ms) < 0 ||
+            kui_display_replay(&frame, shell_display,
+                               response.display_bytes) < 0) {
+            return -1;
+        }
+    }
+    if (type == KUI_SHELL_RENDER) {
+        shell_cached_request = request;
+        shell_cached_request.serial = 0;
+        shell_display_bytes = response.display_bytes;
+        shell_cache_valid = 1;
+    } else if (response.consumed ||
+               response.action != KUI_SHELL_ACTION_NONE) {
+        /* Clicks inside an application do not change shell-owned UI. Keep
+         * Aqua's large Dock frame cached so launching CPU-heavy work from a
+         * button cannot force a full shell redraw at the same time. */
+        shell_cache_valid = 0;
+    }
+    if (result != NULL)
+        *result = response;
+    return 0;
+}
+
+static int dispatch_shell_pointer(int x, int y)
+{
+    struct kui_shell_response response;
+
+    memset(&response, 0, sizeof(response));
+    if (shell_exchange(KUI_SHELL_POINTER, x, y, &response) < 0) {
+        fprintf(stderr, "kuid: shell pointer exchange failed at %d,%d\n",
+                x, y);
+        running = 0;
+        return 1;
+    }
+    if (response.action == KUI_SHELL_ACTION_OPEN_APP) {
+        int app = start_app_by_rank(response.index);
+        if (app >= 0) open_application(&apps[app], NULL);
+    } else if (response.action == KUI_SHELL_ACTION_ACTIVATE_WINDOW) {
+        int index = taskbar_window_by_rank(response.index);
+        if (index >= 0) {
+            windows[index].minimized = 0;
+            raise_window(index);
+        }
+    } else if (response.action == KUI_SHELL_ACTION_CLOSE_ACTIVE) {
+        close_window_index(top_window());
+    } else if (response.action == KUI_SHELL_ACTION_QUIT) {
+        fprintf(stderr, "kuid: shell requested desktop exit\n");
+        running = 0;
+    }
+    return response.consumed != 0;
+}
+
+static void __attribute__((unused)) draw_start_menu(void)
 {
     int count;
     int height;
@@ -815,7 +1239,11 @@ static void draw_start_menu(void)
     if (!start_menu_open) return;
     count = start_entry_count();
     height = 12 + (count + 2) * 26;
-    y = screen_height - TASKBAR_HEIGHT - height;
+    y = aqua_shell() ? 24 : screen_height - TASKBAR_HEIGHT - height;
+    if (aqua_shell()) {
+        x = 4;
+        height = 12 + (count + 1) * 26;
+    }
     kui_fill_rect(&frame, x, y, 250, height, 0x00f5f5f5U);
     kui_outline_rect(&frame, x, y, 250, height, KUI_TITLE_BLUE);
     for (int rank = 0; rank < count; rank++) {
@@ -823,24 +1251,32 @@ static void draw_start_menu(void)
         kui_draw_text(&frame, x + 14, y + 8 + rank * 26,
                       apps[app].name, KUI_BLACK, 0x00f5f5f5U, 0);
     }
-    kui_draw_text(&frame, x + 14, y + 8 + count * 26,
-                  "Close Window", KUI_BLACK, 0x00f5f5f5U, 0);
-    kui_draw_text(&frame, x + 14, y + 8 + (count + 1) * 26,
-                  "Quit to Shell", KUI_BLACK, 0x00f5f5f5U, 0);
+    if (aqua_shell())
+        kui_draw_text(&frame, x + 14, y + 8 + count * 26,
+                      "Quit Aqua", KUI_BLACK, 0x00f5f5f5U, 0);
+    else {
+        kui_draw_text(&frame, x + 14, y + 8 + count * 26,
+                      "Close Window", KUI_BLACK, 0x00f5f5f5U, 0);
+        kui_draw_text(&frame, x + 14, y + 8 + (count + 1) * 26,
+                      "Quit to Shell", KUI_BLACK, 0x00f5f5f5U, 0);
+    }
 }
 
 static void draw_desktop_icons(void)
 {
     int icon = 0;
-    int rows = (screen_height - TASKBAR_HEIGHT - 12) / 82;
+    int rows = (work_height() - 12) / 82;
     if (rows < 1) rows = 1;
     for (int i = 0; i < app_count; i++) {
         int x;
         int y;
         int width;
-        if (!apps[i].desktop) continue;
-        x = 12 + (icon / rows) * 94;
-        y = 8 + (icon % rows) * 82;
+        if (!apps[i].desktop ||
+            (aqua_shell() && strcmp(apps[i].id, "system-disk") != 0))
+            continue;
+        x = aqua_shell() ? screen_width - 94 :
+                           12 + (icon / rows) * 94;
+        y = work_top() + 8 + (icon % rows) * 82;
         if (apps[i].icon.pixels != NULL)
             kui_blit_image(&frame, &apps[i].icon, x + 9, y);
         else {
@@ -877,13 +1313,15 @@ static void render(void)
     if (wallpaper.pixels != NULL)
         kui_blit_image_scaled(&frame, &wallpaper, 0, 0,
                               screen_width, screen_height);
-    else kui_draw_desktop(&frame, 0);
+    else kui_draw_desktop(&frame, work_top());
     draw_desktop_icons();
     for (int i = 0; i < MAX_WINDOWS; i++)
         if (windows[i].visible && !windows[i].minimized)
             draw_window(&windows[i], i == active);
-    draw_taskbar();
-    draw_start_menu();
+    if (shell_exchange(KUI_SHELL_RENDER, cursor_x, cursor_y, NULL) < 0) {
+        fprintf(stderr, "kuid: shell frame render failed\n");
+        running = 0;
+    }
     draw_cursor();
     kui_present(&frame);
 }
@@ -926,9 +1364,33 @@ static void snap_window(int index, int side)
     }
     window->snapped = side;
     window->x = side < 0 ? 0 : half;
-    window->y = 0;
+    window->y = work_top();
     window->width = side < 0 ? half : screen_width - half;
-    window->height = screen_height - TASKBAR_HEIGHT;
+    window->height = work_height();
+    notify_resize(index);
+}
+
+static void maximize_window(int index)
+{
+    struct shell_window *window = &windows[index];
+
+    if (!window->snapped) {
+        window->restore_x = window->x;
+        window->restore_y = window->y;
+        window->restore_width = window->width;
+        window->restore_height = window->height;
+        window->x = 0;
+        window->y = work_top();
+        window->width = screen_width;
+        window->height = work_height();
+        window->snapped = 2;
+    } else {
+        window->x = window->restore_x;
+        window->y = window->restore_y;
+        window->width = window->restore_width;
+        window->height = window->restore_height;
+        window->snapped = 0;
+    }
     notify_resize(index);
 }
 
@@ -949,8 +1411,8 @@ static void activate_taskbar(int x)
 static void activate_start_item(int x, int y)
 {
     int count = start_entry_count();
-    int height = 12 + (count + 2) * 26;
-    int top = screen_height - TASKBAR_HEIGHT - height;
+    int height = 12 + (count + (aqua_shell() ? 1 : 2)) * 26;
+    int top = aqua_shell() ? 24 : screen_height - TASKBAR_HEIGHT - height;
     int rank;
     if (!kui_in_rect(x, y, 3, top, 250, height)) {
         start_menu_open = 0; return;
@@ -960,14 +1422,56 @@ static void activate_start_item(int x, int y)
     if (rank < count) {
         int app = start_app_by_rank(rank);
         if (app >= 0) open_application(&apps[app], NULL);
-    } else if (rank == count) close_window_index(top_window());
+    } else if (aqua_shell()) running = 0;
+    else if (rank == count) close_window_index(top_window());
     else running = 0;
+}
+
+static void activate_dock(int x, int y)
+{
+    int app_icons = start_entry_count();
+    int window_icons = taskbar_window_count();
+    int count;
+    int width;
+    int left;
+    int rank;
+
+    if (app_icons > 12) app_icons = 12;
+    count = app_icons + window_icons;
+    if (count > (screen_width - 20) / 48)
+        count = (screen_width - 20) / 48;
+    width = 20 + count * 48;
+    left = (screen_width - width) / 2;
+    if (!kui_in_rect(x, y, left, screen_height - 58, width, 52))
+        return;
+    rank = (x - left - 10) / 48;
+    if (rank >= 0 && rank < app_icons && rank < count) {
+        int app = start_app_by_rank(rank);
+        if (app >= 0) open_application(&apps[app], NULL);
+    } else if (rank >= app_icons && rank < count) {
+        int index = taskbar_window_by_rank(rank - app_icons);
+        if (index >= 0) {
+            windows[index].minimized = 0;
+            raise_window(index);
+        }
+    }
 }
 
 static void handle_mouse_down(int button)
 {
     int index;
     pointer_window = -1;
+    if (button == 1 && dispatch_shell_pointer(cursor_x, cursor_y))
+        return;
+    if (aqua_shell() && cursor_y < work_top()) {
+        if (button == 1 && cursor_x < 30)
+            start_menu_open = !start_menu_open;
+        return;
+    }
+    if (aqua_shell() && cursor_y >= work_bottom()) {
+        if (button == 1) activate_dock(cursor_x, cursor_y);
+        return;
+    }
     if (cursor_y >= screen_height - TASKBAR_HEIGHT) {
         if (button == 1 && cursor_x < 100)
             start_menu_open = !start_menu_open;
@@ -980,12 +1484,27 @@ static void handle_mouse_down(int button)
     index = window_at(cursor_x, cursor_y);
     if (index >= 0) {
         index = raise_window(index);
-        if (button == 1 &&
+        if (aqua_shell() && button == 1 &&
+            kui_in_rect(cursor_x, cursor_y,
+                        windows[index].x + 8, windows[index].y + 7,
+                        12, 12)) {
+            close_window_index(index);
+        } else if (aqua_shell() && button == 1 &&
+                   kui_in_rect(cursor_x, cursor_y,
+                               windows[index].x + 27,
+                               windows[index].y + 7, 12, 12)) {
+            windows[index].minimized = 1;
+        } else if (aqua_shell() && button == 1 &&
+                   kui_in_rect(cursor_x, cursor_y,
+                               windows[index].x + 46,
+                               windows[index].y + 7, 12, 12)) {
+            maximize_window(index);
+        } else if (!aqua_shell() && button == 1 &&
             kui_in_rect(cursor_x, cursor_y,
                         windows[index].x + windows[index].width - 24,
                         windows[index].y + 4, 19, 17)) {
             close_window_index(index);
-        } else if (button == 1 &&
+        } else if (!aqua_shell() && button == 1 &&
                    kui_in_rect(cursor_x, cursor_y,
                                windows[index].x + windows[index].width - 47,
                                windows[index].y + 4, 19, 17)) {
@@ -1069,11 +1588,11 @@ static int handle_mouse(void)
             window->x = cursor_x - drag_dx;
             window->y = cursor_y - drag_dy;
             if (window->x < 0) window->x = 0;
-            if (window->y < 0) window->y = 0;
+            if (window->y < work_top()) window->y = work_top();
             if (window->x + window->width > screen_width)
                 window->x = screen_width - window->width;
-            if (window->y + window->height > screen_height - TASKBAR_HEIGHT)
-                window->y = screen_height - TASKBAR_HEIGHT - window->height;
+            if (window->y + window->height > work_bottom())
+                window->y = work_bottom() - window->height;
         }
         if (resize_window >= 0 && windows[resize_window].visible) {
             struct shell_window *window = &windows[resize_window];
@@ -1082,8 +1601,8 @@ static int handle_mouse(void)
             if (width < window->minimum_width) width = window->minimum_width;
             if (height < window->minimum_height) height = window->minimum_height;
             if (window->x + width > screen_width) width = screen_width - window->x;
-            if (window->y + height > screen_height - TASKBAR_HEIGHT)
-                height = screen_height - TASKBAR_HEIGHT - window->y;
+            if (window->y + height > work_bottom())
+                height = work_bottom() - window->y;
             if (width != window->width || height != window->height) {
                 window->width = width;
                 window->height = height;
@@ -1194,10 +1713,15 @@ static void restore_console(void)
     fflush(stdout);
 }
 
-int desktop_shell_run(void)
+int desktop_shell_run(const char *shell_path)
 {
     uint32_t last_clock_minute;
+    int shell_restarts = 0;
 
+    if (start_shell(shell_path) < 0) {
+        fprintf(stderr, "kuid: unable to start shell %s\n", shell_path);
+        return 1;
+    }
     if (kui_screen_size(&screen_width, &screen_height) < 0 ||
         screen_width < 320 || screen_height < 200 ||
         screen_width > 4096 || screen_height > 2160) {
@@ -1207,9 +1731,14 @@ int desktop_shell_run(void)
     frame_bytes = (uint32_t)screen_width * screen_height * sizeof(uint32_t);
     frame_pixels = calloc((size_t)screen_width * screen_height,
                           sizeof(uint32_t));
-    if (frame_pixels == NULL) return 1;
+    if (frame_pixels == NULL) {
+        stop_shell();
+        return 1;
+    }
     kui_surface_init(&frame, frame_pixels, screen_width, screen_height);
-    kui_image_load("/usr/share/gui/wallpaper.kimg", &wallpaper);
+    kui_image_load(aqua_shell() ? "/usr/share/gui/aqua-wallpaper.kimg" :
+                                 "/usr/share/gui/wallpaper.kimg",
+                   &wallpaper);
     load_applications();
     cursor_x = screen_width / 2;
     cursor_y = screen_height / 2;
@@ -1220,7 +1749,20 @@ int desktop_shell_run(void)
     render();
     last_clock_minute = kui_ticks_ms() / 60000U;
     while (running) {
+        struct kyleos_fd_status shell_status;
         int changed = handle_mouse();
+
+        if (kui_fd_status(shell_output, &shell_status) < 0 ||
+            shell_status.hung_up) {
+            fprintf(stderr, "kuid: shell %s disconnected\n", shell_name);
+            stop_shell();
+            if (shell_restarts++ == 0 && start_shell(shell_path) == 0) {
+                changed = 1;
+            } else {
+                running = 0;
+                break;
+            }
+        }
         changed |= handle_keyboard();
         changed |= handle_timers();
         if (last_clock_minute != kui_ticks_ms() / 60000U) {
@@ -1236,5 +1778,6 @@ int desktop_shell_run(void)
     kui_image_free(&wallpaper);
     free(frame_pixels);
     frame_pixels = NULL;
+    stop_shell();
     return 0;
 }

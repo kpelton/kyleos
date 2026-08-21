@@ -1,6 +1,7 @@
 #include <fs/vfs.h>
 #include <include/types.h>
 #include <include/uapi/framebuffer.h>
+#include <include/uapi/fd.h>
 #include <mm/mm.h>
 #include <output/output.h>
 #include <output/input.h>
@@ -243,6 +244,17 @@ static int pipe(int pipefd[2])
     if (pipefd == NULL || pipefd >= (int *)KERN_SPACE_BOUNDRY)
         return -1;
     return user_process_pipe(pid, pipefd);
+}
+
+static int fd_status_syscall(int fd, struct kyleos_fd_status *status)
+{
+    struct ktask *task = get_current_process();
+
+    if (status == NULL ||
+        status >= (struct kyleos_fd_status *)KERN_SPACE_BOUNDRY)
+        return -1;
+    return user_process_fd_status(task, fd, &status->readable,
+                                  &status->writable, &status->hung_up);
 }
 
 static int framebuffer_present_syscall(void *pixels, uint32_t bytes)
@@ -796,7 +808,8 @@ void *syscall_tbl[] = {
     (void *)&rmdir,                       // 29
     (void *)&mouse_poll_syscall,          // 30
     (void *)&framebuffer_size_syscall,          // 31
-    (void *)&framebuffer_present_rect_syscall   // 32
+    (void *)&framebuffer_present_rect_syscall,  // 32
+    (void *)&fd_status_syscall                  // 33
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

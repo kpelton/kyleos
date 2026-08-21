@@ -1,6 +1,2 @@
-echo DEMAND-PAGING-START
-demandtest
-echo DEMAND-PAGING-FUNCTIONAL-COMPLETE
-oomtest
-echo PASS-DEMAND-OOM-ISOLATION
-echo DEMAND-PAGING-PASS
+if alltest demand then alltest oom else exit 1
+exit $?

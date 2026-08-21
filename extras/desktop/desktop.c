@@ -1,7 +1,10 @@
-/* KyleOS desktop entry point.  Application behavior lives in clients. */
-#include "extras/desktop/shell.h"
+/* Compatibility launcher for the classic KyleOS desktop environment. */
+#include <unistd.h>
 
 int main(void)
 {
-    return desktop_shell_run();
+    char *argv[] = { "kuid", "/bin/win95-shell", 0 };
+
+    execve("/bin/kuid", argv, 0);
+    return 127;
 }

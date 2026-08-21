@@ -6,6 +6,9 @@ ASFLAGS = -f elf64
 KERNEL_ROOT=$(shell pwd)
 IMAGE ?= $(KERNEL_ROOT)/build/image/test-hd.img
 IMAGE_MOUNT ?= $(KERNEL_ROOT)/build/image/mnt
+TEST_IMAGE ?= $(KERNEL_ROOT)/build/image/test-suite.img
+TEST_IMAGE_MOUNT ?= $(KERNEL_ROOT)/build/image/test-suite-mnt
+TEST_TIMEOUT ?= 180
 USERLAND_STAGE ?= $(KERNEL_ROOT)/build/userland
 KUI_LIBRARY ?= $(USERLAND_STAGE)/libkui.a
 KUI_OBJECT ?= $(USERLAND_STAGE)/kui.o
@@ -13,6 +16,9 @@ KUI_CLIENT_OBJECT ?= $(USERLAND_STAGE)/kui_client.o
 KUI_FILE_DIALOG_OBJECT ?= $(USERLAND_STAGE)/kui_file_dialog.o
 KUI_DIALOG_OBJECT ?= $(USERLAND_STAGE)/kui_dialog.o
 KUI_MENU_OBJECT ?= $(USERLAND_STAGE)/kui_menu.o
+KUI_STYLE_OBJECT ?= $(USERLAND_STAGE)/kui_style.o
+KUI_STYLE_WIN95_OBJECT ?= $(USERLAND_STAGE)/kui_style_win95.o
+KUI_STYLE_AQUA_OBJECT ?= $(USERLAND_STAGE)/kui_style_aqua.o
 MINESWEEPER_WIDGET_OBJECT ?= $(USERLAND_STAGE)/minesweeper_widget.o
 SOLITAIRE_WIDGET_OBJECT ?= $(USERLAND_STAGE)/solitaire_widget.o
 CALCULATOR_WIDGET_OBJECT ?= $(USERLAND_STAGE)/calculator_widget.o
@@ -112,7 +118,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit kui gui-assets desktop finder sysmon editor kterm minesweeper solitaire calculator paint kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc bootstrap-cc doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
+.PHONY: toolchain userland userinit kui gui-assets desktop kuid win95-shell aqua aqua-shell finder sysmon editor cide kterm minesweeper solitaire calculator paint citybuilder parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-paint-brush test-kui-styles test-kui-shells test-suite doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -121,7 +127,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit desktop finder sysmon editor kterm minesweeper solitaire calculator paint kedit rm rmdir fstest gpfault waittest demandtest oomtest breakout cc
+	$(MAKE) userinit desktop kuid win95-shell aqua aqua-shell finder sysmon editor cide kterm minesweeper solitaire calculator paint citybuilder parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -164,7 +170,19 @@ $(KUI_MENU_OBJECT): extras/kui/kui_menu.c extras/kui/kui_menu.h extras/kui/kui.h
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/kui/kui_menu.c -o $@
 
-$(KUI_LIBRARY): $(KUI_OBJECT) $(KUI_CLIENT_OBJECT) $(KUI_FILE_DIALOG_OBJECT) $(KUI_DIALOG_OBJECT) $(KUI_MENU_OBJECT)
+$(KUI_STYLE_OBJECT): extras/kui/kui_style.c extras/kui/kui_style.h
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c $< -o $@
+
+$(KUI_STYLE_WIN95_OBJECT): extras/kui/kui_style_win95.c extras/kui/kui_style.h
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c $< -o $@
+
+$(KUI_STYLE_AQUA_OBJECT): extras/kui/kui_style_aqua.c extras/kui/kui_style.h
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c $< -o $@
+
+$(KUI_LIBRARY): $(KUI_OBJECT) $(KUI_CLIENT_OBJECT) $(KUI_FILE_DIALOG_OBJECT) $(KUI_DIALOG_OBJECT) $(KUI_MENU_OBJECT) $(KUI_STYLE_OBJECT) $(KUI_STYLE_WIN95_OBJECT) $(KUI_STYLE_AQUA_OBJECT)
 	$(AR) rcs $@ $^
 
 $(MINESWEEPER_WIDGET_OBJECT): extras/minesweeper/minesweeper_widget.c extras/minesweeper/minesweeper.h $(KUI_LIBRARY)
@@ -179,9 +197,25 @@ $(CALCULATOR_WIDGET_OBJECT): extras/calculator/calculator_widget.c extras/calcul
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/calculator/calculator_widget.c -o $@
 
-desktop: extras/desktop/desktop.c extras/desktop/shell.c extras/desktop/shell.h extras/kui/kui_protocol.h $(KUI_LIBRARY)
+desktop: extras/desktop/desktop.c
 	mkdir -p $(USERLAND_STAGE)
-	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/desktop/desktop.c extras/desktop/shell.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/desktop
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/desktop
+
+kuid: extras/kuid/kuid.c extras/desktop/shell.c extras/desktop/shell.h extras/kuid/shell_protocol.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/kuid/kuid.c extras/desktop/shell.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kuid
+
+win95-shell: extras/kuid/win95_shell.c extras/kuid/shell_protocol.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/win95-shell
+
+aqua: extras/kuid/aqua.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/aqua
+
+aqua-shell: extras/kuid/aqua_shell.c extras/kuid/shell_protocol.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/aqua-shell
 
 finder: extras/finder/finder.c extras/finder/finder_ipc.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
@@ -194,6 +228,10 @@ sysmon: extras/sysmon/sysmon.c extras/sysmon/sysmon_ipc.h $(KUI_LIBRARY)
 editor: extras/editor/editor.c extras/editor/editor_ipc.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/editor
+
+cide: extras/cide/cide.c extras/editor/editor.c extras/editor/editor_ipc.h extras/editor/c_syntax.c extras/editor/c_syntax.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/cide/cide.c extras/editor/c_syntax.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/cide
 
 kterm: extras/terminal/terminal.c extras/terminal/terminal_ipc.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
@@ -211,9 +249,18 @@ calculator: extras/calculator/calculator.c $(KUI_LIBRARY) $(CALCULATOR_WIDGET_OB
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(CALCULATOR_WIDGET_OBJECT) $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/calculator
 
-paint: extras/paint/paint.c $(KUI_LIBRARY)
+paint: extras/paint/paint.c extras/paint/paint_brush.c extras/paint/paint_brush.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
-	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/paint
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/paint/paint.c extras/paint/paint_brush.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/paint
+
+citybuilder: extras/citybuilder/citybuilder.c extras/citybuilder/city_sim.c extras/citybuilder/city_sim.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/citybuilder/citybuilder.c extras/citybuilder/city_sim.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/citybuilder
+
+parallel-writers: extras/parallel-writer/parallel_writer.c $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -DWRITER_SIDE=0 -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/parallel-writer-a
+	$(CC) $(GUI_CFLAGS) -DWRITER_SIDE=1 -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/parallel-writer-b
 
 rm: extras/rm/rm.c
 	mkdir -p $(USERLAND_STAGE)
@@ -222,6 +269,57 @@ rm: extras/rm/rm.c
 rmdir: extras/rmdir/rmdir.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/rmdir
+
+alltest: extras/alltest/alltest.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/alltest
+
+test-alltest-runner:
+	bash tests/test-alltest-runner.sh
+
+test-c-syntax:
+	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-c-syntax.c extras/editor/c_syntax.c \
+		-o /tmp/os3-test-c-syntax
+	/tmp/os3-test-c-syntax
+
+test-city-sim:
+	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-city-sim.c extras/citybuilder/city_sim.c \
+		-o /tmp/os3-test-city-sim
+	/tmp/os3-test-city-sim
+
+test-paint-brush:
+	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-paint-brush.c extras/paint/paint_brush.c \
+		-o /tmp/os3-test-paint-brush
+	/tmp/os3-test-paint-brush
+
+test-kui-styles:
+	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-kui-styles.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-test-kui-styles
+	/tmp/os3-test-kui-styles
+
+test-kui-shells:
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		extras/kuid/win95_shell.c extras/kui/kui.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-win95-shell-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		extras/kuid/aqua_shell.c extras/kui/kui.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-aqua-shell-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-kui-shells.c extras/kui/kui.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-test-kui-shells
+	/tmp/os3-test-kui-shells /tmp/os3-win95-shell-host /tmp/os3-aqua-shell-host
+
+kmsgtest: extras/kmsgtest/kmsgtest.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kmsgtest
 
 fstest: extras/fstest/fstest.c
 	mkdir -p $(USERLAND_STAGE)
@@ -234,6 +332,10 @@ gpfault: extras/gpfault/gpfault.c
 waittest: extras/waittest/waittest.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/waittest
+
+pipetest: extras/pipetest/pipetest.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/pipetest
 
 demandtest: extras/demandtest/demandtest.c
 	mkdir -p $(USERLAND_STAGE)
@@ -331,7 +433,7 @@ kvm-test: kernel32.bin
 test-c: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -display none -serial stdio 2>log
 debug: kernel32.bin
-	qemu-system-x86_64 -m 8G -kernel kernel32.bin -hda test-hd.img -serial stdio -s -S
+	qemu-system-x86_64 -m 8G -kernel kernel32.bin -hda $(IMAGE) -serial stdio -s -S
 debug-nox: kernel32.bin
 	qemu-system-x86_64 -m 8G -display none -kernel kernel32.bin -hda test-hd.img -serial stdio -s -S
 
@@ -352,5 +454,6 @@ iso-test: iso
 		-cdrom bootable.iso \
 		-serial stdio
 
-test-suite:kernel.bin
-	bash test.sh 2>/dev/null
+test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-paint-brush test-kui-styles test-kui-shells
+	$(MAKE) image-reset IMAGE=$(TEST_IMAGE) IMAGE_MOUNT=$(TEST_IMAGE_MOUNT)
+	TEST_KERNEL=$(KERNEL_ROOT)/kernel32.bin TEST_IMAGE=$(TEST_IMAGE) TEST_TIMEOUT=$(TEST_TIMEOUT) bash tests/e2e/all-tests.sh

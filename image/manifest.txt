@@ -1,12 +1,17 @@
 # Files installed by `make image` after `make userland` stages them.
 # Doom assets are deliberately not listed: put user-owned assets in assets/
 # and install them explicitly with `make image-copy FILE=...`.
+alltest
+aqua
+aqua-shell
 argv
 argv-copy
 breakout
 calculator
 cat
 cc
+cide
+citybuilder
 constest
 cp
 donut
@@ -22,6 +27,8 @@ ed
 grep
 head
 kedit
+kmsgtest
+kuid
 kterm
 ls
 mkdir
@@ -30,6 +37,9 @@ mv
 nushell
 oomtest
 paint
+pipetest
+parallel-writer-a
+parallel-writer-b
 rdwr
 rm
 rmdir
@@ -42,3 +52,5 @@ testprint
 wc
 write
 writebomb
+win95-shell
+ued

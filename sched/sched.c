@@ -68,16 +68,25 @@ void sched_sleep_on(void *channel)
 
 void sched_wakeup(void *channel)
 {
+    bool lock_already_held;
+
     if (channel == NULL)
         return;
-    acquire_spinlock(&sched_spinlock);
+    /* Process teardown closes descriptors while holding the scheduler lock.
+     * KyleOS currently schedules on one CPU, so a set lock here means this
+     * CPU already owns it and pipe-close wakeups must not reacquire it. */
+    lock_already_held =
+        __sync_val_compare_and_swap(&sched_spinlock.lock, 0, 0) != 0;
+    if (!lock_already_held)
+        acquire_spinlock(&sched_spinlock);
     for (int i = 0; i < SCHED_MAX_TASKS; i++)
         if (ktasks[i].pid != -1 && ktasks[i].state == TASK_BLOCKED &&
             ktasks[i].wait_channel == channel) {
             ktasks[i].wait_channel = NULL;
             ktasks[i].state = TASK_READY;
         }
-    release_spinlock(&sched_spinlock);
+    if (!lock_already_held)
+        release_spinlock(&sched_spinlock);
 }
 
 bool sched_sleep_on_if(void *channel, volatile int *condition)

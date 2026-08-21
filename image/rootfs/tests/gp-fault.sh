@@ -1,4 +1,2 @@
-echo GP-FAULT-SUITE-START
-gpfault
-echo PASS-GP-FAULT-ISOLATION
-echo GP-FAULT-SUITE-COMPLETE
+alltest gp
+exit $?

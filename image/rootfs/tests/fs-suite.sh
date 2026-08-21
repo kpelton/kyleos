@@ -1,2 +1,2 @@
-fstest
-echo FS-SUITE-COMPLETE
+alltest fs
+exit $?

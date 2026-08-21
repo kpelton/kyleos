@@ -28,10 +28,10 @@ has a framebuffer-capable DoomGeneric port.
 - User-mode page and general-protection faults terminate only the offending
   process; kernel-mode faults retain the register-dump panic path.
 - UART/serial input, keyboard input, raw-console mode, and a framebuffer.
-- PS/2 mouse input and an early-2000s-inspired userspace desktop at
-  `/bin/desktop`, with a taskbar, Start menu, minimizable windows, raster
-  icons, and keyboard fallback. Each Finder window runs `/bin/finder` as a
-  separate process and exchanges directory state with the desktop over pipes.
+- PS/2 mouse input and a shared userspace compositor at `/bin/kuid`. Launch
+  `/bin/desktop` for the classic taskbar/Start environment or `/bin/aqua` for
+  the Aqua-inspired menu bar, Dock, and traffic-light window controls. Both
+  environments run the same KUI application processes and compositor.
 - Small userspace: `ls`, `cat`, `cp`, `rm`, `mkdir`, `grep`, `wc`, `head`,
   `tail`, `mv`, `ed`, `kedit`, and more.
 - Incrementally rendered ASCII Breakout at `/bin/breakout` (`a`/`d` move,
@@ -45,13 +45,35 @@ has a framebuffer-capable DoomGeneric port.
 - A native x86-64 TinyCC at `/bin/cc`, including headers, static Newlib,
   compiler sources, and a tested stage-2/stage-3 self-bootstrap path.
 
+### KUI desktop environments
+
+`kuid` owns the framebuffer, input routing, application surfaces, focus,
+authoritative window geometry, and command validation. It starts one privileged
+shell process and exchanges versioned state, drawing commands, hit consumption,
+and shell actions over pipes. `win95-shell` owns the classic taskbar and Start
+menu; `aqua-shell` owns the top menu bar and Dock. Window decorations use the
+metrics and style supplied by that shell.
+
+Applications receive the shell style in their normal KUI event stream, so the
+same Finder, editor, terminal, games, dialogs, and menus render consistently in
+either environment. Pipe-readiness status and bounded compositor reads prevent
+a disconnected or stalled client from blocking the display server forever.
+
+From the KyleOS console, start either environment with:
+
+```sh
+desktop
+aqua
+```
+
 ## Prerequisites
 
 On a Debian/Ubuntu-style host, install the host tools:
 
 ```bash
 sudo apt install build-essential gcc-13 nasm binutils qemu-system-x86 \
-  dosfstools kpartx util-linux
+  dosfstools kpartx util-linux imagemagick python3-pil fontconfig \
+  fonts-dejavu-core
 ```
 
 You also need `sudo` access for creating, mapping, formatting, and mounting
@@ -253,15 +275,15 @@ It prints an individual PASS/FAIL line and a final report.  The suite covers
 FAT and `/tmp` file operations, directory removal, and `/dev/null` and
 `/dev/zero`; it cleans up its own test files.
 
-To stress the kernel heap with repeated large RAMFS allocations, after the
-Bible text has been installed run:
+To exercise repeated copy, byte-integrity, and cleanup paths using the bundled
+`/bin/nushell` binary, run:
 
 ```sh
 nushell < /tests/heap-copy.sh
 ```
 
-It copies `/usr/share/text/bible.txt` to `/tmp` four times, removing each
-temporary copy before the next pass.
+It copies the binary to `/tmp` four times, compares every byte, and verifies
+that each temporary file was removed.
 
 The user-fault regression test deliberately executes a privileged instruction
 in a child process; it should print `Segfault` and return to its invoking
@@ -286,8 +308,20 @@ Run every in-image regression in sequence with:
 nushell < /tests/all.sh
 ```
 
-The integrated runner ends with `ALL-TESTS-COMPLETE`.  It requires the Bible
-text installed by `make image` or `make image-reset` for the heap-copy phase.
+The integrated runner stops at the first failure and exits nonzero. It prints
+`ALL-TESTS-COMPLETE count=9` exactly once only after checking every child exit
+status, copy integrity and cleanup, isolated fault status, and all 200 exec
+iterations. The copy phase uses `/bin/nushell`, so it has no optional fixture.
+
+Run the host control-flow check and the complete snapshot-based QEMU suite with:
+
+```sh
+make test-alltest-runner
+make test-suite
+```
+
+`make test-suite` rebuilds a dedicated `build/image/test-suite.img`; it does not
+modify the normal persistent development image.
 
 ## Native C compiler and bootstrap
 
@@ -309,6 +343,21 @@ Compile and run a C program inside KyleOS:
 cc /tests/hello.c -o /tmp/hello
 /tmp/hello
 ```
+
+KyleOS also includes a separate graphical C IDE. After rebuilding the image,
+start the Aqua desktop and open **C IDE** from the Dock (it is also available
+from the KyleOS 95 Start menu):
+
+```sh
+aqua
+```
+
+The IDE opens `/hello.c` by default and provides line numbers, C syntax
+highlighting, Open/Save controls, and integrated Build and Run actions. Press
+F5 to compile the current source with `/bin/cc`, or F6 to compile and run it.
+Builds run in the background so the desktop remains responsive. Compiler
+diagnostics are shown in the IDE status bar and written to
+`/tmp/cide.log`; successful builds produce `/tmp/cide.out`.
 
 The complete self-hosting check builds TinyCC stage 2 with the host-built
 KyleOS compiler, builds stage 3 with stage 2, and uses both native stages to

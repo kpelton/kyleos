@@ -143,16 +143,21 @@ void kui_input_dialog_render(struct kui_surface *surface,
 
     if (!dialog->active) return;
     input_dialog_layout(event, &layout);
-    kui_fill_rect(surface, layout.x + 5, layout.y + 5,
-                  layout.width, layout.height, 0x00505050U);
-    kui_fill_rect(surface, layout.x, layout.y,
-                  layout.width, layout.height, KUI_FACE);
-    kui_outline_rect(surface, layout.x, layout.y,
-                     layout.width, layout.height, KUI_BLACK);
-    kui_fill_rect(surface, layout.x + 3, layout.y + 3,
-                  layout.width - 6, 22, KUI_TITLE_BLUE);
-    kui_draw_text(surface, layout.x + 8, layout.y + 8,
-                  dialog->title, KUI_WHITE, KUI_TITLE_BLUE, 0);
+    if (kui_style_current()->flags & KUI_STYLE_AQUA)
+        kui_draw_window(surface, layout.x, layout.y,
+                        layout.width, layout.height, dialog->title, 1);
+    else {
+        kui_fill_rect(surface, layout.x + 5, layout.y + 5,
+                      layout.width, layout.height, 0x00505050U);
+        kui_fill_rect(surface, layout.x, layout.y,
+                      layout.width, layout.height, KUI_FACE);
+        kui_outline_rect(surface, layout.x, layout.y,
+                         layout.width, layout.height, KUI_BLACK);
+        kui_fill_rect(surface, layout.x + 3, layout.y + 3,
+                      layout.width - 6, 22, KUI_TITLE_BLUE);
+        kui_draw_text(surface, layout.x + 8, layout.y + 8,
+                      dialog->title, KUI_WHITE, KUI_TITLE_BLUE, 0);
+    }
     kui_draw_text(surface, layout.x + 12, layout.y + 38,
                   dialog->prompt, KUI_BLACK, KUI_FACE, 0);
     kui_fill_rect(surface, layout.field_x, layout.field_y,
@@ -259,12 +264,16 @@ void kui_confirm_dialog_render(struct kui_surface *surface,
     accept_x = x + width - 174;
     cancel_x = x + width - 90;
     button_y = y + height - 35;
-    kui_fill_rect(surface, x + 5, y + 5, width, height, 0x00505050U);
-    kui_fill_rect(surface, x, y, width, height, KUI_FACE);
-    kui_outline_rect(surface, x, y, width, height, KUI_BLACK);
-    kui_fill_rect(surface, x + 3, y + 3, width - 6, 22, KUI_TITLE_BLUE);
-    kui_draw_text(surface, x + 8, y + 8, dialog->title,
-                  KUI_WHITE, KUI_TITLE_BLUE, 0);
+    if (kui_style_current()->flags & KUI_STYLE_AQUA)
+        kui_draw_window(surface, x, y, width, height, dialog->title, 1);
+    else {
+        kui_fill_rect(surface, x + 5, y + 5, width, height, 0x00505050U);
+        kui_fill_rect(surface, x, y, width, height, KUI_FACE);
+        kui_outline_rect(surface, x, y, width, height, KUI_BLACK);
+        kui_fill_rect(surface, x + 3, y + 3, width - 6, 22, KUI_TITLE_BLUE);
+        kui_draw_text(surface, x + 8, y + 8, dialog->title,
+                      KUI_WHITE, KUI_TITLE_BLUE, 0);
+    }
     kui_draw_text(surface, x + 16, y + 45, dialog->message,
                   KUI_BLACK, KUI_FACE, 0);
     kui_draw_button(surface, accept_x, button_y, 76, 25,

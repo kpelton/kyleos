@@ -1,8 +1,5 @@
 echo CC-HELLO-START
-cc /tests/hello.c -o /tmp/hello
-echo CC-COMPILE-STATUS
-echo $?
-/tmp/hello
-echo CC-RUN-STATUS
-echo $?
+if cc /tests/hello.c -o /tmp/hello then echo CC-COMPILE-PASS else exit 1
+if /tmp/hello then echo CC-RUN-PASS else exit 1
 echo CC-HELLO-TEST-COMPLETE
+exit 0

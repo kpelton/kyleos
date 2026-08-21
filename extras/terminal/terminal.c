@@ -221,9 +221,9 @@ static void terminal_render(struct kui_client *client,
         if (ch == '\t') ch = ' ';
         if (row >= first_row && row < first_row + rows &&
             ch >= 32 && ch < 127)
-            kui_draw_char(&client->surface, 7 + column * 8,
-                          4 + (row - first_row) * 16, ch,
-                          0x0000ff80U, KUI_BLACK, 0);
+            kui_draw_mono_char(&client->surface, 7 + column * 8,
+                               4 + (row - first_row) * 16, ch,
+                               0x0000ff80U, KUI_BLACK, 0);
         if (++column >= columns) { row++; column = 0; }
     }
     if (row >= first_row && row < first_row + rows)

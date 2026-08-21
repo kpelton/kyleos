@@ -19,6 +19,8 @@ int kui_client_read_event(struct kui_event *event)
     if (event->magic != KUI_PROTOCOL_MAGIC ||
         event->version != KUI_PROTOCOL_VERSION)
         return -1;
+    if (event->style.id != 0)
+        kui_style_apply(&event->style);
     event->argument[sizeof(event->argument) - 1] = '\0';
     event->clipboard[sizeof(event->clipboard) - 1] = '\0';
     return 0;

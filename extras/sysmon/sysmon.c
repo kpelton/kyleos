@@ -67,13 +67,13 @@ static void sysmon_render(struct kui_client *client,
             color = KUI_TITLE_BLUE;
         else if (strncmp(line, "PID  ", 5) == 0)
             color = 0x00316ac5U;
-        kui_draw_text(&client->surface, 9, 5 + row * 16,
-                      line, color, KUI_WHITE, 0);
+        kui_draw_mono_text(&client->surface, 9, 5 + row * 16,
+                           line, color, KUI_WHITE, 0);
         row++;
     }
-    kui_draw_text(&client->surface, 9, event->height - 19,
-                  "Live data from /proc - refreshes every second",
-                  0x00545c68U, KUI_WHITE, 0);
+    kui_draw_mono_text(&client->surface, 9, event->height - 19,
+                       "Live data from /proc - refreshes every second",
+                       0x00545c68U, KUI_WHITE, 0);
 }
 
 static int embedded_main(void)

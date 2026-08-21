@@ -9,6 +9,125 @@
 #include "include/uapi/mouse.h"
 #include "output/font.h"
 
+#define KUI_KFONT_VERSION 1U
+#define KUI_KFONT_GLYPHS 256U
+
+struct kui_kfont_header {
+    unsigned char magic[4];
+    uint32_t version;
+    uint32_t glyph_count;
+    uint32_t atlas_width;
+    uint32_t atlas_height;
+    uint32_t line_height;
+    uint32_t baseline;
+    uint32_t data_bytes;
+};
+
+struct kui_kfont_glyph {
+    uint16_t x;
+    uint16_t y;
+    uint16_t width;
+    uint16_t height;
+    int16_t offset_x;
+    int16_t offset_y;
+    int16_t advance;
+    int16_t reserved;
+};
+
+_Static_assert(sizeof(struct kui_kfont_header) == 32,
+               "KFONT header layout changed");
+_Static_assert(sizeof(struct kui_kfont_glyph) == 16,
+               "KFONT glyph layout changed");
+
+struct kui_kfont {
+    int attempted;
+    int loaded;
+    int atlas_width;
+    int atlas_height;
+    int line_height;
+    struct kui_kfont_glyph glyphs[KUI_KFONT_GLYPHS];
+    unsigned char *alpha;
+};
+
+static struct kui_kfont kui_fonts[3];
+
+static int kui_kfont_open(const char *path, const char *host_path)
+{
+    int fd = open(path, O_RDONLY);
+
+    if (fd < 0 && host_path != NULL)
+        fd = open(host_path, O_RDONLY);
+    return fd;
+}
+
+static int kui_kfont_load(struct kui_kfont *font,
+                          const char *path, const char *host_path)
+{
+    struct kui_kfont_header header;
+    unsigned char *alpha = NULL;
+    int fd;
+
+    font->attempted = 1;
+    fd = kui_kfont_open(path, host_path);
+    if (fd < 0 || kui_read_all(fd, &header, sizeof(header)) < 0 ||
+        memcmp(header.magic, "KFN1", 4) != 0 ||
+        header.version != KUI_KFONT_VERSION ||
+        header.glyph_count != KUI_KFONT_GLYPHS ||
+        header.atlas_width == 0 || header.atlas_width > 2048 ||
+        header.atlas_height == 0 || header.atlas_height > 2048 ||
+        header.line_height < 8 || header.line_height > 64 ||
+        header.data_bytes != header.atlas_width * header.atlas_height ||
+        kui_read_all(fd, font->glyphs, sizeof(font->glyphs)) < 0)
+        goto failed;
+    alpha = malloc(header.data_bytes);
+    if (alpha == NULL || kui_read_all(fd, alpha, header.data_bytes) < 0)
+        goto failed;
+    for (unsigned int index = 0; index < KUI_KFONT_GLYPHS; index++) {
+        const struct kui_kfont_glyph *glyph = &font->glyphs[index];
+
+        if (glyph->x > header.atlas_width ||
+            glyph->width > header.atlas_width - glyph->x ||
+            glyph->y > header.atlas_height ||
+            glyph->height > header.atlas_height - glyph->y ||
+            glyph->advance < 0 || glyph->advance > 64)
+            goto failed;
+    }
+    close(fd);
+    font->atlas_width = (int)header.atlas_width;
+    font->atlas_height = (int)header.atlas_height;
+    font->line_height = (int)header.line_height;
+    font->alpha = alpha;
+    font->loaded = 1;
+    return 0;
+
+failed:
+    if (fd >= 0) close(fd);
+    free(alpha);
+    memset(font->glyphs, 0, sizeof(font->glyphs));
+    return -1;
+}
+
+static const struct kui_kfont *kui_kfont_current(int monospace)
+{
+    int index = monospace ? 2 :
+                (kui_style_current()->flags & KUI_STYLE_AQUA ? 1 : 0);
+    struct kui_kfont *font = &kui_fonts[index];
+    static const char *paths[] = {
+        "/usr/share/gui/font-win95.kfont",
+        "/usr/share/gui/font-aqua.kfont",
+        "/usr/share/gui/font-mono.kfont"
+    };
+    static const char *host_paths[] = {
+        "image/rootfs/usr/share/gui/font-win95.kfont",
+        "image/rootfs/usr/share/gui/font-aqua.kfont",
+        "image/rootfs/usr/share/gui/font-mono.kfont"
+    };
+
+    if (!font->attempted)
+        kui_kfont_load(font, paths[index], host_paths[index]);
+    return font->loaded ? font : NULL;
+}
+
 void kui_surface_init(struct kui_surface *surface, uint32_t *pixels,
                       int width, int height)
 {
@@ -26,6 +145,45 @@ int kui_read_all(int fd, void *buffer, uint32_t bytes)
     while (total < bytes) {
         int count = read(fd, (char *)buffer + total, bytes - total);
         if (count <= 0) return -1;
+        total += (uint32_t)count;
+    }
+    return 0;
+}
+
+int kui_fd_status(int fd, struct kyleos_fd_status *status)
+{
+    register long rax asm("rax") = 33;
+
+    asm volatile("int $0x80" : "+a"(rax) : "D"((long)fd), "S"(status)
+                 : "memory");
+    return (int)rax;
+}
+
+int kui_read_all_timeout(int fd, void *buffer, uint32_t bytes,
+                         uint32_t timeout_ms)
+{
+    uint32_t total = 0;
+    uint32_t start = kui_ticks_ms();
+
+    while (total < bytes) {
+        struct kyleos_fd_status status;
+        uint32_t remaining;
+        uint32_t chunk;
+        int count;
+
+        if (kui_fd_status(fd, &status) < 0)
+            return -1;
+        if (status.readable == 0) {
+            if (status.hung_up || kui_ticks_ms() - start >= timeout_ms)
+                return -1;
+            kui_sleep_ms(1);
+            continue;
+        }
+        remaining = bytes - total;
+        chunk = status.readable < remaining ? status.readable : remaining;
+        count = read(fd, (char *)buffer + total, chunk);
+        if (count <= 0)
+            return -1;
         total += (uint32_t)count;
     }
     return 0;
@@ -106,6 +264,8 @@ void kui_surface_init_commands(struct kui_surface *surface,
     surface->commands = buffer;
 }
 
+static uint32_t kui_alpha_pixel(uint32_t destination, uint32_t source);
+
 static void kui_record_command(struct kui_surface *surface, uint16_t type,
                                int x0, int y0, int x1, int y1,
                                uint32_t foreground, uint32_t background,
@@ -160,6 +320,43 @@ static void kui_record_bitmap_row(struct kui_surface *surface,
     command = kui_command_append(surface->commands, bytes);
     if (command == NULL) return;
     command->type = KUI_DISPLAY_BITMAP_ROW;
+    command->size = (uint16_t)bytes;
+    command->x0 = x;
+    command->y0 = y;
+    command->x1 = width;
+    command->y1 = height;
+    command->foreground = (uint32_t)source_width;
+    command->background = (uint32_t)source_height;
+    command->flags = (uint32_t)source_y;
+    memcpy(command + 1, pixels, pixel_bytes);
+}
+
+static void kui_record_bitmap_alpha_row(struct kui_surface *surface,
+                                        const uint32_t *pixels,
+                                        int source_width, int source_height,
+                                        int source_y, int x, int y,
+                                        int width, int height)
+{
+    struct kui_display_command *command;
+    uint32_t pixel_bytes;
+    uint32_t bytes;
+
+    if (surface == NULL || surface->commands == NULL || pixels == NULL ||
+        source_width <= 0 || source_height <= 0 || source_y < 0 ||
+        source_y >= source_height) {
+        if (surface != NULL && surface->commands != NULL)
+            surface->commands->failed = 1;
+        return;
+    }
+    pixel_bytes = (uint32_t)source_width * sizeof(uint32_t);
+    bytes = sizeof(*command) + pixel_bytes;
+    if (source_width > 4096 || source_height > 2160 || bytes > 0xffffU) {
+        surface->commands->failed = 1;
+        return;
+    }
+    command = kui_command_append(surface->commands, bytes);
+    if (command == NULL) return;
+    command->type = KUI_DISPLAY_BITMAP_ALPHA_ROW;
     command->size = (uint16_t)bytes;
     command->x0 = x;
     command->y0 = y;
@@ -226,14 +423,21 @@ int kui_display_replay(struct kui_surface *surface,
         command = (const struct kui_display_command *)cursor;
         if (command->size < sizeof(*command) || command->size > remaining)
             return -1;
-        if (command->type == KUI_DISPLAY_FILL_RECT) {
+        if (command->type == KUI_DISPLAY_FILL_RECT ||
+            command->type == KUI_DISPLAY_FILL_RECT_ALPHA) {
             if (command->x0 < -8192 || command->x0 > 8192 ||
                 command->y0 < -8192 || command->y0 > 8192 ||
                 command->x1 < 0 || command->x1 > 8192 ||
                 command->y1 < 0 || command->y1 > 8192)
                 return -1;
-            kui_fill_rect(surface, command->x0, command->y0,
-                          command->x1, command->y1, command->foreground);
+            if (command->type == KUI_DISPLAY_FILL_RECT_ALPHA)
+                kui_fill_rect_alpha(surface, command->x0, command->y0,
+                                    command->x1, command->y1,
+                                    command->foreground);
+            else
+                kui_fill_rect(surface, command->x0, command->y0,
+                              command->x1, command->y1,
+                              command->foreground);
         } else if (command->type == KUI_DISPLAY_LINE) {
             if (command->x0 < -8192 || command->x0 > 8192 ||
                 command->y0 < -8192 || command->y0 > 8192 ||
@@ -249,12 +453,20 @@ int kui_display_replay(struct kui_surface *surface,
             if (command->x0 < -8192 || command->x0 > 8192 ||
                 command->y0 < -8192 || command->y0 > 8192 ||
                 text_bytes == 0 || text_bytes > 4096 ||
-                text[text_bytes - 1] != '\0')
+                text[text_bytes - 1] != '\0' ||
+                (command->flags & ~(KUI_TEXT_OPAQUE |
+                                    KUI_TEXT_MONOSPACE)) != 0)
                 return -1;
-            kui_draw_text(surface, command->x0, command->y0, text,
-                          command->foreground, command->background,
-                          (int)command->flags);
-        } else if (command->type == KUI_DISPLAY_BITMAP_ROW) {
+            if (command->flags & KUI_TEXT_MONOSPACE)
+                kui_draw_mono_text(surface, command->x0, command->y0, text,
+                                   command->foreground, command->background,
+                                   (command->flags & KUI_TEXT_OPAQUE) != 0);
+            else
+                kui_draw_text(surface, command->x0, command->y0, text,
+                              command->foreground, command->background,
+                              (command->flags & KUI_TEXT_OPAQUE) != 0);
+        } else if (command->type == KUI_DISPLAY_BITMAP_ROW ||
+                   command->type == KUI_DISPLAY_BITMAP_ALPHA_ROW) {
             uint32_t source_width = command->foreground;
             uint32_t source_height = command->background;
             uint32_t source_y = command->flags;
@@ -296,8 +508,12 @@ int kui_display_replay(struct kui_surface *surface,
                      destination_x < right; destination_x++) {
                     int source_x = (destination_x - command->x0) *
                                    (int)source_width / command->x1;
-                    destination[destination_x] =
-                        source[source_x] & 0x00ffffffU;
+                    if (command->type == KUI_DISPLAY_BITMAP_ALPHA_ROW)
+                        destination[destination_x] = kui_alpha_pixel(
+                            destination[destination_x], source[source_x]);
+                    else
+                        destination[destination_x] =
+                            source[source_x] & 0x00ffffffU;
                 }
             }
         } else if (command->type == KUI_DISPLAY_BITMAP_REGION_ROW) {
@@ -557,6 +773,27 @@ void kui_fill_rect(struct kui_surface *surface, int x, int y, int w, int h,
             surface->pixels[row * surface->stride + col] = color;
 }
 
+void kui_fill_rect_alpha(struct kui_surface *surface, int x, int y,
+                         int w, int h, uint32_t color)
+{
+    int x0 = x < 0 ? 0 : x;
+    int y0 = y < 0 ? 0 : y;
+    int x1 = x + w > surface->width ? surface->width : x + w;
+    int y1 = y + h > surface->height ? surface->height : y + h;
+
+    if (surface->commands != NULL) {
+        kui_record_command(surface, KUI_DISPLAY_FILL_RECT_ALPHA,
+                           x, y, w, h, color, 0, 0, NULL);
+        return;
+    }
+    for (int row = y0; row < y1; row++)
+        for (int col = x0; col < x1; col++) {
+            uint32_t *pixel = &surface->pixels[row * surface->stride + col];
+
+            *pixel = kui_alpha_pixel(*pixel, color);
+        }
+}
+
 void kui_outline_rect(struct kui_surface *surface, int x, int y, int w, int h,
                       uint32_t color)
 {
@@ -589,18 +826,13 @@ void kui_line(struct kui_surface *surface, int x0, int y0, int x1, int y1,
     }
 }
 
-void kui_draw_char(struct kui_surface *surface, int x, int y,
-                   unsigned char ch, uint32_t foreground,
-                   uint32_t background, int opaque)
+static int kui_draw_fallback_char(struct kui_surface *surface, int x, int y,
+                                  unsigned char ch, uint32_t foreground,
+                                  uint32_t background, int opaque)
 {
-    if (surface->commands != NULL) {
-        char text[2] = { (char)ch, '\0' };
-        kui_record_command(surface, KUI_DISPLAY_TEXT, x, y, 0, 0,
-                           foreground, background, (uint32_t)opaque, text);
-        return;
-    }
     for (int row = 0; row < 16; row++) {
         uint8_t bits = terminal_font[(unsigned)ch * 16 + row];
+
         for (int col = 0; col < 8; col++) {
             if (bits & (0x80 >> col))
                 kui_pixel(surface, x + col, y + row, foreground);
@@ -608,27 +840,185 @@ void kui_draw_char(struct kui_surface *surface, int x, int y,
                 kui_pixel(surface, x + col, y + row, background);
         }
     }
+    return 8;
+}
+
+static int kui_draw_kfont_char(struct kui_surface *surface, int x, int y,
+                               unsigned char ch, uint32_t foreground,
+                               uint32_t background, int opaque,
+                               const struct kui_kfont *font)
+{
+    const struct kui_kfont_glyph *glyph = &font->glyphs[ch];
+    int advance;
+
+    if (glyph->advance == 0 && ch != ' ')
+        glyph = &font->glyphs[(unsigned char)'?'];
+    advance = glyph->advance > 0 ? glyph->advance : 8;
+    if (opaque)
+        kui_fill_rect(surface, x, y, advance, font->line_height, background);
+    for (int row = 0; row < glyph->height; row++) {
+        int destination_y = y + glyph->offset_y + row;
+
+        if ((unsigned)destination_y >= (unsigned)surface->height)
+            continue;
+        for (int column = 0; column < glyph->width; column++) {
+            int destination_x = x + glyph->offset_x + column;
+            unsigned char alpha;
+            uint32_t source;
+            uint32_t *destination;
+
+            if ((unsigned)destination_x >= (unsigned)surface->width)
+                continue;
+            alpha = font->alpha[(glyph->y + row) * font->atlas_width +
+                                glyph->x + column];
+            if (alpha == 0) continue;
+            source = ((uint32_t)alpha << 24) | (foreground & 0x00ffffffU);
+            destination = &surface->pixels[
+                destination_y * surface->stride + destination_x];
+            *destination = kui_alpha_pixel(*destination, source);
+        }
+    }
+    return advance;
+}
+
+static int kui_draw_font_char(struct kui_surface *surface, int x, int y,
+                              unsigned char ch, uint32_t foreground,
+                              uint32_t background, int opaque, int monospace)
+{
+    const struct kui_kfont *font = kui_kfont_current(monospace);
+
+    if (font == NULL)
+        return kui_draw_fallback_char(surface, x, y, ch, foreground,
+                                      background, opaque);
+    return kui_draw_kfont_char(surface, x, y, ch, foreground,
+                               background, opaque, font);
+}
+
+static void kui_draw_text_role(struct kui_surface *surface, int x, int y,
+                               const char *text, uint32_t foreground,
+                               uint32_t background, int opaque, int monospace)
+{
+    if (surface->commands != NULL) {
+        uint32_t flags = opaque ? KUI_TEXT_OPAQUE : 0;
+
+        if (monospace) flags |= KUI_TEXT_MONOSPACE;
+        kui_record_command(surface, KUI_DISPLAY_TEXT, x, y, 0, 0,
+                           foreground, background, flags, text);
+        return;
+    }
+    while (*text != '\0') {
+        x += kui_draw_font_char(surface, x, y, (unsigned char)*text++,
+                                foreground, background, opaque, monospace);
+    }
+}
+
+static int kui_text_width_role(const char *text, int monospace)
+{
+    const struct kui_kfont *font = kui_kfont_current(monospace);
+    int width = 0;
+
+    if (font == NULL) return (int)strlen(text) * 8;
+    while (*text != '\0') {
+        const struct kui_kfont_glyph *glyph =
+            &font->glyphs[(unsigned char)*text++];
+
+        if (glyph->advance == 0)
+            glyph = &font->glyphs[(unsigned char)'?'];
+        width += glyph->advance > 0 ? glyph->advance : 8;
+    }
+    return width;
+}
+
+void kui_draw_char(struct kui_surface *surface, int x, int y,
+                   unsigned char ch, uint32_t foreground,
+                   uint32_t background, int opaque)
+{
+    char text[2] = { (char)ch, '\0' };
+
+    kui_draw_text_role(surface, x, y, text, foreground, background,
+                       opaque, 0);
 }
 
 void kui_draw_text(struct kui_surface *surface, int x, int y,
                    const char *text, uint32_t foreground,
                    uint32_t background, int opaque)
 {
-    if (surface->commands != NULL) {
-        kui_record_command(surface, KUI_DISPLAY_TEXT, x, y, 0, 0,
-                           foreground, background, (uint32_t)opaque, text);
-        return;
-    }
-    while (*text != '\0') {
-        kui_draw_char(surface, x, y, (unsigned char)*text++, foreground,
-                      background, opaque);
-        x += 8;
-    }
+    kui_draw_text_role(surface, x, y, text, foreground, background,
+                       opaque, 0);
 }
 
 int kui_text_width(const char *text)
 {
-    return (int)strlen(text) * 8;
+    return kui_text_width_role(text, 0);
+}
+
+int kui_text_ellipsize(char *destination, int capacity, const char *text,
+                       int maximum_width)
+{
+    static const char ellipsis[] = "...";
+    int ellipsis_length = 3;
+    int ellipsis_width;
+    int output_length = 0;
+    int output_width = 0;
+    int text_length;
+
+    if (destination == NULL || capacity <= 0) return 0;
+    destination[0] = '\0';
+    if (text == NULL || text[0] == '\0' || maximum_width <= 0) return 0;
+
+    text_length = (int)strlen(text);
+    if (text_length < capacity && kui_text_width(text) <= maximum_width) {
+        memcpy(destination, text, (size_t)text_length + 1);
+        return kui_text_width(destination);
+    }
+
+    if (ellipsis_length >= capacity) ellipsis_length = capacity - 1;
+    ellipsis_width = 0;
+    for (int index = 0; index < ellipsis_length; index++)
+        ellipsis_width += kui_text_width(".");
+    while (ellipsis_length > 0 && ellipsis_width > maximum_width) {
+        ellipsis_length--;
+        ellipsis_width -= kui_text_width(".");
+    }
+
+    while (text[output_length] != '\0' &&
+           output_length + ellipsis_length < capacity - 1) {
+        char glyph[2] = { text[output_length], '\0' };
+        int glyph_width = kui_text_width(glyph);
+
+        if (output_width + glyph_width + ellipsis_width > maximum_width)
+            break;
+        destination[output_length] = text[output_length];
+        output_width += glyph_width;
+        output_length++;
+    }
+    for (int index = 0; index < ellipsis_length; index++)
+        destination[output_length++] = ellipsis[index];
+    destination[output_length] = '\0';
+    return output_width + ellipsis_width;
+}
+
+void kui_draw_mono_char(struct kui_surface *surface, int x, int y,
+                        unsigned char ch, uint32_t foreground,
+                        uint32_t background, int opaque)
+{
+    char text[2] = { (char)ch, '\0' };
+
+    kui_draw_text_role(surface, x, y, text, foreground, background,
+                       opaque, 1);
+}
+
+void kui_draw_mono_text(struct kui_surface *surface, int x, int y,
+                        const char *text, uint32_t foreground,
+                        uint32_t background, int opaque)
+{
+    kui_draw_text_role(surface, x, y, text, foreground, background,
+                       opaque, 1);
+}
+
+int kui_mono_text_width(const char *text)
+{
+    return kui_text_width_role(text, 1);
 }
 
 struct kui_kimg_header {
@@ -769,6 +1159,40 @@ void kui_blit_image_scaled(struct kui_surface *surface,
     if (surface == NULL || image == NULL || image->pixels == NULL ||
         width <= 0 || height <= 0)
         return;
+    if (surface->commands != NULL) {
+        uint32_t *row;
+
+        if (width > 4096 || height > 2160) {
+            surface->commands->failed = 1;
+            return;
+        }
+        row = malloc((size_t)width * sizeof(*row));
+        if (row == NULL) {
+            surface->commands->failed = 1;
+            return;
+        }
+        for (int destination_y = 0; destination_y < height;
+             destination_y++) {
+            int source_y = destination_y * image->height / height;
+
+            for (int destination_x = 0; destination_x < width;
+                 destination_x++) {
+                int source_x = destination_x * image->width / width;
+
+                row[destination_x] =
+                    image->pixels[source_y * image->width + source_x];
+            }
+            if (image->opaque)
+                kui_record_bitmap_row(surface, row, width, height,
+                                      destination_y, x, y, width, height);
+            else
+                kui_record_bitmap_alpha_row(surface, row, width, height,
+                                            destination_y, x, y,
+                                            width, height);
+        }
+        free(row);
+        return;
+    }
     if (width == image->width && height == image->height) {
         kui_blit_image(surface, image, x, y);
         return;
@@ -871,6 +1295,22 @@ void kui_draw_bitmap_region_scaled(struct kui_surface *surface,
 
 void kui_draw_desktop(struct kui_surface *surface, int menu_height)
 {
+    const struct kui_style *style = kui_style_current();
+
+    if (style->flags & KUI_STYLE_AQUA) {
+        int usable = surface->height - menu_height;
+
+        if (usable < 1) usable = 1;
+        for (int y = menu_height; y < surface->height; y++) {
+            int shade = 28 * (y - menu_height) / usable;
+            uint32_t color = (uint32_t)(0x38 + shade) << 16 |
+                             (uint32_t)(0x82 + shade) << 8 |
+                             (uint32_t)(0xc8 + shade / 2);
+
+            kui_fill_rect(surface, 0, y, surface->width, 1, color);
+        }
+        return;
+    }
     for (int y = menu_height; y < surface->height; y++)
         for (int x = 0; x < surface->width; x++)
             surface->pixels[y * surface->stride + x] =
@@ -880,9 +1320,14 @@ void kui_draw_desktop(struct kui_surface *surface, int menu_height)
 void kui_draw_bevel(struct kui_surface *surface, int x, int y, int w, int h,
                     uint32_t face, int pressed)
 {
+    const struct kui_style *style = kui_style_current();
     uint32_t top = pressed ? KUI_SHADOW : KUI_WHITE;
     uint32_t bottom = pressed ? KUI_WHITE : KUI_SHADOW;
 
+    if (style->flags & KUI_STYLE_AQUA) {
+        top = pressed ? 0x007b9ac0U : 0x00ffffffU;
+        bottom = pressed ? 0x00d9e8f8U : 0x007b8c9fU;
+    }
     kui_fill_rect(surface, x, y, w, h, face);
     kui_fill_rect(surface, x, y, w, 1, top);
     kui_fill_rect(surface, x, y, 1, h, top);
@@ -894,8 +1339,49 @@ void kui_draw_bevel(struct kui_surface *surface, int x, int y, int w, int h,
 void kui_draw_button(struct kui_surface *surface, int x, int y, int w, int h,
                      const char *label, int pressed)
 {
+    const struct kui_style *style = kui_style_current();
     int offset = pressed ? 1 : 0;
     uint32_t face = pressed ? 0x00c9d9efU : 0x00f4f7fbU;
+
+    if (style->flags & KUI_STYLE_AQUA) {
+        uint32_t top = pressed ? 0x00d4d9dfU : 0x00ffffffU;
+        uint32_t bottom = pressed ? 0x00959ea8U : 0x00aab6c3U;
+        uint32_t edge = pressed ? 0x00606a76U : 0x006d7884U;
+        int rows = h > 1 ? h - 1 : 1;
+
+        for (int row = 0; row < h; row++) {
+            uint32_t red = (((top >> 16) & 0xff) * (rows - row) +
+                            ((bottom >> 16) & 0xff) * row) / rows;
+            uint32_t green = (((top >> 8) & 0xff) * (rows - row) +
+                              ((bottom >> 8) & 0xff) * row) / rows;
+            uint32_t blue = ((top & 0xff) * (rows - row) +
+                             (bottom & 0xff) * row) / rows;
+            int inset = row == 0 || row == h - 1 ? 4 :
+                        row == 1 || row == h - 2 ? 2 :
+                        row == 2 || row == h - 3 ? 1 : 0;
+
+            if (w > inset * 2)
+                kui_fill_rect(surface, x + inset, y + row,
+                              w - inset * 2, 1,
+                              (red << 16) | (green << 8) | blue);
+        }
+        kui_line(surface, x + 4, y, x + w - 5, y, edge);
+        kui_line(surface, x + 2, y + 1, x + w - 3, y + 1, edge);
+        kui_line(surface, x, y + 4, x, y + h - 5, edge);
+        kui_line(surface, x + w - 1, y + 4,
+                 x + w - 1, y + h - 5, edge);
+        kui_line(surface, x + 2, y + h - 2,
+                 x + w - 3, y + h - 2, edge);
+        kui_line(surface, x + 4, y + h - 1,
+                 x + w - 5, y + h - 1, edge);
+        if (!pressed && w > 10)
+            kui_fill_rect(surface, x + 5, y + 2, w - 10, 1,
+                          0x00ffffffU);
+        kui_draw_text(surface, x + (w - kui_text_width(label)) / 2 + offset,
+                      y + (h - 16) / 2 + offset, label,
+                      style->text, top, 0);
+        return;
+    }
 
     kui_fill_rect(surface, x, y, w, h, face);
     kui_outline_rect(surface, x, y, w, h, 0x00003599U);
@@ -906,11 +1392,68 @@ void kui_draw_button(struct kui_surface *surface, int x, int y, int w, int h,
                   KUI_BLACK, face, 0);
 }
 
+static int kui_aqua_corner_inset(int row, int height)
+{
+    int edge = row;
+
+    if (height - 1 - row < edge) edge = height - 1 - row;
+    if (edge <= 0) return 5;
+    if (edge == 1) return 3;
+    if (edge == 2) return 2;
+    if (edge <= 4) return 1;
+    return 0;
+}
+
+static void kui_aqua_rounded_fill(struct kui_surface *surface,
+                                  int x, int y, int w, int h,
+                                  uint32_t color, int alpha)
+{
+    if (w <= 10 || h <= 10) return;
+    for (int row = 0; row < h; row++) {
+        int inset = kui_aqua_corner_inset(row, h);
+
+        if (alpha)
+            kui_fill_rect_alpha(surface, x + inset, y + row,
+                                w - inset * 2, 1, color);
+        else
+            kui_fill_rect(surface, x + inset, y + row,
+                          w - inset * 2, 1, color);
+    }
+}
+
 void kui_draw_window(struct kui_surface *surface, int x, int y, int w, int h,
                      const char *title, int active)
 {
+    const struct kui_style *style = kui_style_current();
     uint32_t top = active ? 0x003d95ffU : 0x0090a6c5U;
     uint32_t bottom = active ? 0x000057c9U : 0x00657791U;
+
+    if (style->flags & KUI_STYLE_AQUA) {
+        int title_x = x + (w - kui_text_width(title)) / 2;
+
+        kui_aqua_rounded_fill(surface, x + 3, y + 5, w + 5, h + 5,
+                              0x26000000U, 1);
+        kui_aqua_rounded_fill(surface, x + 6, y + 8, w + 4, h + 4,
+                              0x18000000U, 1);
+        kui_aqua_rounded_fill(surface, x, y, w, h,
+                              0x00777d84U, 0);
+        kui_aqua_rounded_fill(surface, x + 1, y + 1, w - 2, h - 2,
+                              0x00f7f7f7U, 0);
+        for (int row = 1; row < style->title_height; row++) {
+            int inset = kui_aqua_corner_inset(row, h) + 1;
+
+            kui_fill_rect(surface, x + inset, y + row,
+                          w - inset * 2, 1,
+                          row & 1 ? 0x00eef0f2U : 0x00fafbfcU);
+        }
+        kui_fill_rect(surface, x + 4, y + 1, w - 8, 1,
+                      0x00ffffffU);
+        kui_fill_rect(surface, x + 1, y + style->title_height - 1,
+                      w - 2, 1, 0x009ba1a8U);
+        kui_draw_text(surface, title_x, y + 5, title,
+                      active ? style->text : 0x00656565U, 0x00fafbfcU, 0);
+        return;
+    }
 
     kui_fill_rect(surface, x + 5, y + 5, w, h, 0x003c4966U);
     kui_fill_rect(surface, x, y, w, h, KUI_FACE);

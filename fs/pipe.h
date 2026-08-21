@@ -13,6 +13,10 @@ struct pipe_data {
     uint32_t used;
     int readers;
     int writers;
+    /* A zero condition cancels a pending scheduler sleep after readiness or
+     * endpoint closure, closing the unlock-to-sleep lost-wakeup window. */
+    int read_wait;
+    int write_wait;
     struct spinlock lock;
 };
 
@@ -20,5 +24,7 @@ int pipe_read(struct pipe_data *pipe, void *buf, int count);
 int pipe_write(struct pipe_data *pipe, const void *buf, int count);
 void pipe_close(struct pipe_data *pipe, bool writer);
 void pipe_add_ref(struct pipe_data *pipe, bool writer);
+void pipe_status(struct pipe_data *pipe, bool writer,
+                 uint32_t *readable, uint32_t *writable, uint32_t *hung_up);
 
 #endif

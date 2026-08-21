@@ -15,9 +15,9 @@
 #define CONTEXT_MENU_WIDTH 176
 #define CONTEXT_MENU_ROW_HEIGHT 24
 #define CONTEXT_MENU_HEIGHT (CONTEXT_MENU_ROW_HEIGHT * 3 + 4)
-#define FINDER_TOOLBAR_TOP KUI_MENU_BAR_HEIGHT
-#define FINDER_CONTENT_HIT_TOP (KUI_MENU_BAR_HEIGHT + 60)
-#define FINDER_CONTENT_DRAW_TOP (KUI_MENU_BAR_HEIGHT + 65)
+#define FINDER_TOOLBAR_HEIGHT 60
+#define FINDER_ITEM_WIDTH 88
+#define FINDER_LABEL_WIDTH 72
 
 enum finder_context_kind {
     FINDER_CONTEXT_NONE,
@@ -284,13 +284,33 @@ static void parent_path(const char *path, char *parent)
 
 static int finder_columns(int width)
 {
-    int columns = (width - 18) / 88;
+    int columns = (width - 18) / FINDER_ITEM_WIDTH;
     return columns > 0 ? columns : 1;
+}
+
+static int finder_is_aqua(void)
+{
+    return (kui_style_current()->flags & KUI_STYLE_AQUA) != 0;
+}
+
+static int finder_toolbar_top(void)
+{
+    return finder_is_aqua() ? 0 : KUI_MENU_BAR_HEIGHT;
+}
+
+static int finder_content_hit_top(void)
+{
+    return finder_toolbar_top() + FINDER_TOOLBAR_HEIGHT;
+}
+
+static int finder_content_draw_top(void)
+{
+    return finder_toolbar_top() + FINDER_TOOLBAR_HEIGHT + 5;
 }
 
 static int finder_visible_rows(int height)
 {
-    int rows = (height - FINDER_CONTENT_DRAW_TOP) / 82;
+    int rows = (height - finder_content_draw_top()) / 82;
     return rows > 0 ? rows : 1;
 }
 
@@ -305,6 +325,22 @@ static int finder_max_scroll(const struct finder_response *state,
 
 static void draw_folder(struct kui_surface *surface, int x, int y)
 {
+    if (finder_is_aqua()) {
+        kui_fill_rect_alpha(surface, x + 6, y + 1, 21, 8,
+                            0xd06caee8U);
+        kui_fill_rect_alpha(surface, x + 8, y, 17, 2, 0xd0d9f4ffU);
+        kui_fill_rect_alpha(surface, x + 1, y + 7, 46, 29,
+                            0xe04691d2U);
+        kui_fill_rect_alpha(surface, x, y + 11, 48, 23,
+                            0xe07bc7f2U);
+        kui_fill_rect_alpha(surface, x + 1, y + 12, 46, 4,
+                            0xb0e4f8ffU);
+        kui_fill_rect_alpha(surface, x + 2, y + 17, 44, 15,
+                            0x706ab9ebU);
+        kui_line(surface, x + 1, y + 34, x + 46, y + 34, 0x002d78b7U);
+        kui_line(surface, x + 3, y + 35, x + 44, y + 35, 0x006eaad5U);
+        return;
+    }
     kui_fill_rect(surface, x + 4, y, 22, 6, 0x00f2b632U);
     kui_fill_rect(surface, x, y + 5, 48, 32, 0x00ffd45bU);
     kui_outline_rect(surface, x, y + 5, 48, 32, 0x00956a13U);
@@ -312,11 +348,86 @@ static void draw_folder(struct kui_surface *surface, int x, int y)
 
 static void draw_document(struct kui_surface *surface, int x, int y)
 {
+    if (finder_is_aqua()) {
+        kui_fill_rect_alpha(surface, x + 10, y + 3, 32, 39,
+                            0x50000000U);
+        kui_fill_rect(surface, x + 7, y, 28, 40, 0x00fbfdffU);
+        kui_outline_rect(surface, x + 7, y, 28, 40, 0x006c8297U);
+        kui_fill_rect(surface, x + 28, y + 1, 6, 7, 0x00c9d9e8U);
+        kui_line(surface, x + 27, y + 1, x + 34, y + 8, 0x006c8297U);
+        for (int row = 0; row < 4; row++)
+            kui_fill_rect(surface, x + 12, y + 13 + row * 5, 17, 1,
+                          0x00799dccU);
+        return;
+    }
     kui_fill_rect(surface, x + 7, y, 34, 40, KUI_WHITE);
     kui_outline_rect(surface, x + 7, y, 34, 40, KUI_SHADOW);
     for (int row = 0; row < 4; row++)
         kui_fill_rect(surface, x + 13, y + 9 + row * 6, 22, 1,
                       0x0089a1bdU);
+}
+
+static void draw_aqua_toolbar_button(struct kui_surface *surface, int center_x,
+                                     int center_y, const char *label,
+                                     int direction, int disabled)
+{
+    uint32_t edge = disabled ? 0x00aeb5bcU : 0x006b7884U;
+    uint32_t glyph = disabled ? 0x009ca3a9U : 0x003c4854U;
+
+    for (int row = -13; row <= 13; row++) {
+        int absolute = row < 0 ? -row : row;
+        int half = 13 - absolute / 3;
+        uint32_t face = row < -4 ? 0x00fcfdfeU :
+                        row < 5 ? 0x00dce2e7U : 0x00b8c1c9U;
+
+        kui_fill_rect(surface, center_x - half, center_y + row,
+                      half * 2 + 1, 1, edge);
+        if (half > 1)
+            kui_fill_rect(surface, center_x - half + 1, center_y + row,
+                          half * 2 - 1, 1, face);
+    }
+    if (direction < 0) {
+        for (int row = -5; row <= 5; row++) {
+            int absolute = row < 0 ? -row : row;
+            kui_fill_rect(surface, center_x - 5 + absolute / 2,
+                          center_y + row, 2, 1, glyph);
+        }
+        kui_fill_rect(surface, center_x - 3, center_y - 1, 10, 3, glyph);
+    } else if (direction > 0) {
+        for (int row = -5; row <= 5; row++) {
+            int absolute = row < 0 ? -row : row;
+            kui_fill_rect(surface, center_x + 4 - absolute / 2,
+                          center_y + row, 2, 1, glyph);
+        }
+        kui_fill_rect(surface, center_x - 6, center_y - 1, 10, 3, glyph);
+    } else {
+        for (int row = 0; row < 6; row++)
+            kui_fill_rect(surface, center_x - row, center_y - 6 + row,
+                          row * 2 + 1, 1, glyph);
+        kui_fill_rect(surface, center_x - 2, center_y, 5, 7, glyph);
+    }
+    kui_draw_text(surface, center_x - kui_text_width(label) / 2,
+                  center_y + 17, label,
+                  disabled ? 0x0093999fU : KUI_BLACK,
+                  center_y & 1 ? 0x00e7ebefU : 0x00f7f9faU, 0);
+}
+
+static void draw_aqua_toolbar(struct kui_surface *surface, int width,
+                              const struct finder_response *state)
+{
+    for (int row = 0; row < FINDER_TOOLBAR_HEIGHT; row++)
+        kui_fill_rect(surface, 0, row, width, 1,
+                      row & 1 ? 0x00e7ebefU : 0x00f7f9faU);
+    kui_fill_rect(surface, 0, FINDER_TOOLBAR_HEIGHT - 2, width, 1,
+                  0x00ffffffU);
+    kui_fill_rect(surface, 0, FINDER_TOOLBAR_HEIGHT - 1, width, 1,
+                  0x00858d95U);
+    draw_aqua_toolbar_button(surface, 29, 20, "Back", -1,
+                             !state->can_back);
+    draw_aqua_toolbar_button(surface, 91, 20, "Forward", 1,
+                             !state->can_forward);
+    draw_aqua_toolbar_button(surface, 155, 20, "Up", 0,
+                             !state->can_up);
 }
 
 static void finder_render(struct kui_client *client,
@@ -327,25 +438,29 @@ static void finder_render(struct kui_client *client,
                           const char *status_message)
 {
     int columns = finder_columns(event->width);
+    int toolbar_top = finder_toolbar_top();
+    int content_top = finder_content_draw_top();
     char location[148];
 
     kui_fill_rect(&client->surface, 0, 0, event->width, event->height,
                   KUI_WHITE);
-    kui_fill_rect(&client->surface, 0, FINDER_TOOLBAR_TOP,
-                  event->width, 58, KUI_LIGHT);
-    kui_draw_button(&client->surface, 5, FINDER_TOOLBAR_TOP + 5,
-                    55, 24, "Back",
-                    !state->can_back);
-    kui_draw_button(&client->surface, 64, FINDER_TOOLBAR_TOP + 5,
-                    70, 24, "Forward",
-                    !state->can_forward);
-    kui_draw_button(&client->surface, 138, FINDER_TOOLBAR_TOP + 5,
-                    40, 24, "Up",
-                    !state->can_up);
-    snprintf(location, sizeof(location), "Location: %s", state->path);
-    kui_draw_text(&client->surface, 7, FINDER_TOOLBAR_TOP + 36, location,
-                  KUI_BLACK, KUI_LIGHT, 0);
+    if (finder_is_aqua()) {
+        draw_aqua_toolbar(&client->surface, event->width, state);
+    } else {
+        kui_fill_rect(&client->surface, 0, toolbar_top,
+                      event->width, 58, KUI_LIGHT);
+        kui_draw_button(&client->surface, 5, toolbar_top + 5,
+                        55, 24, "Back", !state->can_back);
+        kui_draw_button(&client->surface, 64, toolbar_top + 5,
+                        70, 24, "Forward", !state->can_forward);
+        kui_draw_button(&client->surface, 138, toolbar_top + 5,
+                        40, 24, "Up", !state->can_up);
+        snprintf(location, sizeof(location), "Location: %s", state->path);
+        kui_draw_text(&client->surface, 7, toolbar_top + 36, location,
+                      KUI_BLACK, KUI_LIGHT, 0);
+    }
     for (int item = 0; item < state->item_count; item++) {
+        char label[FINDER_NAME_MAX];
         int visible = item - scroll_row * columns;
         int row;
         int column;
@@ -358,8 +473,8 @@ static void finder_render(struct kui_client *client,
         row = visible / columns;
         column = visible % columns;
         if (row >= finder_visible_rows(event->height)) break;
-        x = 9 + column * 88;
-        y = FINDER_CONTENT_DRAW_TOP + row * 82;
+        x = 9 + column * FINDER_ITEM_WIDTH;
+        y = content_top + row * 82;
         if (context_kind == FINDER_CONTEXT_ITEM && item == context_item) {
             label_background = 0x00cde8ffU;
             kui_fill_rect(&client->surface, x + 2, y - 3, 76, 68,
@@ -371,10 +486,12 @@ static void finder_render(struct kui_client *client,
             draw_folder(&client->surface, x + 16, y);
         else
             draw_document(&client->surface, x + 16, y);
-        label_width = kui_text_width(state->item_names[item]);
+        label_width = kui_text_ellipsize(label, sizeof(label),
+                                         state->item_names[item],
+                                         FINDER_LABEL_WIDTH);
         kui_draw_text(&client->surface,
                       x + 40 - label_width / 2, y + 47,
-                      state->item_names[item], KUI_BLACK,
+                      label, KUI_BLACK,
                       label_background, 0);
     }
     if (status_message != NULL && status_message[0] != '\0') {
@@ -426,12 +543,13 @@ static int finder_item_at(const struct finder_response *state,
     int columns;
     int item;
 
-    if (x < 9 || y < FINDER_CONTENT_HIT_TOP ||
+    if (x < 9 || y < finder_content_hit_top() ||
         x >= width - 4 || y >= height)
         return -1;
     columns = finder_columns(width);
     item = scroll_row * columns +
-           (y - FINDER_CONTENT_HIT_TOP) / 82 * columns + (x - 9) / 88;
+           (y - finder_content_hit_top()) / 82 * columns +
+           (x - 9) / FINDER_ITEM_WIDTH;
     return item >= 0 && item < state->item_count ? item : -1;
 }
 
@@ -623,7 +741,8 @@ static int embedded_main(void)
             } else if (result == KUI_INPUT_DIALOG_CANCEL) {
                 create_kind = FINDER_CREATE_NONE;
             }
-        } else if ((menu_action = kui_menu_handle(
+        } else if (!finder_is_aqua() &&
+                   (menu_action = kui_menu_handle(
                         &menu_state, &event, finder_menus, 1,
                         &menu_consumed)) != 0) {
             context_kind = FINDER_CONTEXT_NONE;
@@ -654,7 +773,7 @@ static int embedded_main(void)
             scroll_row -= event.wheel * 3;
             context_kind = FINDER_CONTEXT_NONE;
         } else if (event.type == KUI_EVENT_POINTER && event.button == 2) {
-            if (event.y < FINDER_TOOLBAR_TOP + 58) {
+            if (event.y < finder_toolbar_top() + 58) {
                 context_kind = FINDER_CONTEXT_NONE;
             } else {
                 context_item = finder_item_at(&state, event.width,
@@ -748,8 +867,8 @@ static int embedded_main(void)
                 }
             }
         } else if (event.type == KUI_EVENT_POINTER && event.button == 1 &&
-                   event.y >= FINDER_TOOLBAR_TOP &&
-                   event.y < FINDER_TOOLBAR_TOP + 31) {
+                   event.y >= finder_toolbar_top() &&
+                   event.y < finder_toolbar_top() + 31) {
             if (event.x < 62 && state.can_back && history_index > 0) {
                 load_directory(history[history_index - 1], &response);
                 if (response.status == 0) { history_index--; state = response; }
@@ -796,7 +915,8 @@ static int embedded_main(void)
         finder_render(&client, &event, &state, scroll_row,
                       context_kind, context_item, context_x, context_y,
                       status_message);
-        kui_menu_render(&client.surface, &menu_state, finder_menus, 1);
+        if (!finder_is_aqua())
+            kui_menu_render(&client.surface, &menu_state, finder_menus, 1);
         kui_input_dialog_render(&client.surface, &event, &create_dialog);
         if (shell_action != KUI_ACTION_NONE)
             kui_client_set_action(&client, shell_action, action_path);

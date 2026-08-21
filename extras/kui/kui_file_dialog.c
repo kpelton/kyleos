@@ -395,17 +395,24 @@ void kui_file_dialog_render(struct kui_surface *surface,
 
     if (!dialog->active) return;
     dialog_layout(event, &layout);
-    kui_fill_rect(surface, layout.x + 5, layout.y + 5,
-                  layout.width, layout.height, 0x00505050U);
-    kui_fill_rect(surface, layout.x, layout.y,
-                  layout.width, layout.height, KUI_FACE);
-    kui_outline_rect(surface, layout.x, layout.y,
-                     layout.width, layout.height, KUI_BLACK);
-    kui_fill_rect(surface, layout.x + 3, layout.y + 3,
-                  layout.width - 6, 22, KUI_TITLE_BLUE);
-    kui_draw_text(surface, layout.x + 8, layout.y + 8,
-                  dialog->mode == KUI_FILE_DIALOG_OPEN ? "Open" : "Save As",
-                  KUI_WHITE, KUI_TITLE_BLUE, 0);
+    if (kui_style_current()->flags & KUI_STYLE_AQUA)
+        kui_draw_window(surface, layout.x, layout.y,
+                        layout.width, layout.height,
+                        dialog->mode == KUI_FILE_DIALOG_OPEN ?
+                        "Open" : "Save As", 1);
+    else {
+        kui_fill_rect(surface, layout.x + 5, layout.y + 5,
+                      layout.width, layout.height, 0x00505050U);
+        kui_fill_rect(surface, layout.x, layout.y,
+                      layout.width, layout.height, KUI_FACE);
+        kui_outline_rect(surface, layout.x, layout.y,
+                         layout.width, layout.height, KUI_BLACK);
+        kui_fill_rect(surface, layout.x + 3, layout.y + 3,
+                      layout.width - 6, 22, KUI_TITLE_BLUE);
+        kui_draw_text(surface, layout.x + 8, layout.y + 8,
+                      dialog->mode == KUI_FILE_DIALOG_OPEN ?
+                      "Open" : "Save As", KUI_WHITE, KUI_TITLE_BLUE, 0);
+    }
     kui_draw_text(surface, layout.x + 12, layout.y + 38,
                   "Save in:", KUI_BLACK, KUI_FACE, 0);
     kui_fill_rect(surface, layout.x + 76, layout.y + 31,
