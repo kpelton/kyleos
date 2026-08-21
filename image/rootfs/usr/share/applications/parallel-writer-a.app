@@ -1,0 +1,9 @@
+id=parallel-writer-a
+name=Parallel Writers
+exec=/bin/parallel-writer-a
+icon=/usr/share/gui/terminal.kimg
+start_menu=true
+width=500
+height=440
+x=20
+y=70

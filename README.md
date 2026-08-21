@@ -173,9 +173,8 @@ git submodule update --init --recursive
 
 ## Current source layout
 
-The kernel and reproducible image tooling live in this repository.  During
-all core userspace, helper programs, and Newlib sources are kept in-tree. Copy
-the example configuration only when overriding the defaults:
+The kernel, userspace, Newlib sources, and image tooling all live in this
+repository. Copy the example configuration only when overriding the defaults:
 
 ```bash
 cp config.mk.example config.mk
@@ -194,6 +193,9 @@ The repository-local dependency policy is intentional: source dependencies are
 checked in under `userspace/` and `external/`, while compiler output, sysroots,
 userland staging files, and disk images are generated only under `build/`.
 No build target should require `/tmp/z` or a sibling checkout.
+
+See [`userspace/README.md`](userspace/README.md) for the ownership boundary
+between the core userspace tree and the additional programs tree.
 
 `config.mk` is ignored by Git. The checked-in `toolchain/newlib-build` metadata
 keeps the Newlib build self-contained; generated libraries and headers are

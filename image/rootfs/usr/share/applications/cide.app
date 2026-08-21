@@ -1,0 +1,10 @@
+id=cide
+name=C IDE
+exec=/bin/cide
+icon=/usr/share/gui/cide.kimg
+argument=/hello.c
+accepts=c
+desktop=true
+start_menu=true
+width=820
+height=560

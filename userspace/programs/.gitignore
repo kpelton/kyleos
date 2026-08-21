@@ -1,0 +1,5 @@
+# Keep source and build metadata; ignore extensionless compiled test binaries.
+progs/*
+!progs/*.c
+!progs/*.h
+!progs/Makefile

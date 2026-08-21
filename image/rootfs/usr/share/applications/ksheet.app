@@ -1,0 +1,10 @@
+id=ksheet
+name=KSheet
+exec=/bin/ksheet
+icon=/usr/share/gui/ksheet.kimg
+argument=/SHEET.CSV
+accepts=csv
+desktop=true
+start_menu=true
+width=900
+height=600

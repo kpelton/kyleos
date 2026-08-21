@@ -1,0 +1,9 @@
+id=paint
+name=Paint
+exec=/bin/paint
+icon=/usr/share/gui/paint.kimg
+accepts=image
+desktop=true
+start_menu=true
+width=800
+height=600
