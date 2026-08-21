@@ -4,7 +4,77 @@ KyleOS is a hobby x86-64 operating system with a small Unix-like userspace.
 It boots directly in QEMU, uses a FAT32 disk image for persistent files, and
 has a framebuffer-capable DoomGeneric port.
 
-## Features
+## Contents
+
+- [What is included](#what-is-included)
+- [Kernel and platform](#kernel-and-platform)
+- [Desktop and GUI](#desktop-and-gui)
+- [Included programs](#included-programs)
+- [Technical feature matrix](#technical-feature-matrix)
+- [Build and boot](#build-and-boot)
+- [Testing and diagnostics](#testing-and-diagnostics)
+- [Source layout](#current-source-layout)
+- [Limitations](#current-limitations)
+
+## What is included
+
+KyleOS is a bootable system rather than a userspace demo. The image combines a
+small preemptive kernel, a FAT32-backed root filesystem, a Unix-like command
+environment, and two window-manager shells sharing the same GUI applications.
+It runs in QEMU and on compatible x86 hardware with legacy BIOS and PS/2 input.
+
+## Kernel and platform
+
+- x86-64 long mode with 32-bit bootstrap support and a framebuffer console.
+- Demand-zero heap and stack paging, lazy file-backed ELF paging, physical-page
+  allocation, and a checked first-fit kernel heap.
+- Preemptive round-robin scheduling, user processes, `fork`, copy-on-write,
+  `exec`, `wait`, file descriptors, pipes, and process reaping.
+- FAT32 VFS with directories, file creation/truncation, seek, sizes, removal,
+  and separate RAM filesystems at `/dev` and `/tmp`.
+- `/dev/console`, `/dev/null`, `/dev/zero`, `/dev/kmsg`, UART/serial input,
+  keyboard input, PS/2 mouse input, and raw-console mode.
+- User-mode page and general-protection faults terminate the offending process;
+  kernel faults retain register-dump diagnostics.
+
+## Desktop and GUI
+
+`/bin/kuid` is the shared compositor and window server. It owns the framebuffer,
+input routing, focus, window geometry, display-command validation, and process
+lifecycle. Applications communicate through the versioned KUI event/response
+protocol over pipes.
+
+- `desktop`: classic taskbar and Start-menu shell.
+- `aqua`: Aqua-inspired menu bar, Dock, traffic-light controls, and glass-style
+  scrollbars.
+- Shared KUI menus, text selection, file dialogs, Save As confirmation, wheel
+  scrolling, repeating scrollbar arrows, and window resize handling.
+- Applications include Finder, Text Editor, C IDE, Terminal, KSheet, Paint,
+  Help, System Monitor, games, and parallel-writer demonstrations.
+
+See the [GUI architecture guide](docs/gui-architecture.html),
+[Markdown architecture notes](docs/gui-architecture.md), and the
+[Aqua desktop screenshot](docs/kyleos-aqua-desktop.png).
+
+## Included programs
+
+### Core commands
+
+`ls`, `cat`, `cp`, `mv`, `rm`, `mkdir`, `rmdir`, `grep`, `wc`, `head`, `tail`,
+`ed`, `kedit`, `sh`, and the filesystem/process regression tools.
+
+### GUI applications
+
+Finder, Text Editor, C IDE, Terminal, KSheet spreadsheet, Paint, Help,
+Calculator, System Monitor, Minesweeper, Solitaire, Tetris, City Builder,
+Parallel Writers, and the Aqua/Win95 shell demos.
+
+### Optional extras
+
+DoomGeneric, Quake, Duke Nukem 3D, Lua 5.4.4, and the native TinyCC compiler
+are built and installed by their respective image targets.
+
+## Technical feature matrix
 
 - x86-64 long mode, demand-zero heap and stack paging, lazy file-backed ELF
   executable paging, physical-memory allocation, and a 16-byte-aligned
@@ -279,7 +349,25 @@ the source repository. Run `duke3d` inside KyleOS. The default keyboard layout
 uses the arrow keys to move and turn, Ctrl to fire, Space to use, Enter to
 select, and Escape to open or close the menu.
 
-## In-OS regression tests
+## Testing and diagnostics
+
+Host-side integration tests cover KUI shell protocol behavior, KSheet and
+Editor Save As, terminal responsiveness, Help navigation, text selection,
+scrollbar behavior, and widget styles. Run the focused GUI checks with:
+
+```bash
+make test-kui-shells test-ksheet-ui test-editor-clipboard \
+  test-terminal-async test-help-ui
+```
+
+The shell writes app lifecycle and protocol failures to `/SHELL.LOG` without
+polluting the KUI stdout stream. In the running system, inspect it with:
+
+```sh
+cat /SHELL.LOG
+```
+
+The integrated in-OS regression runner is documented below.
 
 After booting, run the bundled suite through the shell:
 
