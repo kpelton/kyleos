@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KyleOS GUI Architecture</title>
+<style>
+:root{font:16px/1.5 system-ui,sans-serif;color:#18212b;background:#eef2f6}body{max-width:1100px;margin:32px auto;padding:0 24px}h1{color:#174a83}h2{margin-top:36px;color:#245f96}.panel{background:#fff;border:1px solid #b8c6d5;border-radius:12px;padding:20px;margin:16px 0;box-shadow:0 3px 12px #0001}.flow{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px}.node{background:linear-gradient(#fafdff,#dceafa);border:1px solid #6f94b8;border-radius:9px;padding:12px 16px;text-align:center;min-width:150px}.arrow{font-size:24px;color:#3874a8}.sequence{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px}.sequence div{padding:8px;border-bottom:1px solid #dce3ea}.tag{font-family:ui-monospace,monospace;background:#edf3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#18212b;color:#e8f2ff;padding:16px;border-radius:8px}table{width:100%;border-collapse:collapse}td,th{text-align:left;border-bottom:1px solid #ccd7e2;padding:9px}
+</style>
+</head>
+<body>
+<h1>KyleOS GUI Architecture</h1>
+<p>This document describes the desktop compositor, KUI protocol, application lifecycle, rendering pipeline, input handling, and Save As flow.</p>
+
+<section class="panel"><h2>System overview</h2><div class="flow">
+<div class="node">Kernel<br><small>processes · pipes · files · input</small></div><span class="arrow">→</span>
+<div class="node">/bin/kuid<br><small>desktop compositor</small></div><span class="arrow">↔</span>
+<div class="node">Shell window manager<br><small>extras/desktop/shell.c</small></div><span class="arrow">↔</span>
+<div class="node">KUI protocol<br><small>events · responses · display commands</small></div><span class="arrow">↔</span>
+<div class="node">GUI apps<br><small>Finder · Editor · KSheet · Paint · Help</small></div>
+</div></section>
+
+<section class="panel"><h2>Application lifecycle</h2><div class="sequence">
+<div>User clicks icon/menu</div><div>Shell forks and execs the application</div>
+<div>Shell sends <span class="tag">KUI_EVENT_INIT</span></div><div>App returns title, constraints, and display commands</div>
+<div>User generates pointer/key/timer input</div><div>Shell forwards a serial-numbered event</div>
+<div>App responds with commands and actions</div><div>Shell replays and composites the window</div>
+<div>User closes the window</div><div>Shell sends close, closes pipes, and reaps the child</div>
+</div></section>
+
+<section class="panel"><h2>Rendering pipeline</h2><pre>input → shell → kui_event → app event loop
+                         ↓
+                    kui_surface
+                         ↓
+             serialized display commands
+                         ↓
+              shell validates and replays
+                         ↓
+       windows + menus + taskbar + cursor → frame</pre>
+<p>The display-command limit is <span class="tag">KUI_PROTOCOL_MAX_DISPLAY</span> (512 KiB).</p></section>
+
+<section class="panel"><h2>Input and scrolling</h2><div class="flow">
+<div class="node">Keyboard / mouse / wheel</div><span class="arrow">→</span><div class="node">Shell event</div><span class="arrow">→</span><div class="node">App event loop</div><span class="arrow">→</span><div class="node">Shared scrollbar state</div><span class="arrow">→</span><div class="node">Visible rows / columns</div>
+</div><p>Wheel movement is normalized by <span class="tag">kui_scrollbar_wheel()</span>. Arrow buttons share the same state and repeat timer.</p></section>
+
+<section class="panel"><h2>Save As flow</h2><div class="sequence">
+<div>App opens shared Save dialog</div><div>Dialog presents directory and filename field</div>
+<div>User types filename and presses Enter</div><div>Dialog checks whether target exists</div>
+<div>If existing: overwrite confirmation</div><div>Dialog returns selected absolute path</div>
+<div>App writes the file</div><div>App returns <span class="tag">KUI_ACTION_FILE_SAVED</span></div>
+</div><p>Path updates use bounded overlap-safe copies. Shell lifecycle diagnostics are written to <span class="tag">/SHELL.LOG</span>; stdout remains reserved for KUI protocol traffic.</p></section>
+
+<section class="panel"><h2>Main source locations</h2><table><tr><th>Layer</th><th>Source</th></tr>
+<tr><td>Desktop/window manager</td><td><code>extras/desktop/shell.c</code></td></tr><tr><td>Protocol</td><td><code>extras/kui/kui_protocol.h</code></td></tr><tr><td>Rendering/widgets</td><td><code>extras/kui/kui.c</code> and <code>extras/kui/*.c</code></td></tr><tr><td>File dialogs</td><td><code>extras/kui/kui_file_dialog.c</code></td></tr><tr><td>Applications</td><td><code>extras/ksheet</code>, <code>extras/editor</code>, <code>extras/terminal</code>, <code>extras/help</code></td></tr>
+</table></section>
+</body></html>

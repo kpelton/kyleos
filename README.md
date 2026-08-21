@@ -32,6 +32,8 @@ has a framebuffer-capable DoomGeneric port.
   `/bin/desktop` for the classic taskbar/Start environment or `/bin/aqua` for
   the Aqua-inspired menu bar, Dock, and traffic-light window controls. Both
   environments run the same KUI application processes and compositor.
+- Boots on compatible physical x86 hardware through legacy BIOS, with PS/2
+  keyboard and mouse support in addition to QEMU.
 - Small userspace: `ls`, `cat`, `cp`, `rm`, `mkdir`, `grep`, `wc`, `head`,
   `tail`, `mv`, `ed`, `kedit`, and more.
 - Incrementally rendered ASCII Breakout at `/bin/breakout` (`a`/`d` move,
@@ -58,6 +60,20 @@ Applications receive the shell style in their normal KUI event stream, so the
 same Finder, editor, terminal, games, dialogs, and menus render consistently in
 either environment. Pipe-readiness status and bounded compositor reads prevent
 a disconnected or stalled client from blocking the display server forever.
+
+### GUI architecture
+
+The detailed GUI architecture, event/rendering flows, Save As path, and source
+map are documented in [the HTML architecture guide](docs/gui-architecture.html)
+and [the Markdown version](docs/gui-architecture.md).
+
+![KyleOS Aqua desktop with KSheet and Help running](docs/kyleos-aqua-desktop.png)
+
+This live QEMU capture shows the Aqua composition with KSheet, Help, Finder,
+and the Dock running together. The shell owns the menu bar, window placement,
+and Dock while applications render through the shared KUI protocol and widget
+library. The [architecture preview](docs/gui-aqua-overview.svg) provides a
+clean diagrammatic overview as well.
 
 From the KyleOS console, start either environment with:
 
