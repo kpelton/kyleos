@@ -5,6 +5,9 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifdef KYLEOS_HOST
+#include <dirent.h>
+#endif
 
 struct kyleos_dirent {
     uint64_t inode;
@@ -33,12 +36,44 @@ struct dialog_layout {
 static int get_directory_entries(int fd, struct kyleos_dirent *entries,
                                  int count)
 {
+#ifdef KYLEOS_HOST
+    DIR *directory;
+    struct dirent *entry;
+    int result = 0;
+    char path[128];
+    char link_path[64];
+
+    snprintf(link_path, sizeof(link_path), "/proc/self/fd/%d", fd);
+    if (readlink(link_path, path, sizeof(path) - 1) < 0) return -1;
+    path[sizeof(path) - 1] = '\0';
+    directory = opendir(path);
+    if (directory == NULL) return -1;
+    while (result < count && (entry = readdir(directory)) != NULL) {
+        struct stat status;
+        char child[256];
+
+        if (snprintf(child, sizeof(child), "%s/%s", path,
+                     entry->d_name) >= (int)sizeof(child))
+            continue;
+        entries[result].inode = (uint64_t)entry->d_ino;
+        strncpy(entries[result].name, entry->d_name,
+                sizeof(entries[result].name) - 1);
+        entries[result].name[sizeof(entries[result].name) - 1] = '\0';
+        entries[result].type = 0;
+        if (stat(child, &status) == 0 && S_ISDIR(status.st_mode))
+            entries[result].type = KUI_FILE_DIALOG_DIRECTORY;
+        result++;
+    }
+    closedir(directory);
+    return result;
+#else
     register long result asm("rax") = 16;
 
     asm volatile("int $0x80" : "+a"(result)
                  : "D"((long)fd), "S"(entries), "d"((long)count)
                  : "memory");
     return (int)result;
+#endif
 }
 
 static void copy_text(char *destination, size_t size, const char *source)
@@ -238,7 +273,11 @@ void kui_file_dialog_open(struct kui_file_dialog *dialog, int mode,
         }
     }
     if (dialog->filename[0] == '\0') strcpy(dialog->filename, "new.txt");
-    load_directory(dialog);
+    /* Save As only needs the directory and filename.  Avoid the guest
+     * getdents path here; on older images it can fault while opening the
+     * dialog before the user has a chance to enter a name. */
+    if (mode == KUI_FILE_DIALOG_OPEN)
+        load_directory(dialog);
 }
 
 void kui_file_dialog_close(struct kui_file_dialog *dialog)
@@ -260,9 +299,19 @@ int kui_file_dialog_handle(struct kui_file_dialog *dialog,
 {
     struct dialog_layout layout;
     int maximum;
+    int scrollbar_hit;
 
     if (!dialog->active) return KUI_FILE_DIALOG_NONE;
     dialog_layout(event, &layout);
+    scrollbar_hit = event->type == KUI_EVENT_POINTER && event->button == 1 &&
+        kui_in_rect(event->x, event->y,
+                    layout.list_x + layout.list_width - KUI_SCROLLBAR_SIZE,
+                    layout.list_y, KUI_SCROLLBAR_SIZE, layout.list_height);
+    dialog->scroll_row = kui_vscrollbar_handle(
+        &dialog->scrollbar, event,
+        layout.list_x + layout.list_width - KUI_SCROLLBAR_SIZE,
+        layout.list_y, layout.list_height, dialog->scroll_row,
+        visible_items(&layout), dialog->item_count);
     if (dialog->confirm_overwrite) {
         int box_x = (event->width - 300) / 2;
         int box_y = (event->height - 112) / 2;
@@ -287,9 +336,13 @@ int kui_file_dialog_handle(struct kui_file_dialog *dialog,
     if (event->type == KUI_EVENT_POINTER && event->wheel != 0 &&
         kui_in_rect(event->x, event->y, layout.list_x, layout.list_y,
                     layout.list_width, layout.list_height)) {
-        dialog->scroll_row -= event->wheel * 3;
+        dialog->scroll_row = kui_scrollbar_wheel(
+            dialog->scroll_row, event->wheel, visible_items(&layout),
+            dialog->item_count);
     } else if (event->type == KUI_EVENT_POINTER && event->button == 1) {
-        if (kui_in_rect(event->x, event->y,
+        if (scrollbar_hit) {
+            /* The shared scrollbar owns this press and any repeat timer. */
+        } else if (kui_in_rect(event->x, event->y,
                         layout.x + layout.width - 42, layout.y + 31,
                         30, 24)) {
             parent_path(dialog->directory);
@@ -439,7 +492,8 @@ void kui_file_dialog_render(struct kui_surface *surface,
                      0x000a64adU : KUI_WHITE;
         if (item == dialog->selected_item)
             kui_fill_rect(surface, layout.list_x + 2, y - 1,
-                          layout.list_width - 4, 19, background);
+                          layout.list_width - KUI_SCROLLBAR_SIZE - 4,
+                          19, background);
         if (dialog->items[item].type == KUI_FILE_DIALOG_DIRECTORY)
             draw_small_folder(surface, layout.list_x + 6, y + 1);
         else
@@ -449,6 +503,12 @@ void kui_file_dialog_render(struct kui_surface *surface,
                       item == dialog->selected_item ? KUI_WHITE : KUI_BLACK,
                       background, 0);
     }
+    kui_draw_vscrollbar(surface,
+                        layout.list_x + layout.list_width -
+                        KUI_SCROLLBAR_SIZE,
+                        layout.list_y, layout.list_height,
+                        dialog->scroll_row, visible,
+                        dialog->item_count, &dialog->scrollbar);
     kui_draw_text(surface, layout.x + 12, layout.filename_y + 7,
                   "File name:", KUI_BLACK, KUI_FACE, 0);
     kui_fill_rect(surface, layout.filename_x, layout.filename_y,
@@ -494,4 +554,10 @@ void kui_file_dialog_render(struct kui_surface *surface,
         kui_draw_button(surface, box_x + 208, box_y + 75,
                         70, 25, "No", 0);
     }
+}
+
+uint32_t kui_file_dialog_timer_ms(const struct kui_file_dialog *dialog)
+{
+    return dialog != NULL && dialog->active ?
+           kui_scrollbar_timer_ms(&dialog->scrollbar) : 0;
 }

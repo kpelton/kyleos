@@ -1392,6 +1392,333 @@ void kui_draw_button(struct kui_surface *surface, int x, int y, int w, int h,
                   KUI_BLACK, face, 0);
 }
 
+static int kui_scrollbar_limit(int page, int total)
+{
+    int limit = total - page;
+
+    return limit > 0 ? limit : 0;
+}
+
+static int kui_scrollbar_clamp(int position, int page, int total)
+{
+    int limit = kui_scrollbar_limit(page, total);
+
+    if (position < 0) return 0;
+    return position > limit ? limit : position;
+}
+
+static void kui_scrollbar_thumb(int track, int position, int page, int total,
+                                int *offset, int *size)
+{
+    int limit = kui_scrollbar_limit(page, total);
+
+    if (track < 1) track = 1;
+    position = kui_scrollbar_clamp(position, page, total);
+    *size = total <= 0 || page >= total ? track : track * page / total;
+    if (*size < KUI_SCROLLBAR_SIZE) *size = KUI_SCROLLBAR_SIZE;
+    if (*size > track) *size = track;
+    *offset = limit > 0 ? position * (track - *size) / limit : 0;
+}
+
+static void kui_scrollbar_arrow(struct kui_surface *surface, int x, int y,
+                                int direction, uint32_t color)
+{
+    for (int row = 0; row < 5; row++) {
+        int half = direction == 0 || direction == 2 ? row : 4 - row;
+
+        if (direction < 2)
+            kui_fill_rect(surface, x + 7 - half, y + 5 + row,
+                          half * 2 + 1, 1, color);
+        else
+            kui_fill_rect(surface, x + 5 + row, y + 7 - half,
+                          1, half * 2 + 1, color);
+    }
+}
+
+static void kui_scrollbar_part(struct kui_surface *surface,
+                               int x, int y, int width, int height,
+                               int pressed)
+{
+    uint32_t face = KUI_FACE;
+
+    if (pressed) face = KUI_LIGHT;
+    kui_fill_rect(surface, x, y, width, height, face);
+    kui_outline_rect(surface, x, y, width, height, KUI_SHADOW);
+    if (width > 3 && height > 3) {
+        kui_fill_rect(surface, x + 1, y + 1, width - 2, 1, KUI_WHITE);
+        kui_fill_rect(surface, x + 1, y + 1, 1, height - 2, KUI_WHITE);
+    }
+}
+
+/* Mac OS X 10.0 placed both scroll arrows at the trailing end.  The trough
+ * was recessed white and the thumb was an opaque, candy-blue capsule. */
+static void kui_aqua_scrollbar_track(struct kui_surface *surface,
+                                     int x, int y, int length, int horizontal)
+{
+    if (horizontal) {
+        kui_fill_rect(surface, x, y, length, KUI_SCROLLBAR_SIZE, 0x00d7daddU);
+        kui_fill_rect(surface, x, y + 2, length, 11, 0x00f7f8f9U);
+        kui_fill_rect(surface, x, y + 4, length, 6, KUI_WHITE);
+        kui_fill_rect(surface, x, y + 1, length, 1, 0x00b9bec3U);
+        kui_fill_rect(surface, x, y + 13, length, 1, 0x00aeb4baU);
+    } else {
+        kui_fill_rect(surface, x, y, KUI_SCROLLBAR_SIZE, length, 0x00d7daddU);
+        kui_fill_rect(surface, x + 2, y, 11, length, 0x00f7f8f9U);
+        kui_fill_rect(surface, x + 4, y, 6, length, KUI_WHITE);
+        kui_fill_rect(surface, x + 1, y, 1, length, 0x00b9bec3U);
+        kui_fill_rect(surface, x + 13, y, 1, length, 0x00aeb4baU);
+    }
+}
+
+static int kui_aqua_scrollbar_cap_inset(int position, int length)
+{
+    int end = position;
+
+    if (length - 1 - position < end) end = length - 1 - position;
+    if (end <= 0) return 4;
+    if (end == 1) return 2;
+    if (end == 2) return 1;
+    return 0;
+}
+
+static void kui_aqua_scrollbar_thumb(struct kui_surface *surface,
+                                     int x, int y, int length, int horizontal)
+{
+    static const uint32_t glass[13] = {
+        0x003d668eU, 0x00255ba4U, 0x00347fcbU, 0x0057b8e9U,
+        0x007bd8f6U, 0x00a1edffU, 0x00adf1ffU, 0x0090e3fcU,
+        0x006acbf3U, 0x0046a9e1U, 0x00327bc3U, 0x00265b9dU,
+        0x005f7488U
+    };
+
+    for (int along = 0; along < length; along++) {
+        int inset = kui_aqua_scrollbar_cap_inset(along, length);
+        int end = along;
+
+        if (length - 1 - along < end) end = length - 1 - along;
+        for (int cross = inset; cross < 13 - inset; cross++) {
+            uint32_t color = glass[cross];
+
+            if (end == 0 || cross == inset || cross == 12 - inset)
+                color = end < 2 ? 0x00335f91U : 0x003b638aU;
+            else if (end == 1)
+                color = 0x002d76bdU;
+            if (horizontal)
+                kui_pixel(surface, x + along, y + 1 + cross, color);
+            else
+                kui_pixel(surface, x + 1 + cross, y + along, color);
+        }
+    }
+}
+
+static void kui_aqua_scrollbar_button(struct kui_surface *surface,
+                                      int x, int y, int direction, int pressed)
+{
+    uint32_t top = pressed ? 0x00bcc3caU : KUI_WHITE;
+    uint32_t bottom = pressed ? 0x00d9dde1U : 0x00d9dde1U;
+
+    for (int row = 0; row < KUI_SCROLLBAR_SIZE; row++) {
+        uint32_t inverse = (uint32_t)(KUI_SCROLLBAR_SIZE - 1 - row);
+        uint32_t red = (((top >> 16) & 0xffU) * inverse +
+                        ((bottom >> 16) & 0xffU) * (uint32_t)row) / 14U;
+        uint32_t green = (((top >> 8) & 0xffU) * inverse +
+                          ((bottom >> 8) & 0xffU) * (uint32_t)row) / 14U;
+        uint32_t blue = ((top & 0xffU) * inverse +
+                         (bottom & 0xffU) * (uint32_t)row) / 14U;
+
+        kui_fill_rect(surface, x, y + row, KUI_SCROLLBAR_SIZE, 1,
+                      (red << 16) | (green << 8) | blue);
+    }
+    kui_outline_rect(surface, x, y, KUI_SCROLLBAR_SIZE,
+                     KUI_SCROLLBAR_SIZE, 0x00959ca3U);
+    kui_fill_rect(surface, x + 2, y + 1, 11, 1,
+                  pressed ? 0x00d9dde1U : KUI_WHITE);
+    kui_scrollbar_arrow(surface, x, y, direction,
+                        pressed ? 0x003f464eU : 0x005a6168U);
+}
+
+void kui_draw_vscrollbar(struct kui_surface *surface, int x, int y, int height,
+                         int position, int page, int total,
+                         const struct kui_scrollbar_state *state)
+{
+    int thumb_offset;
+    int thumb_size;
+    int track_height = height - KUI_SCROLLBAR_SIZE * 2;
+    int aqua = (kui_style_current()->flags & KUI_STYLE_AQUA) != 0;
+    int track_y = aqua ? y : y + KUI_SCROLLBAR_SIZE;
+
+    if (height < KUI_SCROLLBAR_SIZE * 2 + 1) return;
+    if (aqua) {
+        int arrows_y = y + height - KUI_SCROLLBAR_SIZE * 2;
+
+        kui_aqua_scrollbar_track(surface, x, track_y, track_height, 0);
+        kui_aqua_scrollbar_button(
+            surface, x, arrows_y, 0,
+            state != NULL && state->active_direction < 0);
+        kui_aqua_scrollbar_button(
+            surface, x, arrows_y + KUI_SCROLLBAR_SIZE, 1,
+            state != NULL && state->active_direction > 0);
+    } else {
+        kui_fill_rect(surface, x, track_y, KUI_SCROLLBAR_SIZE, track_height,
+                      KUI_LIGHT);
+        kui_scrollbar_part(surface, x, y, KUI_SCROLLBAR_SIZE,
+                           KUI_SCROLLBAR_SIZE,
+                           state != NULL && state->active_direction < 0);
+        kui_scrollbar_part(surface, x, y + height - KUI_SCROLLBAR_SIZE,
+                           KUI_SCROLLBAR_SIZE, KUI_SCROLLBAR_SIZE,
+                           state != NULL && state->active_direction > 0);
+        kui_scrollbar_arrow(surface, x, y, 0, kui_style_current()->text);
+        kui_scrollbar_arrow(surface, x, y + height - KUI_SCROLLBAR_SIZE, 1,
+                            kui_style_current()->text);
+    }
+    kui_scrollbar_thumb(track_height, position, page, total,
+                        &thumb_offset, &thumb_size);
+    if (aqua)
+        kui_aqua_scrollbar_thumb(surface, x, track_y + thumb_offset,
+                                 thumb_size, 0);
+    else
+        kui_scrollbar_part(surface, x, track_y + thumb_offset,
+                           KUI_SCROLLBAR_SIZE, thumb_size, 0);
+}
+
+void kui_draw_hscrollbar(struct kui_surface *surface, int x, int y, int width,
+                         int position, int page, int total,
+                         const struct kui_scrollbar_state *state)
+{
+    int thumb_offset;
+    int thumb_size;
+    int track_width = width - KUI_SCROLLBAR_SIZE * 2;
+    int aqua = (kui_style_current()->flags & KUI_STYLE_AQUA) != 0;
+    int track_x = aqua ? x : x + KUI_SCROLLBAR_SIZE;
+
+    if (width < KUI_SCROLLBAR_SIZE * 2 + 1) return;
+    if (aqua) {
+        int arrows_x = x + width - KUI_SCROLLBAR_SIZE * 2;
+
+        kui_aqua_scrollbar_track(surface, track_x, y, track_width, 1);
+        kui_aqua_scrollbar_button(
+            surface, arrows_x, y, 2,
+            state != NULL && state->active_direction < 0);
+        kui_aqua_scrollbar_button(
+            surface, arrows_x + KUI_SCROLLBAR_SIZE, y, 3,
+            state != NULL && state->active_direction > 0);
+    } else {
+        kui_fill_rect(surface, track_x, y, track_width, KUI_SCROLLBAR_SIZE,
+                      KUI_LIGHT);
+        kui_scrollbar_part(surface, x, y, KUI_SCROLLBAR_SIZE,
+                           KUI_SCROLLBAR_SIZE,
+                           state != NULL && state->active_direction < 0);
+        kui_scrollbar_part(surface, x + width - KUI_SCROLLBAR_SIZE, y,
+                           KUI_SCROLLBAR_SIZE, KUI_SCROLLBAR_SIZE,
+                           state != NULL && state->active_direction > 0);
+        kui_scrollbar_arrow(surface, x, y, 2, kui_style_current()->text);
+        kui_scrollbar_arrow(surface, x + width - KUI_SCROLLBAR_SIZE, y, 3,
+                            kui_style_current()->text);
+    }
+    kui_scrollbar_thumb(track_width, position, page, total,
+                        &thumb_offset, &thumb_size);
+    if (aqua)
+        kui_aqua_scrollbar_thumb(surface, track_x + thumb_offset, y,
+                                 thumb_size, 1);
+    else
+        kui_scrollbar_part(surface, track_x + thumb_offset, y,
+                           thumb_size, KUI_SCROLLBAR_SIZE, 0);
+}
+
+static int kui_scrollbar_handle_axis(int pointer, int start, int length,
+                                     int position, int page, int total)
+{
+    int thumb_offset;
+    int thumb_size;
+    int aqua = (kui_style_current()->flags & KUI_STYLE_AQUA) != 0;
+    int track_start = aqua ? start : start + KUI_SCROLLBAR_SIZE;
+    int track_length = length - KUI_SCROLLBAR_SIZE * 2;
+    int first_arrow = aqua ? start + track_length : start;
+    int second_arrow = start + length - KUI_SCROLLBAR_SIZE;
+
+    position = kui_scrollbar_clamp(position, page, total);
+    if (pointer >= first_arrow && pointer < second_arrow) position--;
+    else if (pointer >= second_arrow) position++;
+    else {
+        kui_scrollbar_thumb(track_length, position, page, total,
+                            &thumb_offset, &thumb_size);
+        if (pointer < track_start + thumb_offset) position -= page;
+        else if (pointer >= track_start + thumb_offset + thumb_size)
+            position += page;
+    }
+    return kui_scrollbar_clamp(position, page, total);
+}
+
+static int kui_scrollbar_handle(struct kui_scrollbar_state *state,
+                                const struct kui_event *event,
+                                int pointer, int start, int length,
+                                int inside, int position, int page, int total)
+{
+    if (state == NULL || event == NULL)
+        return kui_scrollbar_clamp(position, page, total);
+    if (event->type == KUI_EVENT_POINTER &&
+        event->button == 0 && (event->buttons & 1U) == 0) {
+        state->active_direction = 0;
+        state->repeating = 0;
+    }
+    if (event->type == KUI_EVENT_TIMER && state->active_direction != 0) {
+        position += state->active_direction;
+        state->repeating = 1;
+        return kui_scrollbar_clamp(position, page, total);
+    }
+    if (event->type != KUI_EVENT_POINTER || event->button != 1 || !inside)
+        return kui_scrollbar_clamp(position, page, total);
+    state->active_direction = 0;
+    state->repeating = 0;
+    if ((kui_style_current()->flags & KUI_STYLE_AQUA) != 0) {
+        if (pointer >= start + length - KUI_SCROLLBAR_SIZE * 2 &&
+            pointer < start + length - KUI_SCROLLBAR_SIZE)
+            state->active_direction = -1;
+        else if (pointer >= start + length - KUI_SCROLLBAR_SIZE)
+            state->active_direction = 1;
+    } else if (pointer < start + KUI_SCROLLBAR_SIZE)
+        state->active_direction = -1;
+    else if (pointer >= start + length - KUI_SCROLLBAR_SIZE)
+        state->active_direction = 1;
+    return kui_scrollbar_handle_axis(pointer, start, length,
+                                     position, page, total);
+}
+
+int kui_vscrollbar_handle(struct kui_scrollbar_state *state,
+                          const struct kui_event *event, int x, int y,
+                          int height, int position, int page, int total)
+{
+    int inside = event != NULL &&
+        kui_in_rect(event->x, event->y, x, y, KUI_SCROLLBAR_SIZE, height);
+
+    return kui_scrollbar_handle(state, event,
+                                event != NULL ? event->y : 0,
+                                y, height, inside, position, page, total);
+}
+
+int kui_hscrollbar_handle(struct kui_scrollbar_state *state,
+                          const struct kui_event *event, int x, int y,
+                          int width, int position, int page, int total)
+{
+    int inside = event != NULL &&
+        kui_in_rect(event->x, event->y, x, y, width, KUI_SCROLLBAR_SIZE);
+
+    return kui_scrollbar_handle(state, event,
+                                event != NULL ? event->x : 0,
+                                x, width, inside, position, page, total);
+}
+
+int kui_scrollbar_wheel(int position, int wheel, int page, int total)
+{
+    return kui_scrollbar_clamp(position - wheel * 3, page, total);
+}
+
+uint32_t kui_scrollbar_timer_ms(const struct kui_scrollbar_state *state)
+{
+    if (state == NULL || state->active_direction == 0) return 0;
+    return state->repeating ? 65U : 320U;
+}
+
 static int kui_aqua_corner_inset(int row, int height)
 {
     int edge = row;

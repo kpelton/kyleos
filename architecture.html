@@ -3,678 +3,498 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>KyleOS — subsystem atlas</title>
+  <meta name="description" content="Detailed, source-linked architecture of KyleOS: kernel, userspace, shared KUI compositor, desktop shells, applications, build image, and tests.">
+  <title>KyleOS Architecture Atlas</title>
   <style>
     :root {
-      --ink: #f2f0e7;
-      --muted: #aaa99f;
-      --dim: #77776f;
-      --ground: #0e100f;
-      --panel: #151816;
-      --panel-2: #1b1f1c;
-      --line: #30352f;
-      --lime: #c7f36b;
-      --cyan: #67d7d0;
-      --orange: #f5a45d;
-      --violet: #b9a1ff;
-      --red: #ff7c70;
-      --radius: 16px;
-      --mono: "SFMono-Regular", "Cascadia Code", "Liberation Mono", monospace;
-      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color-scheme: dark;
+      --bg: #071018;
+      --panel: #0d1924;
+      --panel-2: #122231;
+      --ink: #e8f1f6;
+      --muted: #9db0be;
+      --line: #294254;
+      --cyan: #53d6d0;
+      --blue: #70a8ff;
+      --violet: #bc8cff;
+      --green: #71dc9b;
+      --amber: #ffc66d;
+      --red: #ff7c87;
+      --radius: 15px;
+      --shadow: 0 18px 55px rgba(0, 0, 0, .25);
     }
-
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      color: var(--ink);
       background:
-        radial-gradient(circle at 75% -10%, rgba(103, 215, 208, .09), transparent 34rem),
-        radial-gradient(circle at 12% 18%, rgba(199, 243, 107, .06), transparent 27rem),
-        var(--ground);
-      font-family: var(--sans);
-      line-height: 1.5;
-    }
-
-    a { color: inherit; }
-    button { font: inherit; }
-    code { font-family: var(--mono); }
-
-    .shell {
-      width: min(1480px, calc(100% - 40px));
-      margin: 0 auto;
-    }
-
-    .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      border-bottom: 1px solid rgba(255,255,255,.08);
-      background: rgba(14,16,15,.84);
-      backdrop-filter: blur(18px);
-    }
-
-    .topbar-inner {
-      min-height: 64px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 24px;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 11px;
-      text-decoration: none;
-      font-weight: 700;
-      letter-spacing: -.02em;
-    }
-
-    .brand-mark {
-      width: 28px;
-      height: 28px;
-      display: grid;
-      place-items: center;
-      border: 1px solid rgba(199,243,107,.55);
-      border-radius: 8px;
-      color: var(--lime);
-      background: rgba(199,243,107,.08);
-      font: 700 12px var(--mono);
-    }
-
-    nav { display: flex; gap: 6px; }
-    nav a {
-      padding: 8px 11px;
-      border-radius: 8px;
-      color: var(--muted);
-      text-decoration: none;
-      font-size: 13px;
-    }
-    nav a:hover { color: var(--ink); background: rgba(255,255,255,.05); }
-
-    .hero {
-      padding: 88px 0 56px;
-      display: grid;
-      grid-template-columns: minmax(0, 1.3fr) minmax(320px, .7fr);
-      gap: 64px;
-      align-items: end;
-    }
-
-    .eyebrow {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--lime);
-      font: 700 11px var(--mono);
-      letter-spacing: .14em;
-      text-transform: uppercase;
-    }
-    .eyebrow::before { content: ""; width: 28px; height: 1px; background: currentColor; }
-
-    h1 {
-      max-width: 850px;
-      margin: 18px 0 20px;
-      font-size: clamp(48px, 7vw, 92px);
-      line-height: .94;
-      letter-spacing: -.065em;
-      font-weight: 720;
-    }
-
-    .hero-copy {
-      max-width: 720px;
-      margin: 0;
-      color: var(--muted);
-      font-size: clamp(16px, 2vw, 20px);
-    }
-
-    .hero-aside {
-      padding-left: 24px;
-      border-left: 1px solid var(--line);
-    }
-
-    .hero-aside p {
-      margin: 0 0 22px;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    .stat strong { display: block; color: var(--ink); font: 600 26px var(--mono); }
-    .stat span { display: block; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
-
-    section { padding: 46px 0 74px; }
-    .section-head {
-      display: grid;
-      grid-template-columns: 1fr minmax(280px, 560px);
-      gap: 32px;
-      align-items: end;
-      margin-bottom: 24px;
-    }
-    .section-index { color: var(--lime); font: 600 11px var(--mono); letter-spacing: .12em; }
-    h2 { margin: 5px 0 0; font-size: clamp(30px, 4vw, 48px); letter-spacing: -.045em; line-height: 1.05; }
-    .section-head p { margin: 0; color: var(--muted); font-size: 14px; }
-
-    .atlas {
-      border: 1px solid var(--line);
-      border-radius: 22px;
-      overflow: hidden;
-      background: rgba(21,24,22,.88);
-      box-shadow: 0 30px 100px rgba(0,0,0,.24);
-    }
-
-    .atlas-toolbar {
-      min-height: 58px;
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(255,255,255,.016);
-    }
-    .hint { color: var(--dim); font: 12px var(--mono); }
-    .legend { display: flex; flex-wrap: wrap; gap: 7px; }
-    .legend button {
-      appearance: none;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 6px 10px;
-      color: var(--muted);
-      background: transparent;
-      cursor: pointer;
-      font-size: 11px;
-    }
-    .legend button::before {
-      content: "";
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      margin-right: 7px;
-      border-radius: 50%;
-      background: var(--tag);
-      vertical-align: 1px;
-    }
-    .legend button:hover, .legend button.active { color: var(--ink); border-color: var(--tag); background: color-mix(in srgb, var(--tag) 8%, transparent); }
-
-    .map-scroll { overflow-x: auto; }
-    .map {
-      position: relative;
-      min-width: 1130px;
-      padding: 36px;
-      display: grid;
-      grid-template-columns: repeat(6, minmax(130px, 1fr));
-      grid-template-rows: repeat(5, minmax(126px, auto));
-      gap: 26px 24px;
-      background-image:
-        linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
-      background-size: 32px 32px;
-    }
-
-    #edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 0; }
-    .edge { fill: none; stroke: #657069; stroke-width: 1.3; opacity: .42; transition: opacity .2s, stroke .2s, stroke-width .2s; }
-    .edge.hot { opacity: .95; stroke: var(--lime); stroke-width: 2; }
-    .edge.dimmed { opacity: .07; }
-
-    .node {
-      --tag: var(--ink);
-      position: relative;
-      z-index: 2;
-      min-height: 126px;
-      padding: 16px;
-      border: 1px solid #343a35;
-      border-radius: 14px;
-      background: linear-gradient(145deg, rgba(31,35,32,.97), rgba(23,26,24,.97));
+        radial-gradient(circle at 10% -10%, rgba(83, 214, 208, .13), transparent 34rem),
+        radial-gradient(circle at 90% 10%, rgba(112, 168, 255, .12), transparent 31rem),
+        var(--bg);
       color: var(--ink);
-      text-align: left;
-      cursor: pointer;
-      transition: transform .18s, border-color .18s, opacity .18s, box-shadow .18s;
+      font: 16px/1.58 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    .node::after {
-      content: "";
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--tag);
-      box-shadow: 0 0 16px var(--tag);
-    }
-    .node:hover, .node.selected { transform: translateY(-3px); border-color: var(--tag); box-shadow: 0 14px 34px rgba(0,0,0,.28); }
-    .node.dimmed { opacity: .24; }
-    .node small { color: var(--tag); font: 700 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
-    .node h3 { margin: 14px 0 5px; font-size: 17px; letter-spacing: -.02em; }
-    .node p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.42; }
-
-    [data-group="user"] { --tag: var(--lime); }
-    [data-group="service"] { --tag: var(--cyan); }
-    [data-group="core"] { --tag: var(--violet); }
-    [data-group="driver"] { --tag: var(--orange); }
-    [data-group="hardware"] { --tag: var(--red); }
-
-    #apps { grid-area: 1 / 1 / 2 / 3; }
-    #libc { grid-area: 1 / 3 / 2 / 5; }
-    #init { grid-area: 1 / 5 / 2 / 7; }
-    #syscall { grid-area: 2 / 1 / 3 / 3; }
-    #process { grid-area: 2 / 3 / 3 / 4; }
-    #scheduler { grid-area: 2 / 4 / 3 / 5; }
-    #exec { grid-area: 2 / 5 / 3 / 7; }
-    #vfs { grid-area: 3 / 1 / 4 / 3; }
-    #memory { grid-area: 3 / 3 / 4 / 5; }
-    #interrupts { grid-area: 3 / 5 / 4 / 7; }
-    #fat { grid-area: 4 / 1 / 5 / 2; }
-    #ramfs { grid-area: 4 / 2 / 5 / 3; }
-    #pipes { grid-area: 4 / 3 / 5 / 4; }
-    #locks { grid-area: 4 / 4 / 5 / 5; }
-    #timer { grid-area: 4 / 5 / 5 / 6; }
-    #console { grid-area: 4 / 6 / 5 / 7; }
-    #ata { grid-area: 5 / 1 / 6 / 3; }
-    #hardware { grid-area: 5 / 3 / 6 / 7; }
-
-    .inspector {
-      min-height: 104px;
-      display: grid;
-      grid-template-columns: 160px 1fr auto;
-      gap: 22px;
-      align-items: center;
-      padding: 20px 24px;
-      border-top: 1px solid var(--line);
-      background: #111411;
-    }
-    .inspector-label { color: var(--dim); font: 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
-    .inspector h3 { margin: 2px 0; font-size: 17px; }
-    .inspector p { margin: 0; color: var(--muted); font-size: 13px; }
-    .source-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 9px 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      color: var(--muted);
-      text-decoration: none;
-      font: 11px var(--mono);
-      white-space: nowrap;
-    }
-    .source-link:hover { color: var(--lime); border-color: rgba(199,243,107,.45); }
-
-    .bootline {
-      position: relative;
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 10px;
-      padding-top: 24px;
-    }
-    .bootline::before {
-      content: "";
-      position: absolute;
-      top: 39px;
-      left: 8%;
-      right: 8%;
-      height: 1px;
-      background: linear-gradient(90deg, var(--orange), var(--lime), var(--cyan));
-      opacity: .42;
-    }
-    .boot-step { position: relative; z-index: 1; padding-right: 12px; }
-    .boot-step .dot {
-      width: 31px;
-      height: 31px;
-      display: grid;
-      place-items: center;
-      margin-bottom: 20px;
-      border: 1px solid var(--line);
-      border-radius: 50%;
-      background: var(--ground);
-      color: var(--lime);
-      font: 700 10px var(--mono);
-    }
-    .boot-step h3 { margin: 0 0 6px; font-size: 14px; }
-    .boot-step p { margin: 0; color: var(--dim); font-size: 11px; }
-    .boot-step code { color: var(--muted); font-size: 10px; }
-
-    .flow-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-    .flow-card {
-      padding: 24px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--panel);
-    }
-    .flow-card header { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
-    .flow-card .number { color: var(--dim); font: 11px var(--mono); }
-    .flow-card h3 { margin: 0; font-size: 19px; letter-spacing: -.025em; }
-    .flow-card > p { margin: 8px 0 22px; color: var(--muted); font-size: 13px; }
-    .flow {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      overflow-x: auto;
-      padding-bottom: 4px;
-    }
-    .flow span {
-      flex: 0 0 auto;
-      padding: 7px 9px;
-      border-radius: 7px;
-      background: var(--panel-2);
-      border: 1px solid var(--line);
-      color: #d7d7ce;
-      font: 10px var(--mono);
-    }
-    .flow i { flex: 0 0 auto; color: var(--lime); font-style: normal; font-size: 12px; }
-    .return-note { margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--line); color: var(--dim); font: 10px var(--mono); }
-
-    .source-table { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
-    .source-row {
-      display: grid;
-      grid-template-columns: 190px 250px 1fr;
-      gap: 24px;
-      padding: 17px 20px;
+    a { color: var(--cyan); text-underline-offset: .18em; }
+    a:hover { color: #9cf7ef; }
+    code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    code { color: #d8e9ff; background: #07131d; padding: .12em .35em; border-radius: 5px; }
+    header {
       border-bottom: 1px solid var(--line);
-      background: rgba(21,24,22,.78);
-      align-items: baseline;
+      padding: 5.7rem max(1.2rem, calc((100vw - 1180px) / 2)) 3.7rem;
     }
-    .source-row:last-child { border-bottom: 0; }
-    .source-row:hover { background: var(--panel-2); }
-    .source-row strong { font-size: 13px; }
-    .source-row a { color: var(--cyan); text-decoration: none; font: 11px var(--mono); }
-    .source-row a:hover { text-decoration: underline; }
-    .source-row span { color: var(--muted); font-size: 12px; }
-
-    footer { padding: 24px 0 50px; border-top: 1px solid var(--line); color: var(--dim); font: 11px var(--mono); }
-    footer .shell { display: flex; justify-content: space-between; gap: 20px; }
-
-    @media (max-width: 900px) {
-      .hero { grid-template-columns: 1fr; gap: 36px; padding-top: 60px; }
-      .hero-aside { padding-left: 0; border-left: 0; }
-      .section-head { grid-template-columns: 1fr; gap: 14px; }
-      .flow-grid { grid-template-columns: 1fr; }
-      .bootline { grid-template-columns: repeat(3, 1fr); row-gap: 30px; }
-      .bootline::before { display: none; }
-      .source-row { grid-template-columns: 130px 210px 1fr; gap: 14px; }
+    header .eyebrow { color: var(--cyan); letter-spacing: .15em; text-transform: uppercase; font-size: .78rem; font-weight: 750; }
+    h1 { max-width: 900px; margin: .6rem 0 .8rem; font-size: clamp(2.7rem, 7vw, 5.4rem); line-height: .97; letter-spacing: -.055em; }
+    header p { max-width: 800px; color: var(--muted); font-size: 1.14rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1.5rem; }
+    .chip { border: 1px solid var(--line); background: rgba(18, 34, 49, .8); border-radius: 999px; padding: .34rem .72rem; font-size: .83rem; color: #caddE8; }
+    nav {
+      position: sticky; top: 0; z-index: 20; overflow-x: auto; white-space: nowrap;
+      background: rgba(7, 16, 24, .92); backdrop-filter: blur(16px); border-bottom: 1px solid var(--line);
+      padding: .7rem max(1rem, calc((100vw - 1180px) / 2));
     }
-
-    @media (max-width: 650px) {
-      .shell { width: min(100% - 24px, 1480px); }
+    nav a { display: inline-block; padding: .35rem .65rem; color: var(--muted); text-decoration: none; font-size: .88rem; }
+    nav a:hover { color: var(--ink); }
+    main { max-width: 1180px; margin: 0 auto; padding: 2.5rem 1.2rem 7rem; }
+    section { scroll-margin-top: 4.5rem; margin: 4.8rem 0; }
+    h2 { font-size: clamp(1.8rem, 4vw, 2.8rem); letter-spacing: -.035em; margin: 0 0 .55rem; }
+    h3 { margin: 0 0 .55rem; font-size: 1.12rem; }
+    .lede { color: var(--muted); max-width: 850px; margin: 0 0 1.7rem; }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1rem; }
+    .card { grid-column: span 4; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(145deg, rgba(18,34,49,.93), rgba(10,22,32,.97)); padding: 1.2rem; box-shadow: var(--shadow); }
+    .card.wide { grid-column: span 8; }
+    .card.half { grid-column: span 6; }
+    .card.full { grid-column: 1 / -1; }
+    .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+    .card p, .card li { color: #bdd0dc; }
+    .kicker { color: var(--cyan); text-transform: uppercase; font-size: .72rem; letter-spacing: .12em; font-weight: 800; }
+    .metric { font-size: 2rem; font-weight: 800; letter-spacing: -.04em; display: block; }
+    ul, ol { padding-left: 1.3rem; }
+    li + li { margin-top: .34rem; }
+    .diagram { border: 1px solid var(--line); border-radius: var(--radius); background: #09141e; padding: .65rem; overflow-x: auto; box-shadow: var(--shadow); }
+    .diagram svg { min-width: 920px; width: 100%; height: auto; display: block; }
+    .svg-title { font: 700 16px system-ui, sans-serif; fill: #eef8fc; }
+    .svg-body { font: 12px system-ui, sans-serif; fill: #b7cad6; }
+    .svg-small { font: 11px ui-monospace, monospace; fill: #90a8b7; }
+    .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: .65rem; align-items: stretch; }
+    .flow > div { position: relative; border: 1px solid var(--line); border-radius: 12px; padding: .9rem; background: var(--panel); min-height: 105px; }
+    .flow > div:not(:last-child)::after { content: "→"; position: absolute; color: var(--cyan); right: -.7rem; top: 40%; z-index: 2; font-weight: 800; }
+    .flow strong { display: block; margin-bottom: .25rem; }
+    .flow small { color: var(--muted); }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+    table { width: 100%; border-collapse: collapse; background: rgba(13,25,36,.85); font-size: .91rem; }
+    th, td { text-align: left; vertical-align: top; padding: .72rem .8rem; border-bottom: 1px solid #203747; }
+    th { color: var(--cyan); background: #0d1b26; position: sticky; top: 48px; }
+    tr:last-child td { border-bottom: 0; }
+    td:first-child { color: #f2f7fa; }
+    .tag { display: inline-block; border-radius: 5px; padding: .12rem .4rem; margin: .08rem; font-size: .72rem; font-weight: 750; }
+    .kernel { background: rgba(112,168,255,.18); color: #a9caff; }
+    .user { background: rgba(83,214,208,.16); color: #84ebe5; }
+    .skin { background: rgba(188,140,255,.17); color: #d0acff; }
+    .io { background: rgba(255,198,109,.16); color: #ffd58e; }
+    .warning { border-left: 4px solid var(--amber); background: rgba(255,198,109,.08); padding: 1rem 1.1rem; border-radius: 0 12px 12px 0; color: #e7d3af; }
+    .good { border-left-color: var(--green); background: rgba(113,220,155,.08); }
+    .source-map { columns: 2 320px; column-gap: 2rem; }
+    .source-map li { break-inside: avoid; padding-bottom: .3rem; }
+    .sequence { counter-reset: step; list-style: none; padding-left: 0; }
+    .sequence li { position: relative; padding: .1rem 0 1.2rem 3rem; border-left: 1px solid var(--line); margin-left: 1rem; }
+    .sequence li::before { counter-increment: step; content: counter(step); position: absolute; left: -1rem; top: -.15rem; width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: 50%; background: var(--cyan); color: #031013; font-weight: 850; }
+    footer { border-top: 1px solid var(--line); color: var(--muted); padding: 2rem max(1.2rem, calc((100vw - 1180px) / 2)); }
+    @media (max-width: 850px) {
+      .card, .card.wide, .card.half { grid-column: 1 / -1; }
+      .flow { grid-template-columns: 1fr; }
+      .flow > div:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -.85rem; }
+      header { padding-top: 3.5rem; }
+    }
+    @media print {
+      :root { color-scheme: light; --bg: #fff; --panel: #fff; --panel-2: #fff; --ink: #16212a; --muted: #445967; --line: #b8c3ca; }
+      body, header { background: white; }
       nav { display: none; }
-      .hero { padding: 50px 0 28px; }
-      h1 { font-size: 48px; }
-      section { padding: 36px 0 52px; }
-      .atlas-toolbar { align-items: start; flex-direction: column; }
-      .inspector { grid-template-columns: 1fr; gap: 10px; }
-      .bootline { grid-template-columns: repeat(2, 1fr); }
-      .source-row { grid-template-columns: 1fr; gap: 5px; }
-      footer .shell { flex-direction: column; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      html { scroll-behavior: auto; }
-      *, *::before, *::after { transition-duration: .001ms !important; }
+      .card, .diagram { box-shadow: none; break-inside: avoid; }
+      section { margin: 2.8rem 0; }
+      a { color: #075b75; }
     }
   </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="shell topbar-inner">
-      <a class="brand" href="#top"><span class="brand-mark">K</span><span>KyleOS / system atlas</span></a>
-      <nav aria-label="Page sections">
-        <a href="#map">Topology</a>
-        <a href="#boot">Boot</a>
-        <a href="#flows">Interactions</a>
-        <a href="#sources">Sources</a>
-      </nav>
+  <header>
+    <div class="eyebrow">Source-derived system map · 20 August 2026</div>
+    <h1>KyleOS architecture atlas</h1>
+    <p>A detailed map of the whole system—from Multiboot entry and higher-half paging to the shared KUI compositor, interchangeable Win95 and Aqua desktop shells, applications, disk-image pipeline, and the test contract.</p>
+    <div class="chips" aria-label="Current architecture facts">
+      <span class="chip">x86-64 monolithic kernel</span>
+      <span class="chip">34 syscalls · <span class="mono">int 0x80</span></span>
+      <span class="chip">100 Hz preemptive scheduler</span>
+      <span class="chip">KUI app protocol v8</span>
+      <span class="chip">shell protocol v4</span>
+      <span class="chip">shared userspace compositor</span>
+      <span class="chip">FAT32 root + RAMFS mounts</span>
     </div>
   </header>
 
-  <main id="top">
-    <div class="shell hero">
-      <div>
-        <div class="eyebrow">x86-64 hobby operating system</div>
-        <h1>One kernel.<br>Every connection.</h1>
-        <p class="hero-copy">A code-backed map of KyleOS—from Multiboot and long mode to PID&nbsp;1, FAT32, demand paging, interrupts, and the devices beneath them.</p>
+  <nav aria-label="Document sections">
+    <a href="#overview">Overview</a><a href="#boot">Boot</a><a href="#kernel">Kernel</a><a href="#process">Processes</a><a href="#memory">Memory</a><a href="#storage">Storage</a><a href="#gui">GUI</a><a href="#apps">Apps</a><a href="#abi">ABI</a><a href="#build">Build</a><a href="#tests">Tests</a><a href="#limits">Limits</a><a href="#sources">Source map</a>
+  </nav>
+
+  <main>
+    <section id="overview">
+      <h2>The system at one glance</h2>
+      <p class="lede">KyleOS is a single-machine x86-64 operating system. Kernel services live in one higher-half address space. Each userspace process has its own virtual-memory map and reaches the kernel through a compact syscall ABI. The graphical desktop is deliberately outside the kernel: one shared userspace compositor owns display and input, while separate shell processes provide the desktop-environment personality.</p>
+
+      <div class="diagram" role="img" aria-label="Layered KyleOS architecture diagram">
+        <svg viewBox="0 0 1120 760" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#53d6d0"/></marker>
+            <linearGradient id="u" x1="0" x2="1"><stop stop-color="#102c32"/><stop offset="1" stop-color="#102538"/></linearGradient>
+            <linearGradient id="k" x1="0" x2="1"><stop stop-color="#152a45"/><stop offset="1" stop-color="#1d2141"/></linearGradient>
+          </defs>
+          <rect x="10" y="10" width="1100" height="740" rx="20" fill="#07131d" stroke="#294254"/>
+          <text x="35" y="43" class="svg-small">USERSPACE · isolated process address spaces</text>
+
+          <rect x="35" y="62" width="670" height="104" rx="13" fill="url(#u)" stroke="#337471"/>
+          <text x="55" y="89" class="svg-title">Managed graphical applications</text>
+          <text x="55" y="112" class="svg-body">Finder · Editor · C IDE · Terminal · Paint · Calculator · Games · Sysmon</text>
+          <text x="55" y="136" class="svg-small">KUI client → event/response over two anonymous pipes → retained display commands</text>
+          <rect x="725" y="62" width="360" height="104" rx="13" fill="#30213b" stroke="#7d5aa0"/>
+          <text x="745" y="89" class="svg-title">Exclusive framebuffer applications</text>
+          <text x="745" y="112" class="svg-body">Doom · Quake · Duke3D</text>
+          <text x="745" y="136" class="svg-small">Direct framebuffer/input syscalls; not KUI-managed</text>
+
+          <rect x="35" y="190" width="320" height="126" rx="13" fill="#211b36" stroke="#785cb3"/>
+          <text x="55" y="217" class="svg-title">Desktop shell process</text>
+          <text x="55" y="241" class="svg-body">Win95 shell or Aqua shell</text>
+          <text x="55" y="264" class="svg-small">panel / menu / dock / clock</text>
+          <text x="55" y="284" class="svg-small">shell protocol v4 · style profile</text>
+          <text x="55" y="302" class="svg-small">same compositor; two launch environments</text>
+
+          <rect x="380" y="190" width="705" height="126" rx="13" fill="url(#u)" stroke="#337471"/>
+          <text x="400" y="217" class="svg-title">kuid — shared compositor + window manager</text>
+          <text x="400" y="241" class="svg-body">Owns framebuffer, keyboard/mouse, focus, process lifecycle, geometry and final composition</text>
+          <text x="400" y="265" class="svg-small">cached per-window pixel surfaces · damage rectangles · rounded Aqua chrome · shell restart</text>
+          <text x="400" y="285" class="svg-small">application manifests · KIMG assets · KFONT text · wallpaper · cursor</text>
+          <text x="400" y="303" class="svg-small">KUI v8 · typed 1 KiB clipboard · ≤ 256 KiB display · ≤ 10 windows · ≤ 24 manifests</text>
+
+          <path d="M355 252H380" stroke="#53d6d0" stroke-width="2" marker-end="url(#arrow)"/>
+          <path d="M370 166V190" stroke="#53d6d0" stroke-width="2" marker-end="url(#arrow)"/>
+          <path d="M740 166V190" stroke="#53d6d0" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <rect x="35" y="340" width="1050" height="60" rx="12" fill="#122536" stroke="#416884"/>
+          <text x="55" y="366" class="svg-title">Newlib C runtime + syscall wrappers</text>
+          <text x="55" y="386" class="svg-small">static userspace programs · POSIX-like files/processes/pipes · graphical extensions</text>
+          <path d="M540 316V340" stroke="#53d6d0" stroke-width="2" marker-end="url(#arrow)"/>
+          <path d="M900 166V340" stroke="#bc8cff" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <rect x="35" y="424" width="1050" height="49" rx="12" fill="#171e2c" stroke="#70a8ff"/>
+          <text x="55" y="455" class="svg-title">System-call boundary · user-callable IDT gate 0x80 · table slots 0–33</text>
+          <path d="M560 400V424" stroke="#70a8ff" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <text x="35" y="510" class="svg-small">KERNEL · monolithic higher-half address space</text>
+          <rect x="35" y="528" width="245" height="103" rx="13" fill="url(#k)" stroke="#4b73a7"/>
+          <text x="55" y="555" class="svg-title">Process + scheduler</text>
+          <text x="55" y="578" class="svg-body">100 Hz round robin</text>
+          <text x="55" y="599" class="svg-small">fork / exec / wait · FPU state</text>
+          <text x="55" y="617" class="svg-small">sleep channels · PID 1 adoption</text>
+          <rect x="296" y="528" width="245" height="103" rx="13" fill="url(#k)" stroke="#4b73a7"/>
+          <text x="316" y="555" class="svg-title">Virtual memory</text>
+          <text x="316" y="578" class="svg-body">4 KiB pages · per-process maps</text>
+          <text x="316" y="599" class="svg-small">lazy ELF/file faults · COW fork</text>
+          <text x="316" y="617" class="svg-small">PMM · VMM · heap · physmap</text>
+          <rect x="557" y="528" width="245" height="103" rx="13" fill="url(#k)" stroke="#4b73a7"/>
+          <text x="577" y="555" class="svg-title">VFS + IPC</text>
+          <text x="577" y="578" class="svg-body">FDs · paths · pipes</text>
+          <text x="577" y="599" class="svg-small">FAT32 / RAMFS / proc devices</text>
+          <text x="577" y="617" class="svg-small">4 KiB pipe rings · readiness</text>
+          <rect x="818" y="528" width="267" height="103" rx="13" fill="url(#k)" stroke="#4b73a7"/>
+          <text x="838" y="555" class="svg-title">IRQ + device layer</text>
+          <text x="838" y="578" class="svg-body">ATA · PS/2 · framebuffer</text>
+          <text x="838" y="599" class="svg-small">PIC · PIT · RTC · UART · VGA</text>
+          <text x="838" y="617" class="svg-small">keyboard · mouse event queue</text>
+          <path d="M560 473V528" stroke="#70a8ff" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <rect x="35" y="658" width="1050" height="60" rx="12" fill="#251f16" stroke="#866b3f"/>
+          <text x="55" y="684" class="svg-title">Boot + hardware contract</text>
+          <text x="55" y="704" class="svg-small">Multiboot loader · x86-64 CPU/MMU · 1280×720×32 linear framebuffer · ATA disk · PS/2 · QEMU</text>
+          <path d="M560 631V658" stroke="#ffc66d" stroke-width="2" marker-end="url(#arrow)"/>
+        </svg>
       </div>
-      <aside class="hero-aside">
-        <p>The map reads top-to-bottom: userspace crosses the syscall boundary into kernel services, which coordinate drivers and hardware. Select any node to isolate its direct interactions.</p>
-        <div class="stats" aria-label="Architecture summary">
-          <div class="stat"><strong>18</strong><span>nodes</span></div>
-          <div class="stat"><strong>5</strong><span>layers</span></div>
-          <div class="stat"><strong>30</strong><span>syscalls</span></div>
-        </div>
-      </aside>
-    </div>
 
-    <section id="map" class="shell">
-      <div class="section-head">
-        <div><span class="section-index">01 / TOPOLOGY</span><h2>Subsystem interaction map</h2></div>
-        <p>Arrows show the dominant direction of control or data. Shared-state locks are shown as coordination dependencies. Click a node or filter by layer.</p>
-      </div>
-
-      <div class="atlas">
-        <div class="atlas-toolbar">
-          <span class="hint">SELECT A NODE TO TRACE ITS EDGES</span>
-          <div class="legend" aria-label="Filter subsystem layers">
-            <button type="button" data-filter="all" class="active" style="--tag:#f2f0e7">All</button>
-            <button type="button" data-filter="user" style="--tag:#c7f36b">Userspace</button>
-            <button type="button" data-filter="service" style="--tag:#67d7d0">Services</button>
-            <button type="button" data-filter="core" style="--tag:#b9a1ff">Core</button>
-            <button type="button" data-filter="driver" style="--tag:#f5a45d">Drivers</button>
-            <button type="button" data-filter="hardware" style="--tag:#ff7c70">Hardware</button>
-          </div>
-        </div>
-
-        <div class="map-scroll">
-          <div class="map" id="architecture-map">
-            <svg id="edges" aria-hidden="true"><defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#657069"></path></marker><marker id="arrow-hot" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c7f36b"></path></marker></defs></svg>
-
-            <button class="node" id="apps" data-group="user" data-source="README.md" data-detail="Shell commands, init, tests, editors, games, Lua, and TinyCC run as user processes."><small>Userspace</small><h3>Applications & shell</h3><p><code>init</code> · <code>nushell</code> · tools · extras</p></button>
-            <button class="node" id="libc" data-group="user" data-source="init/syscall.c" data-detail="Newlib-facing calls marshal arguments into KyleOS's interrupt-based syscall ABI."><small>Userspace</small><h3>Newlib / syscall stubs</h3><p>POSIX-like API · ABI glue · <code>int 0x80</code></p></button>
-            <button class="node" id="init" data-group="user" data-source="extras/init/init.c" data-detail="PID 1 owns the console descriptors, launches the shell, adopts orphans, and reaps children."><small>Userspace</small><h3>PID 1 lifecycle</h3><p>console owner · shell supervisor · reaper</p></button>
-
-            <button class="node" id="syscall" data-group="service" data-source="init/syscall.c" data-detail="The IDT's user-callable 0x80 gate dispatches 30 syscall slots for files, processes, time, and display/input."><small>Kernel boundary</small><h3>Syscall dispatch</h3><p>validation · 30-entry table · return via <code>iretq</code></p></button>
-            <button class="node" id="process" data-group="service" data-source="sched/ps.c" data-detail="Owns per-task file descriptors plus process-facing open/read/write/pipe/sbrk/exit/wait operations."><small>Kernel service</small><h3>Process & FD layer</h3><p>descriptor tables · wait/reap · heap break</p></button>
-            <button class="node" id="scheduler" data-group="core" data-source="sched/sched.c" data-detail="A single-CPU, preemptive round-robin scheduler manages task state, context, sleep channels, fork, exit, and reaping."><small>Kernel core</small><h3>Scheduler</h3><p>run queue · context switch · sleep/wakeup</p></button>
-            <button class="node" id="exec" data-group="service" data-source="sched/exec.c" data-detail="Validates ELF program headers and reserves lazy file-backed mappings before adding or replacing a task image."><small>Kernel service</small><h3>ELF exec loader</h3><p>ELF validation · lazy segments · argv</p></button>
-
-            <button class="node" id="vfs" data-group="service" data-source="fs/vfs.c" data-detail="Provides pathname walking, mounts, inodes, the global file table, and a uniform operations interface over every filesystem."><small>Kernel service</small><h3>Virtual filesystem</h3><p>paths · mounts · inode/file ops · file table</p></button>
-            <button class="node" id="memory" data-group="core" data-source="mm/vmm.c" data-detail="Combines physical allocation, page tables, kernel heap, process maps, demand paging, and copy-on-write fault resolution."><small>Kernel core</small><h3>Memory system</h3><p>PMM · paging · heap · VMM · COW</p></button>
-            <button class="node" id="interrupts" data-group="core" data-source="init/tables.c" data-detail="GDT/TSS and IDT setup route CPU exceptions, hardware IRQs, and the userspace syscall gate into C handlers."><small>Kernel core</small><h3>CPU tables & IRQ</h3><p>GDT/TSS · IDT · PIC · exception gates</p></button>
-
-            <button class="node" id="fat" data-group="driver" data-source="fs/fat.c" data-detail="The persistent root filesystem implements FAT32 directory, file, metadata, allocation-chain, and mutation operations."><small>Filesystem</small><h3>FAT32 root</h3><p><code>/</code> · persistent files · 8.3-safe mutation</p></button>
-            <button class="node" id="ramfs" data-group="driver" data-source="fs/ramfs.c" data-detail="Two RAM filesystem instances mount at /dev and /tmp; /dev exposes console, null, zero, and kmsg devices."><small>Filesystem</small><h3>RAM filesystems</h3><p><code>/dev</code> · <code>/tmp</code> · device nodes</p></button>
-            <button class="node" id="pipes" data-group="driver" data-source="fs/pipe.c" data-detail="An in-kernel circular buffer backs VFS pipe endpoints and yields with timed sleeps when empty or full."><small>IPC</small><h3>Pipes</h3><p>reader/writer refs · ring buffer · backpressure</p></button>
-            <button class="node" id="locks" data-group="core" data-source="locks/mutex.c" data-detail="Spinlocks protect short critical sections; sleeping mutexes coordinate longer operations using scheduler wakeups."><small>Kernel core</small><h3>Synchronization</h3><p>spinlocks · mutexes · wait channels</p></button>
-            <button class="node" id="timer" data-group="driver" data-source="timer/pit.c" data-detail="PIT ticks advance jiffies and invoke schedule at 50 Hz; RTC support is initialized alongside it."><small>Timer</small><h3>PIT & RTC</h3><p>100 Hz ticks · 50 Hz scheduling · sleeps</p></button>
-            <button class="node" id="console" data-group="driver" data-source="output/output.c" data-detail="A shared input path receives keyboard and UART bytes; output fans out to the VGA framebuffer console and serial port."><small>I/O</small><h3>Console & graphics</h3><p>keyboard · UART · VGA text · framebuffer</p></button>
-
-            <button class="node" id="ata" data-group="driver" data-source="block/ata.c" data-detail="A mutex-serialized PIO ATA driver probes known ports, reads the MBR, and caches recently read 512-byte sectors."><small>Block driver</small><h3>ATA PIO</h3><p>MBR probe · sector I/O · read-through cache</p></button>
-            <button class="node" id="hardware" data-group="hardware" data-source="asm/asm.c" data-detail="The x86-64 CPU/MMU, PIC, PIT/RTC, keyboard, UART, framebuffer, and emulated disk form the hardware-facing base."><small>Machine</small><h3>x86-64 hardware / QEMU</h3><p>CPU + MMU · IRQ devices · display · disk</p></button>
-          </div>
-        </div>
-
-        <div class="inspector" aria-live="polite">
-          <div><span class="inspector-label">Selected subsystem</span><h3 id="inspect-title">Explore the map</h3></div>
-          <p id="inspect-copy">Click a node to highlight everything it directly calls or receives data from.</p>
-          <a class="source-link" id="inspect-source" href="README.md">README.md ↗</a>
-        </div>
-      </div>
-    </section>
-
-    <section id="boot" class="shell">
-      <div class="section-head">
-        <div><span class="section-index">02 / BOOT</span><h2>From bootloader to PID 1</h2></div>
-        <p>The order below follows <code>kernel_bootstrap</code>, <code>kmain</code>, <code>kinit</code>, and <code>kernel</code>. ATA initialization discovers and registers the FAT root before RAM filesystems are mounted.</p>
-      </div>
-      <div class="bootline">
-        <article class="boot-step"><div class="dot">01</div><h3>GRUB / Multiboot</h3><p>Loads the kernel and supplies memory plus framebuffer metadata.</p><code>boot/grub.cfg</code></article>
-        <article class="boot-step"><div class="dot">02</div><h3>Bootstrap</h3><p>Builds temporary 2 MiB mappings, enables PAE + long mode, jumps high.</p><code>init/loader.s</code></article>
-        <article class="boot-step"><div class="dot">03</div><h3>CPU foundations</h3><p>Initializes output, validates Multiboot, then installs GDT/TSS and IDT.</p><code>init/kernel.c</code></article>
-        <article class="boot-step"><div class="dot">04</div><h3>Memory</h3><p>Starts the PMM, protected paging, kernel heap, VMM, stack, and framebuffer.</p><code>mm/*.c</code></article>
-        <article class="boot-step"><div class="dot">05</div><h3>Devices & services</h3><p>PIC → ATA/FAT → timers → exec → scheduler → FPU → RAMFS mounts.</p><code>kinit()</code></article>
-        <article class="boot-step"><div class="dot">06</div><h3>Userspace</h3><p>Adds idle, loads <code>/sbin/init</code>, and lets the scheduler take over.</p><code>exec_from_inode()</code></article>
-      </div>
-    </section>
-
-    <section id="flows" class="shell">
-      <div class="section-head">
-        <div><span class="section-index">03 / INTERACTIONS</span><h2>Four critical paths</h2></div>
-        <p>These traces make the high-level arrows concrete. Each step names the owning subsystem or the key function used at the boundary.</p>
-      </div>
-      <div class="flow-grid">
-        <article class="flow-card">
-          <header><h3>File read / write</h3><span class="number">PATH 01</span></header>
-          <p>A userspace descriptor resolves through the current task before VFS dispatches to the mounted implementation.</p>
-          <div class="flow"><span>app</span><i>→</i><span>int 0x80</span><i>→</i><span>process FD</span><i>→</i><span>VFS</span><i>→</i><span>FAT / RAMFS / pipe</span><i>→</i><span>device</span></div>
-          <div class="return-note">return: byte count or −1 → userspace RAX</div>
-        </article>
-
-        <article class="flow-card">
-          <header><h3>Fork then exec</h3><span class="number">PATH 02</span></header>
-          <p><code>fork</code> shares writable pages as COW; <code>exec</code> replaces the map with validated, lazy file-backed ELF segments.</p>
-          <div class="flow"><span>fork syscall</span><i>→</i><span>scheduler</span><i>→</i><span>COW VMM</span><i>→</i><span>exec syscall</span><i>→</i><span>VFS + ELF</span><i>→</i><span>new map</span></div>
-          <div class="return-note">fault path: #PF → COW copy or demand-load page → resume</div>
-        </article>
-
-        <article class="flow-card">
-          <header><h3>Timer preemption</h3><span class="number">PATH 03</span></header>
-          <p>The PIT supplies 100 ticks per second. Every second tick reaches the round-robin scheduler for a 50 Hz scheduling cadence.</p>
-          <div class="flow"><span>PIT IRQ0</span><i>→</i><span>IDT 32</span><i>→</i><span>timer_irq</span><i>→</i><span>jiffies++</span><i>→</i><span>schedule</span><i>→</i><span>context switch</span></div>
-          <div class="return-note">state: RUNNING → READY; sleeping timers may become READY</div>
-        </article>
-
-        <article class="flow-card">
-          <header><h3>waitpid + WNOHANG</h3><span class="number">PATH 04</span></header>
-          <p><code>WNOHANG</code> selects a locked, non-blocking child scan instead of putting the parent on its wait channel.</p>
-          <div class="flow"><span>waitpid</span><i>→</i><span>syscall 7</span><i>→</i><span>process_wait</span><i>→</i><span>sched_reap_child</span><i>→</i><span>PID / 0 / −1</span></div>
-          <div class="return-note">0 = matching child still runs; PID = reaped; −1 = no match</div>
-        </article>
+      <div class="grid" style="margin-top:1rem">
+        <article class="card"><span class="kicker">Architecture</span><span class="metric">1 shared compositor</span><p>Win95 and Aqua are desktop-shell processes and style profiles around the same <code>kuid</code> compositor. They are separate launch environments, not a live theme toggle.</p></article>
+        <article class="card"><span class="kicker">Isolation</span><span class="metric">1 map / process</span><p>User processes get private page tables, stacks, heaps, file tables, current directories, FPU state, and lifecycle state.</p></article>
+        <article class="card"><span class="kicker">Persistence</span><span class="metric">FAT32 + RAMFS</span><p>The root disk persists changes. <code>/dev</code>, <code>/tmp</code>, and <code>/proc</code> are RAM-backed mounts recreated each boot.</p></article>
       </div>
     </section>
 
-    <section id="sources" class="shell">
-      <div class="section-head">
-        <div><span class="section-index">04 / SOURCE MAP</span><h2>Where each layer lives</h2></div>
-        <p>Relative links open the implementation directly when this atlas is served from or opened inside the repository.</p>
+    <section id="boot">
+      <h2>Boot and initialization</h2>
+      <p class="lede">The boot assembly establishes the architectural invariants that every later subsystem assumes. Initialization then proceeds in dependency order, ending by replacing the initial kernel task with the first userspace executable.</p>
+      <div class="flow" aria-label="Boot sequence">
+        <div><strong>1 · Multiboot</strong><small>The loader receives a Multiboot boot-info structure and requests a 1280×720, 32-bpp framebuffer.</small></div>
+        <div><strong>2 · Long mode</strong><small>Temporary 2 MiB mappings cover identity and higher-half addresses; PAE, EFER.LME, and paging are enabled.</small></div>
+        <div><strong>3 · Core tables</strong><small><code>kmain</code> validates the magic and discovers memory. GDT, TSS, IDT, paging, PMM, heap, and a protected kernel stack follow.</small></div>
+        <div><strong>4 · Devices + services</strong><small>Framebuffer, PIC, mouse, ATA, PIT, exec, scheduler, FPU, RAMFS mounts, and MTRR reporting initialize.</small></div>
+        <div><strong>5 · Userspace</strong><small>The idle task is created. The kernel tries <code>/sbin/init</code>, then shell fallbacks; PID 1 supervises the interactive shell.</small></div>
       </div>
-      <div class="source-table">
-        <div class="source-row"><strong>Boot & entry</strong><a href="init/loader.s">init/loader.s</a><span>Multiboot header, temporary page tables, long-mode transition</span></div>
-        <div class="source-row"><strong>Kernel init</strong><a href="init/kernel.c">init/kernel.c</a><span>Ordered subsystem initialization and first userspace image</span></div>
-        <div class="source-row"><strong>Syscall ABI</strong><a href="init/syscall.c">init/syscall.c</a><span>30-entry dispatch table and syscall implementations</span></div>
-        <div class="source-row"><strong>Processes</strong><a href="sched/">sched/</a><span>Scheduler, FD bridge, fork, exec, exit, wait, sleep channels</span></div>
-        <div class="source-row"><strong>Memory</strong><a href="mm/">mm/</a><span>PMM, paging, heap allocator, VMM, COW, lazy page faults, MTRR</span></div>
-        <div class="source-row"><strong>Filesystems</strong><a href="fs/">fs/</a><span>VFS, FAT32, RAMFS device nodes, and pipes</span></div>
-        <div class="source-row"><strong>Block I/O</strong><a href="block/ata.c">block/ata.c</a><span>PIO ATA, MBR discovery, sector cache</span></div>
-        <div class="source-row"><strong>Interrupts & time</strong><a href="irq/">irq/</a><span>PIC routing; PIT and RTC implementations live under timer/</span></div>
-        <div class="source-row"><strong>Console I/O</strong><a href="output/">output/</a><span>UART, keyboard/input, VGA text renderer, framebuffer, kernel log</span></div>
-        <div class="source-row"><strong>Synchronization</strong><a href="locks/">locks/</a><span>Spinlocks and scheduler-aware mutexes</span></div>
+      <div class="grid" style="margin-top:1rem">
+        <article class="card half"><h3>Link and address layout</h3><ul><li>Linker entry: <code>kernel_bootstrap</code>.</li><li>Physical load begins at <code>0x00100000</code>.</li><li>Higher-half kernel base: <code>0xffffffff80000000</code>.</li><li>Direct physical map base: <code>0xffff888000000000</code>.</li><li>The loader enters in 32-bit mode, constructs bootstrap tables, then jumps through a 64-bit GDT into <code>Realm64</code> and finally the higher-half <code>kmain</code>.</li></ul></article>
+        <article class="card half"><h3>PID 1 contract</h3><p><code>/sbin/init</code> is a small userspace supervisor. It starts <code>/bin/nushell</code>, waits for it, and restarts it if it exits. Kernel process management reserves PID 0 for idle and PID 1 for init; orphaned processes are reparented so they remain reapable.</p><p>Fallbacks in the kernel allow development images without a fully installed init to enter <code>/bin/nushell</code> or a root-level <code>nushell</code>.</p></article>
       </div>
+    </section>
+
+    <section id="kernel">
+      <h2>Kernel subsystem map</h2>
+      <p class="lede">The kernel is monolithic: its scheduler, memory managers, VFS, filesystems, drivers, interrupt handlers, and syscall dispatcher link into one image. The module boundaries below are source and ownership boundaries, not protection boundaries.</p>
+      <div class="grid">
+        <article class="card"><span class="tag kernel">init</span><h3>Entry, tables, syscalls</h3><p>Bootstrap orchestration, GDT/TSS/IDT installation, exception gates, the shell fallback, ELF handoff, and the 34-entry syscall table.</p></article>
+        <article class="card"><span class="tag kernel">sched</span><h3>Tasks and execution</h3><p>Task table, context switching, timer preemption, wait channels, process lifecycle, <code>fork</code>, ELF <code>exec</code>, argument setup, and status reporting.</p></article>
+        <article class="card"><span class="tag kernel">mm</span><h3>Memory</h3><p>Early paging, physical-page allocation, protected higher-half mappings, per-process VMM sections, lazy file/anonymous faults, copy-on-write, and kernel heap allocation.</p></article>
+        <article class="card"><span class="tag kernel">fs</span><h3>VFS and filesystems</h3><p>Path lookup, mount dispatch, descriptors, reference-counted open files, FAT32 persistence, RAMFS devices/pseudo-files, and anonymous pipes.</p></article>
+        <article class="card"><span class="tag kernel">block</span><h3>Storage</h3><p>PIO ATA probing and transfer, MBR partition discovery, and a 512-sector read cache. The first partition is handed to FAT.</p></article>
+        <article class="card"><span class="tag kernel">output</span><h3>Human I/O</h3><p>Framebuffer drawing/presentation, VGA and UART output, keyboard input, PS/2 mouse IRQ decoding and event queue, and unified output/input entry points.</p></article>
+        <article class="card"><span class="tag kernel">irq</span><h3>Interrupt control</h3><p>PIC remapping/masking, interrupt acknowledgement, IDT stubs, kernel exception policy, and user-fault containment.</p></article>
+        <article class="card"><span class="tag kernel">timer</span><h3>Clocking</h3><p>PIT at 100 Hz drives jiffies and scheduler entry. RTC supplies calendar time; millisecond timers convert onto the tick clock.</p></article>
+        <article class="card"><span class="tag kernel">locks</span><h3>Synchronization</h3><p>Spinlocks protect short kernel critical sections. Mutex/sleep-channel paths allow tasks to block and wake without busy-waiting at the process level.</p></article>
+      </div>
+    </section>
+
+    <section id="process">
+      <h2>Processes, scheduling, and execution</h2>
+      <p class="lede">Scheduling is preemptive round-robin on a single CPU. A timer interrupt enters the scheduler every 10 ms. Blocking kernel operations sleep on channels and wake when their condition changes, which is especially important for GUI pipes and child-process control.</p>
+      <div class="grid">
+        <article class="card wide"><h3>Task record</h3><p>Each task tracks PID and parent, exit status, name, process type, state, saved registers, kernel and userspace stacks, heap position, virtual-memory map, start address, context-switch count, working directory, 64 descriptor slots, a 512-byte x87/SSE save area, timer state, and a wait channel.</p><p>States are <code>NEW</code>, <code>READY</code>, <code>RUNNING</code>, <code>BLOCKED</code>, and <code>DONE</code>. The table supports up to 1,024 task records. PID 0 is the idle task and is skipped whenever ordinary runnable work exists.</p></article>
+        <article class="card"><span class="metric">100 Hz</span><p>PIT tick and scheduler cadence. FPU state and active page tables change with the selected task.</p></article>
+        <article class="card half"><h3><code>fork</code></h3><p>Creates a child task with copied process state and a distinct descriptor table whose open-file objects are reference-counted. Writable userspace pages are shared copy-on-write until either process writes. The child returns zero; the parent receives the child PID.</p></article>
+        <article class="card half"><h3><code>exec</code></h3><p>Serializes image replacement, validates the ELF header and program headers, reserves file-backed load segments, checks userspace addresses and permissions, builds the initial stack/arguments, then atomically adopts the new VMM map. Segment bytes arrive lazily on page fault.</p></article>
+        <article class="card half"><h3><code>wait</code> and exit</h3><p>A parent can block until a child becomes <code>DONE</code>, collect its status, and release the task slot. Exiting closes inherited descriptors, records status, wakes waiters, and schedules another task. User memory faults use status 139.</p></article>
+        <article class="card half"><h3>Blocking I/O</h3><p>Pipe readers sleep while empty but writers exist; writers sleep while full but readers exist. Close and data transitions wake the opposing wait channel. This prevents the compositor, shell, IDE build tasks, and parallel demos from burning scheduler time while waiting.</p></article>
+      </div>
+    </section>
+
+    <section id="memory">
+      <h2>Memory architecture</h2>
+      <div class="grid">
+        <article class="card"><span class="kicker">Physical</span><h3>PMM</h3><p>Boot memory-map data seeds physical-page ownership. The allocator supplies 4 KiB frames to page tables, user mappings, stacks, heaps, and kernel subsystems.</p></article>
+        <article class="card"><span class="kicker">Kernel virtual</span><h3>Paging + heap</h3><p>The kernel occupies the higher half and has a direct physical map. Protected mappings replace temporary bootstrap tables. The kernel heap uses a first-fit allocator with splitting and coalescing.</p></article>
+        <article class="card"><span class="kicker">Process virtual</span><h3>VMM</h3><p>VMM regions distinguish stack, text, and data; anonymous and file-backed storage; writable and executable policy. Each process starts with a 1 MiB stack near <code>0x700000000</code> and an initial heap near <code>0x600000000</code>.</p></article>
+        <article class="card half"><h3>Page-fault decision path</h3><ol><li>If a present userspace page is written, attempt copy-on-write resolution.</li><li>If a page is absent but belongs to a valid VMM region, allocate it lazily. File mappings read only the overlapping bytes and zero the remainder.</li><li>A kernel-mode fault may still be recoverable when the kernel is touching a valid lazy userspace buffer during a syscall.</li><li>An invalid userspace fault prints a diagnostic, exits the task with 139, and schedules away.</li><li>An invalid kernel fault is fatal and panics.</li></ol></article>
+        <article class="card half"><h3>Why lazy mapping matters</h3><p>ELF load segments do not have to be copied eagerly at <code>exec</code>. Pages are populated on demand from the executable, lowering launch work and memory use. Copy-on-write similarly makes <code>fork</code> cheap until the parent or child mutates shared data.</p><p>The tradeoff is more page-fault complexity: VFS-backed faults, COW ownership, address validation, and kernel/user fault context must agree.</p></article>
+      </div>
+    </section>
+
+    <section id="storage">
+      <h2>Storage, VFS, devices, and pipes</h2>
+      <p class="lede">All regular application I/O is descriptor-based. VFS resolves a path to a mounted device and filesystem operation, while each task’s descriptor points to a reference-counted open-file object carrying position and flags.</p>
+      <div class="diagram" role="img" aria-label="VFS storage and IPC architecture">
+        <svg viewBox="0 0 1120 380" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arrow2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#53d6d0"/></marker></defs>
+          <rect x="15" y="15" width="1090" height="350" rx="18" fill="#07131d" stroke="#294254"/>
+          <rect x="50" y="48" width="240" height="70" rx="12" fill="#102c32" stroke="#337471"/><text x="70" y="77" class="svg-title">Process file table</text><text x="70" y="99" class="svg-small">64 descriptor slots per task</text>
+          <rect x="390" y="48" width="310" height="70" rx="12" fill="#152a45" stroke="#4b73a7"/><text x="410" y="77" class="svg-title">Global open-file objects</text><text x="410" y="99" class="svg-small">refcount · inode copy · pos · flags · pipe</text>
+          <rect x="800" y="48" width="250" height="70" rx="12" fill="#152a45" stroke="#4b73a7"/><text x="820" y="77" class="svg-title">VFS path + mount layer</text><text x="820" y="99" class="svg-small">≤ 10 devices · ≤ 1,024 opens</text>
+          <path d="M290 83H390" stroke="#53d6d0" stroke-width="2" marker-end="url(#arrow2)"/><path d="M700 83H800" stroke="#53d6d0" stroke-width="2" marker-end="url(#arrow2)"/>
+          <rect x="50" y="180" width="310" height="125" rx="12" fill="#251f16" stroke="#866b3f"/><text x="70" y="209" class="svg-title">FAT32 root: /</text><text x="70" y="233" class="svg-body">persistent files and directories</text><text x="70" y="256" class="svg-small">create · write · truncate · rename</text><text x="70" y="277" class="svg-small">unlink · mkdir · rmdir · stat</text><text x="70" y="297" class="svg-small">ATA PIO → MBR first partition</text>
+          <rect x="405" y="180" width="310" height="125" rx="12" fill="#102c32" stroke="#337471"/><text x="425" y="209" class="svg-title">RAMFS mounts</text><text x="425" y="233" class="svg-body">/dev · /tmp · /proc</text><text x="425" y="256" class="svg-small">console · null · zero · kmsg · mouse</text><text x="425" y="277" class="svg-small">temporary files · processes · meminfo</text><text x="425" y="297" class="svg-small">recreated at boot</text>
+          <rect x="760" y="180" width="290" height="125" rx="12" fill="#211b36" stroke="#785cb3"/><text x="780" y="209" class="svg-title">Anonymous pipe</text><text x="780" y="233" class="svg-body">4 KiB ring buffer</text><text x="780" y="256" class="svg-small">reader/writer references</text><text x="780" y="277" class="svg-small">sleep/wakeup channels</text><text x="780" y="297" class="svg-small">readiness + hangup via fd_status</text>
+          <path d="M890 118L205 180" stroke="#53d6d0" stroke-width="2" marker-end="url(#arrow2)"/><path d="M925 118L560 180" stroke="#53d6d0" stroke-width="2" marker-end="url(#arrow2)"/><path d="M960 118L905 180" stroke="#53d6d0" stroke-width="2" marker-end="url(#arrow2)"/>
+        </svg>
+      </div>
+      <div class="grid" style="margin-top:1rem">
+        <article class="card half"><h3>ATA and FAT path</h3><p>The ATA driver probes legacy ports, validates the MBR signature <code>0xaa55</code>, and exposes the first partition’s start, size, and type to FAT. Transfers use PIO LBA28 with a 512-sector read cache. Long device polls periodically yield so a slow disk does not completely monopolize the CPU.</p><p>FAT is the persistent root. Its mutation path is intentionally conservative and 8.3-safe for create, remove, rename, truncate, metadata, and regular writes.</p></article>
+        <article class="card half"><h3>Pipe semantics in the GUI</h3><p>Each managed GUI application and the desktop shell use a pair of anonymous pipes with <code>kuid</code>. The same primitive supports IDE build output and the parallel-writer demo. Kernel-level blocking and readiness status let the compositor multiplex work while bounded application response deadlines prevent one client from freezing the whole desktop.</p></article>
+      </div>
+    </section>
+
+    <section id="gui">
+      <h2>Shared compositor and desktop environments</h2>
+      <p class="lede">The GUI follows the same separation of mechanism and policy used by X/Wayland-style systems, at a deliberately smaller scale. <code>kuid</code> is the mechanism: display ownership, input routing, window state, composition, and client supervision. A shell is policy and appearance: panel or dock, menus, launchers, task switching, and style metrics.</p>
+
+      <div class="diagram" role="img" aria-label="Detailed shared compositor and shell protocol diagram">
+        <svg viewBox="0 0 1120 590" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arrow3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#53d6d0"/></marker></defs>
+          <rect x="15" y="15" width="1090" height="560" rx="18" fill="#07131d" stroke="#294254"/>
+          <text x="45" y="50" class="svg-small">PLUGGABLE POLICY / SKIN</text>
+          <rect x="45" y="68" width="480" height="108" rx="13" fill="#211b36" stroke="#785cb3"/>
+          <text x="65" y="97" class="svg-title">Win95 shell + style id 1</text><text x="65" y="121" class="svg-body">bottom 32 px taskbar · Start menu · window buttons · clock</text><text x="65" y="145" class="svg-small">square chrome · border 4 · title 24 · desktop/start-menu manifests</text>
+          <rect x="595" y="68" width="480" height="108" rx="13" fill="#30213b" stroke="#8e6ab1"/>
+          <text x="615" y="97" class="svg-title">Aqua shell + style id 2</text><text x="615" y="121" class="svg-body">top 24 px menu · glass dock · clock · hover magnification</text><text x="615" y="145" class="svg-small">rounded chrome · border 3 · title 25 · dock 74 · icon 58→76 px</text>
+          <path d="M285 176V224H480" stroke="#bc8cff" stroke-width="2" marker-end="url(#arrow3)"/><path d="M835 176V224H640" stroke="#bc8cff" stroke-width="2" marker-end="url(#arrow3)"/>
+
+          <rect x="270" y="206" width="580" height="90" rx="13" fill="#102c32" stroke="#337471"/>
+          <text x="290" y="235" class="svg-title">Shell protocol v4</text><text x="290" y="259" class="svg-body">render and pointer requests ↔ display stream and shell actions</text><text x="290" y="281" class="svg-small">launch · activate · close active · quit · profile metrics · cached stable render</text>
+
+          <rect x="210" y="335" width="700" height="137" rx="15" fill="#102538" stroke="#39778c"/>
+          <text x="235" y="365" class="svg-title">kuid shared compositor / window manager</text>
+          <text x="235" y="392" class="svg-body">input dispatch · focus · dragging · geometry · app spawning/reaping · style distribution</text>
+          <text x="235" y="417" class="svg-small">application display commands → validate → replay into cached ARGB window surface</text>
+          <text x="235" y="440" class="svg-small">wallpaper → desktop icons → app surfaces/chrome → shell surface → cursor → present damage</text>
+          <text x="235" y="461" class="svg-small">one shell restart after disconnect · 500 ms bounded response reads</text>
+          <path d="M560 296V335" stroke="#53d6d0" stroke-width="2" marker-end="url(#arrow3)"/>
+
+          <rect x="45" y="506" width="310" height="45" rx="10" fill="#152a45" stroke="#4b73a7"/><text x="65" y="534" class="svg-title">keyboard + mouse events</text>
+          <rect x="405" y="506" width="310" height="45" rx="10" fill="#152a45" stroke="#4b73a7"/><text x="425" y="534" class="svg-title">framebuffer + rect present</text>
+          <rect x="765" y="506" width="310" height="45" rx="10" fill="#152a45" stroke="#4b73a7"/><text x="785" y="534" class="svg-title">app pipe sessions · KUI v8</text>
+          <path d="M200 506L310 472" stroke="#70a8ff" stroke-width="2" marker-end="url(#arrow3)"/><path d="M560 472V506" stroke="#70a8ff" stroke-width="2" marker-end="url(#arrow3)"/><path d="M920 506L810 472" stroke="#70a8ff" stroke-width="2" marker-end="url(#arrow3)"/>
+        </svg>
+      </div>
+
+      <div class="grid" style="margin-top:1rem">
+        <article class="card half"><h3>Managed application transaction</h3><ol class="sequence"><li><code>kuid</code> sends an event with serial, content-local pointer coordinates, current style, window size, argument, and typed path/text clipboard state.</li><li>The client validates protocol magic/version, applies the supplied style, updates application state, and records drawing commands.</li><li>The client returns a title, size constraints, timer request, action, display bytes, and optionally a damage rectangle.</li><li>The compositor validates the response and replays the commands into that window’s cached pixel surface.</li><li>Only the affected desktop area is recomposed and presented. Moving or exposing an unchanged window reuses the cache without asking the app to redraw.</li></ol></article>
+        <article class="card half"><h3>Display vocabulary</h3><p>The retained command stream supports filled rectangles, alpha-filled rectangles, lines, text, opaque bitmap rows, rectangular bitmap rows, and alpha bitmap rows. Text can be opaque or transparent and select the proportional UI or monospace font role.</p><p>Raster assets use the internal <code>KIMG</code> format; fonts use <code>KFONT</code>. Both shells and compositor cache decoded assets rather than reparsing them every frame.</p><p class="warning good">Responsiveness comes from cached window surfaces, partial damage, sleepable pipes, stable shell-render caching, and response deadlines—not from putting GUI policy into the kernel.</p></article>
+        <article class="card"><h3>Style contract</h3><p>A <code>kui_style</code> carries style ID, flags, palette roles, selection/desktop/panel colors, and window metrics. Every app receives it, so widgets and content match the active shell without separate app binaries.</p></article>
+        <article class="card"><h3>Aqua behavior</h3><p>The dock caches image icons and grows the hovered icon from 58 to 76 px, with 66 px neighbors. It shows running indicators and minimized-window entries. Rounded window chrome is composited for every managed app.</p></article>
+        <article class="card"><h3>Win95 behavior</h3><p>The modular shell draws the taskbar, Start menu, running-window buttons, clock, and square classic chrome. It discovers the same application manifests and launches the same KUI clients.</p></article>
+      </div>
+    </section>
+
+    <section id="apps">
+      <h2>Application and asset architecture</h2>
+      <p class="lede">Applications are installed independently and discovered at runtime through <code>/usr/share/applications/*.app</code>. A manifest defines ID, label, executable, icon, optional argument and accepted type, launcher visibility, autostart/exclusive behavior, and initial geometry.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Group</th><th>Applications</th><th>Architecture notes</th></tr></thead>
+          <tbody>
+            <tr><td>Desktop + files</td><td>Finder / System Disk, Trash, Readme, About</td><td>Finder is the autostart file browser, routes open actions by type, uses home/disk/folder/file art, and ellipsizes labels that exceed their icon cell.</td></tr>
+            <tr><td>Creation</td><td>Editor, C IDE, Paint, KSheet</td><td>The editor owns the text model and C-token highlighting. Editor and IDE share KUI's wrapped-text hit testing, drag selection, buffer-edit operations, context menu, and compositor text clipboard. The IDE adds source/build workflow and asynchronous compiler output. Paint separates drawing state from its KUI front end. KSheet provides a dynamically growing sparse CSV grid with multi-letter columns, arithmetic, cell references, range functions, formula-bar selection, rectangular mouse and keyboard selection, TSV clipboard transfer, and range-aware context-menu editing. It starts at 100×26 and safely grows to 65,536 rows, 4,096 columns, and 65,536 populated cells.</td></tr>
+            <tr><td>System</td><td>Terminal, Calculator, Sysmon, Parallel Writers</td><td>Terminal bridges shell I/O into a managed window and runs commands asynchronously: a per-terminal output log is drained and the child is reaped from short KUI timer events, so long compiles never violate the compositor response deadline. Sysmon reads process/memory pseudo-files. Parallel Writers demonstrates two visible windows making progress concurrently through scheduler and pipe behavior.</td></tr>
+            <tr><td>Native games</td><td>Minesweeper, Solitaire, City Builder, Tetris</td><td>Game logic is kept separately testable where practical. City Builder splits simulation and UI. Tetris splits rules from KUI presentation and composes real tile images into a bounded bitmap frame.</td></tr>
+            <tr><td>Exclusive ports</td><td>Doom, Quake, Duke3D</td><td>Full-screen ports bypass normal KUI window management and use framebuffer/input syscalls directly. They cannot participate as ordinary overlapped desktop windows.</td></tr>
+            <tr><td>Toolchain/runtime</td><td>Nushell, Newlib, TinyCC, Lua 5.4.4</td><td>Static Newlib provides the userspace C runtime. TinyCC and its sources/runtime are optionally installed for native C compilation; Lua provides an embedded scripting runtime.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid" style="margin-top:1rem">
+        <article class="card half"><h3>Asset pipeline</h3><p>Source wallpaper and icon art lives under <code>extras/desktop/art</code>. Build rules use ImageMagick and repository converters to produce OS-native KIMG resources: desktop wallpaper, 64×64 app icons, and 16×16 Tetris block variants. Aqua receives its own blue wallpaper while Win95 retains the existing desktop art.</p></article>
+        <article class="card half"><h3>Font pipeline</h3><p>Host DejaVu Sans, DejaVu Sans Condensed, and DejaVu Sans Mono sources are rasterized into KFONT assets. KUI chooses proportional antialiased UI text or fixed-width editor/terminal text by role. This keeps font rasterization out of the frame loop and makes both shells share the same legibility improvements.</p></article>
+      </div>
+    </section>
+
+    <section id="abi">
+      <h2>System-call ABI</h2>
+      <p class="lede">A user-callable IDT gate at vector <code>0x80</code> enters the assembly syscall bridge. The syscall number is in <code>RAX</code>; ordinary x86-64 C argument registers carry parameters. The dispatcher validates the table slot and returns a machine-word result.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Call</th><th>Responsibility</th><th>Primary consumers</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td><code>sleep</code></td><td>Block for a duration</td><td>Shells, apps, tests</td></tr>
+            <tr><td>1</td><td><code>debugprint</code></td><td>Kernel diagnostic output</td><td>Early programs/tests</td></tr>
+            <tr><td>2–4</td><td><code>open</code>, <code>close</code>, <code>read</code></td><td>Descriptor lifecycle and input</td><td>All userspace</td></tr>
+            <tr><td>5–8</td><td><code>fork</code>, <code>exit</code>, <code>wait</code>, <code>exec</code></td><td>Process lifecycle and image replacement</td><td>Init, shells, IDE, compositor</td></tr>
+            <tr><td>9</td><td><code>sbrk</code></td><td>Grow process heap</td><td>Newlib allocator</td></tr>
+            <tr><td>10</td><td><code>debug_read_input</code></td><td>Legacy/debug console input</td><td>Shell/debug tools</td></tr>
+            <tr><td>11</td><td><code>exec_args</code></td><td>Execute with argument vector</td><td>Shells/launchers</td></tr>
+            <tr><td>12–14</td><td><code>write</code>, <code>creat</code>, <code>stat</code></td><td>File output, creation, metadata</td><td>Newlib and applications</td></tr>
+            <tr><td>15–18</td><td><code>fstat</code>, <code>getdents</code>, <code>chdir</code>, <code>mkdir</code></td><td>Metadata, directories, working directory</td><td>Finder, shells</td></tr>
+            <tr><td>19–22</td><td><code>dup</code>, <code>dup2</code>, <code>unlink</code>, <code>lseek</code></td><td>Descriptor routing and file mutation/position</td><td>Shell pipelines, editors</td></tr>
+            <tr><td>23</td><td><code>framebuffer_present</code></td><td>Present a complete frame</td><td>KUI/exclusive apps</td></tr>
+            <tr><td>24–25</td><td><code>key_poll</code>, <code>ticks_ms</code></td><td>Keyboard events and monotonic time</td><td>KUI/games</td></tr>
+            <tr><td>26–27</td><td><code>pipe</code>, <code>tty_raw</code></td><td>IPC and terminal input mode</td><td>KUI, shell, IDE</td></tr>
+            <tr><td>28–29</td><td><code>rename</code>, <code>rmdir</code></td><td>Filesystem mutation</td><td>Finder/tools</td></tr>
+            <tr><td>30–31</td><td><code>mouse_poll</code>, <code>framebuffer_size</code></td><td>Pointer events and display discovery</td><td>KUI/exclusive apps</td></tr>
+            <tr><td>32</td><td><code>framebuffer_present_rect</code></td><td>Damage-region presentation</td><td>KUI compositor</td></tr>
+            <tr><td>33</td><td><code>fd_status</code></td><td>Readable/writable/hangup status</td><td>KUI and pipe-driven apps</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="build">
+      <h2>Build, install, and disk-image pipeline</h2>
+      <p class="lede">The repository produces two coupled artifacts: a freestanding kernel and a populated boot disk. Kernel and userspace have separate toolchain assumptions, then meet in the image staging pipeline.</p>
+      <div class="flow" aria-label="Build pipeline">
+        <div><strong>Kernel objects</strong><small>Freestanding x86-64 C/assembly across init, scheduling, memory, filesystem, block, IRQ, output, timers, and locks.</small></div>
+        <div><strong>Kernel image</strong><small>The linker emits <code>kernel.bin</code>; objcopy also creates the Multiboot/QEMU-compatible 32-bit ELF container.</small></div>
+        <div><strong>Static userspace</strong><small>Newlib/libm plus repository extras and local program trees become staged binaries and converted GUI assets.</small></div>
+        <div><strong>Manifest install</strong><small><code>image/manifest.txt</code> selects programs for <code>/bin</code>; PID 1 installs to <code>/sbin/init</code>; application manifests/assets install under <code>/usr/share</code>.</small></div>
+        <div><strong>FAT32 disk</strong><small>A 256 MiB MBR image gets its first FAT32 partition, rootfs seed, programs, optional ports, Lua, and TinyCC content.</small></div>
+      </div>
+      <div class="grid" style="margin-top:1rem">
+        <article class="card half"><h3>Compiler profile</h3><p>Kernel code is freestanding, static, x86-64, and built for the higher-half large code model. GUI code uses optimization for rendering throughput; sensitive scheduler code is kept unoptimized where its assembly/context assumptions require it. Userspace links against the locally built KyleOS Newlib port.</p></article>
+        <article class="card half"><h3>Image lifecycle</h3><p>The default disk is <code>build/image/test-hd.img</code>. A readiness marker allows normal rebuilds to reuse it, preserving user-created files and avoiding a costly repartition/reinstall cycle. Consequently, newly staged binaries do not appear in an already-ready image until the explicit reset/rebuild path runs.</p><p class="warning"><strong>Operational boundary:</strong> <code>image-reset</code> intentionally destroys the generated disk image. It is the correct way to force a fresh install, but not a harmless compile step.</p></article>
+        <article class="card half"><h3>QEMU runtime</h3><p>The development target passes the kernel directly with <code>-kernel</code> and attaches the FAT32 hard disk. The boot framebuffer, ATA controller, keyboard, mouse, serial log, and CPU/MMU behavior form the hardware contract used by the current drivers.</p></article>
+        <article class="card half"><h3>Ports and optional payloads</h3><p>Image rules can stage DoomGeneric, software Quake, Duke3D, Lua 5.4.4, TinyCC runtime/source, and game data. These are payloads above the stable kernel ABI; they do not become kernel modules.</p></article>
+      </div>
+    </section>
+
+    <section id="tests">
+      <h2>Testing and the meaning of “complete”</h2>
+      <p class="lede">The test architecture deliberately separates fast host-side logic checks from booted end-to-end behavior. The completion marker is a contract, not merely a string printed at the end of an optimistic script.</p>
+      <div class="grid">
+        <article class="card"><span class="metric">9</span><h3>Booted test groups</h3><p>Filesystem, copy, kernel log, wait, pipe, demand paging, expected user #GP containment, expected OOM containment, and 200-iteration exec stress.</p></article>
+        <article class="card"><span class="metric">1×</span><h3>Completion marker</h3><p>The harness requires exactly one <code>ALL-TESTS-COMPLETE count=9</code>. Zero markers, duplicates, explicit failure markers, early QEMU exit, and timeout all fail.</p></article>
+        <article class="card"><span class="metric">139</span><h3>Expected containment</h3><p>Fault and OOM tests pass only when the offending userspace task is killed with the expected status while the kernel and test shell remain alive.</p></article>
+        <article class="card half"><h3>Host unit and integration layer</h3><ul><li>Completion-control parsing validates that pass/fail markers cannot accidentally report success.</li><li>C token-highlighting, text selection/buffer editing, context menus, City simulation, Paint brush sizes, Tetris rules, and style helpers run without booting the OS.</li><li>A real Editor client is driven through KUI events to verify selection, Ctrl+C/X/V/A, right-click Delete, clipboard actions, and saved file contents.</li><li>KUI shell tests exercise protocol behavior, Win95/Aqua style selection, rounded Aqua windows, and dock magnification.</li><li>Tetris UI integration feeds real events, replays display commands, and proves the composed tile frame stays below the 256 KiB protocol cap.</li></ul></article>
+        <article class="card half"><h3>Booted end-to-end layer</h3><ol><li>Build kernel and userspace test payloads.</li><li>Reset a dedicated test-suite image so stale binaries cannot masquerade as current results.</li><li>Run host tests.</li><li>Boot QEMU headless in snapshot mode and wait for <code>Kyle OS has booted</code>.</li><li>Inject <code>nushell &lt; /tests/all.sh</code> over the monitor/console channel.</li><li>Parse the serial transcript and enforce the unique completion contract.</li></ol></article>
+      </div>
+      <p class="warning good"><strong>Interpretation:</strong> “all tests complete” means all nine in-guest groups returned their required status in a live kernel boot, the shell reached the final aggregator, and the external harness saw exactly one count-matching marker before timeout. It does not claim exhaustive GUI, hardware, filesystem-corruption, multiprocess-race, or long-duration stability coverage.</p>
+    </section>
+
+    <section id="limits">
+      <h2>Current boundaries and engineering tradeoffs</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Boundary</th><th>Benefit</th><th>Cost / implication</th></tr></thead>
+          <tbody>
+            <tr><td>Single shared userspace compositor</td><td>One rendering/input/window implementation serves both desktop environments; app binaries remain shared.</td><td>A compositor crash ends the desktop session. Shell restart is handled once, but compositor restart/session recovery is not a display-server protocol.</td></tr>
+            <tr><td>Separate Win95 and Aqua launch environments</td><td>Clear, Linux-desktop-like choice with no runtime switch complexity or half-transitioned state.</td><td>Changing environment means leaving one session and launching the other.</td></tr>
+            <tr><td>Synchronous pipe transactions with 500 ms bounds</td><td>Very small protocol and deterministic client state.</td><td>Slow clients can miss a frame/request. This is mitigated by cached window surfaces and damage updates, not fully asynchronous buffering.</td></tr>
+            <tr><td>Retained display commands, compositor raster cache</td><td>Window moves, focus changes, and exposures are fast and do not force application redraw.</td><td>The compositor stores a pixel surface per window and must strictly validate client commands and dimensions.</td></tr>
+            <tr><td>256 KiB display stream</td><td>Bounds pipe memory, validation, and worst-case response work.</td><td>Large images must be tiled/composed carefully; apps cannot submit an arbitrary full 1280×720 raw frame as one normal window update.</td></tr>
+            <tr><td>10 managed windows / 24 app manifests</td><td>Fixed storage and simple failure behavior suit the current system scale.</td><td>Limits must become dynamic or larger before the desktop can scale to workstation workloads. Aqua initially exposes at most 12 app icons and fits no more than 16 total dock items.</td></tr>
+            <tr><td>Monolithic kernel, userspace GUI</td><td>Drivers and core services communicate cheaply; GUI faults remain outside supervisor mode.</td><td>A kernel driver/filesystem defect can affect the whole OS. There is no kernel-module or microkernel isolation.</td></tr>
+            <tr><td>100 Hz single-CPU round robin</td><td>Easy-to-reason-about fairness and responsive enough interactive scheduling.</td><td>No SMP, priority classes, real-time guarantees, or tickless idle; CPU-heavy tasks receive equal slices.</td></tr>
+            <tr><td>Lazy ELF + COW fork</td><td>Fast process creation and lower immediate memory cost.</td><td>Page-fault and VFS correctness become part of ordinary execution and require careful fault-context handling.</td></tr>
+            <tr><td>FAT32 persistent root</td><td>Simple image tooling and host interoperability.</td><td>No journaling, Unix ownership model, or crash-consistency guarantees comparable to a modern native filesystem.</td></tr>
+            <tr><td>Exclusive framebuffer ports</td><td>Large legacy games can run without translating every renderer to KUI.</td><td>They bypass normal window composition and do not coexist as ordinary Aqua/Win95 windows.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="sources">
+      <h2>Source ownership map</h2>
+      <p class="lede">These links are the shortest path from each architectural statement to its implementation. The document describes the current tree, not only README intent.</p>
+      <ul class="source-map">
+        <li><a href="init/loader.s">init/loader.s</a> — Multiboot header, bootstrap page tables, long-mode transition.</li>
+        <li><a href="init/kernel.c">init/kernel.c</a> — initialization order and first userspace process.</li>
+        <li><a href="init/tables.c">init/tables.c</a> — GDT/TSS/IDT and exception/syscall gates.</li>
+        <li><a href="init/syscall.c">init/syscall.c</a> — syscall table and kernel-side implementations.</li>
+        <li><a href="asm/asm_calls.s">asm/asm_calls.s</a> — low-level interrupt/syscall/context entry.</li>
+        <li><a href="sched/sched.c">sched/sched.c</a> and <a href="sched/sched.h">sched/sched.h</a> — task model and scheduler.</li>
+        <li><a href="sched/exec.c">sched/exec.c</a> — ELF validation and process image replacement.</li>
+        <li><a href="mm/paging.c">mm/paging.c</a> and <a href="mm/paging.h">mm/paging.h</a> — page tables, faults, COW.</li>
+        <li><a href="mm/vmm.c">mm/vmm.c</a> and <a href="mm/vmm.h">mm/vmm.h</a> — process mapping regions and lazy backing.</li>
+        <li><a href="mm/pmem.c">mm/pmem.c</a> — physical memory manager.</li>
+        <li><a href="mm/mm.c">mm/mm.c</a> — kernel heap.</li>
+        <li><a href="fs/vfs.c">fs/vfs.c</a> and <a href="fs/vfs.h">fs/vfs.h</a> — mount, path, open-file and descriptor core.</li>
+        <li><a href="fs/fat.c">fs/fat.c</a> — persistent FAT32 implementation.</li>
+        <li><a href="fs/ramfs.c">fs/ramfs.c</a> — <code>/dev</code>, <code>/tmp</code>, and <code>/proc</code>.</li>
+        <li><a href="fs/pipe.c">fs/pipe.c</a> — anonymous ring-buffer pipes and wakeups.</li>
+        <li><a href="block/ata.c">block/ata.c</a> — ATA PIO, MBR and disk cache.</li>
+        <li><a href="timer/timer.c">timer/timer.c</a> and <a href="timer/pit.c">timer/pit.c</a> — timers and 100 Hz scheduler tick.</li>
+        <li><a href="output/framebuffer.c">output/framebuffer.c</a> — kernel framebuffer service.</li>
+        <li><a href="output/mouse.c">output/mouse.c</a> — PS/2 mouse queue and delivery.</li>
+        <li><a href="extras/init/init.c">extras/init/init.c</a> — PID 1 shell supervision.</li>
+        <li><a href="extras/kuid/kuid.c">extras/kuid/kuid.c</a> — compositor entry and selected shell launch.</li>
+        <li><a href="extras/desktop/shell.c">extras/desktop/shell.c</a> — shared window manager, event transactions, caching, composition, and manifest discovery.</li>
+        <li><a href="extras/kui/kui.h">extras/kui/kui.h</a> and <a href="extras/kui/kui.c">extras/kui/kui.c</a> — application protocol/client drawing library.</li>
+        <li><a href="extras/kui/kui_text_selection.h">extras/kui/kui_text_selection.h</a> — reusable mouse selection, wrapped hit testing, normalized ranges, and copy/delete/replace buffer operations.</li>
+        <li><a href="extras/desktop/shell.h">extras/desktop/shell.h</a> and <a href="extras/desktop/shell.c">extras/desktop/shell.c</a> — shell protocol and app manifest model.</li>
+        <li><a href="extras/kuid/win95_shell.c">extras/kuid/win95_shell.c</a> — classic shell policy.</li>
+        <li><a href="extras/kuid/aqua_shell.c">extras/kuid/aqua_shell.c</a> — Aqua menu/dock policy and hover zoom.</li>
+        <li><a href="extras/editor">extras/editor/</a>, <a href="extras/cide">extras/cide/</a>, <a href="extras/paint">extras/paint/</a> — primary creation applications.</li>
+        <li><a href="extras/ksheet">extras/ksheet/</a> — dynamically growing sparse spreadsheet grid, multi-letter cell references, formula evaluator, dependency-cycle detection, and CSV import/export.</li>
+        <li><a href="extras/citybuilder">extras/citybuilder/</a> and <a href="extras/tetris">extras/tetris/</a> — split game-core/UI examples.</li>
+        <li><a href="extras/desktop/art">extras/desktop/art/</a> — wallpaper and icon masters.</li>
+        <li><a href="image/manifest.txt">image/manifest.txt</a> — userspace image installation selection.</li>
+        <li><a href="Makefile">Makefile</a> — kernel, userland, assets, images, QEMU and test orchestration.</li>
+        <li><a href="tests/e2e/all-tests.sh">tests/e2e/all-tests.sh</a> — booted completion contract.</li>
+        <li><a href="extras/alltest/alltest.c">extras/alltest/alltest.c</a> — in-image nine-group aggregator.</li>
+        <li><a href="tests">tests/</a> — host unit/integration coverage.</li>
+      </ul>
     </section>
   </main>
 
   <footer>
-    <div class="shell"><span>KYLEOS SYSTEM ATLAS · GENERATED FROM THE CURRENT TREE</span><span>Last mapped: 2026-08-09</span></div>
+    <strong>KyleOS Architecture Atlas</strong> · source-derived snapshot for the current repository on 20 August 2026. Protocol and fixed-capacity values are implementation limits and should be updated here when their defining headers change.
   </footer>
-
-  <script>
-    const connections = [
-      ['apps', 'libc'], ['init', 'libc'], ['libc', 'syscall'],
-      ['syscall', 'process'], ['syscall', 'vfs'], ['syscall', 'timer'], ['syscall', 'console'],
-      ['process', 'scheduler'], ['process', 'vfs'], ['process', 'memory'],
-      ['exec', 'vfs'], ['exec', 'memory'], ['exec', 'scheduler'],
-      ['vfs', 'fat'], ['vfs', 'ramfs'], ['vfs', 'pipes'],
-      ['fat', 'ata'], ['ramfs', 'console'], ['pipes', 'scheduler'],
-      ['timer', 'scheduler'], ['hardware', 'interrupts'], ['interrupts', 'timer'],
-      ['interrupts', 'console'], ['interrupts', 'memory'],
-      ['ata', 'hardware'], ['console', 'hardware'], ['memory', 'hardware'],
-      ['locks', 'scheduler'], ['locks', 'vfs'], ['locks', 'ata']
-    ];
-
-    const map = document.getElementById('architecture-map');
-    const svg = document.getElementById('edges');
-    const nodes = [...document.querySelectorAll('.node')];
-    let selected = null;
-
-    function boundaryPoint(fromRect, toRect, rootRect) {
-      const from = { x: fromRect.left + fromRect.width / 2 - rootRect.left, y: fromRect.top + fromRect.height / 2 - rootRect.top };
-      const to = { x: toRect.left + toRect.width / 2 - rootRect.left, y: toRect.top + toRect.height / 2 - rootRect.top };
-      const dx = to.x - from.x;
-      const dy = to.y - from.y;
-      const scale = Math.min(Math.abs((fromRect.width / 2 + 4) / (dx || .001)), Math.abs((fromRect.height / 2 + 4) / (dy || .001)));
-      return { x: from.x + dx * scale, y: from.y + dy * scale };
-    }
-
-    function drawEdges() {
-      svg.querySelectorAll('.edge').forEach(edge => edge.remove());
-      const root = map.getBoundingClientRect();
-      connections.forEach(([fromId, toId]) => {
-        const fromEl = document.getElementById(fromId);
-        const toEl = document.getElementById(toId);
-        const aRect = fromEl.getBoundingClientRect();
-        const bRect = toEl.getBoundingClientRect();
-        const a = boundaryPoint(aRect, bRect, root);
-        const b = boundaryPoint(bRect, aRect, root);
-        const curve = Math.max(28, Math.abs(b.y - a.y) * .42);
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', `M ${a.x} ${a.y} C ${a.x} ${a.y + curve}, ${b.x} ${b.y - curve}, ${b.x} ${b.y}`);
-        path.setAttribute('class', 'edge');
-        path.setAttribute('data-from', fromId);
-        path.setAttribute('data-to', toId);
-        path.setAttribute('marker-end', 'url(#arrow)');
-        svg.appendChild(path);
-      });
-      updateHighlight();
-    }
-
-    function updateHighlight() {
-      const edges = [...svg.querySelectorAll('.edge')];
-      if (!selected) {
-        nodes.forEach(node => node.classList.remove('dimmed', 'selected'));
-        edges.forEach(edge => { edge.classList.remove('hot', 'dimmed'); edge.setAttribute('marker-end', 'url(#arrow)'); });
-        return;
-      }
-      const related = new Set([selected]);
-      edges.forEach(edge => {
-        const hot = edge.dataset.from === selected || edge.dataset.to === selected;
-        edge.classList.toggle('hot', hot);
-        edge.classList.toggle('dimmed', !hot);
-        edge.setAttribute('marker-end', hot ? 'url(#arrow-hot)' : 'url(#arrow)');
-        if (hot) { related.add(edge.dataset.from); related.add(edge.dataset.to); }
-      });
-      nodes.forEach(node => {
-        node.classList.toggle('selected', node.id === selected);
-        node.classList.toggle('dimmed', !related.has(node.id));
-      });
-    }
-
-    nodes.forEach(node => node.addEventListener('click', () => {
-      selected = selected === node.id ? null : node.id;
-      updateHighlight();
-      const active = selected ? document.getElementById(selected) : null;
-      document.getElementById('inspect-title').textContent = active ? active.querySelector('h3').textContent : 'Explore the map';
-      document.getElementById('inspect-copy').textContent = active ? active.dataset.detail : 'Click a node to highlight everything it directly calls or receives data from.';
-      const source = document.getElementById('inspect-source');
-      source.href = active ? active.dataset.source : 'README.md';
-      source.textContent = (active ? active.dataset.source : 'README.md') + ' ↗';
-    }));
-
-    document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => {
-      document.querySelectorAll('[data-filter]').forEach(item => item.classList.remove('active'));
-      button.classList.add('active');
-      selected = null;
-      const filter = button.dataset.filter;
-      nodes.forEach(node => node.classList.toggle('dimmed', filter !== 'all' && node.dataset.group !== filter));
-      svg.querySelectorAll('.edge').forEach(edge => {
-        const from = document.getElementById(edge.dataset.from);
-        const to = document.getElementById(edge.dataset.to);
-        edge.classList.toggle('dimmed', filter !== 'all' && from.dataset.group !== filter && to.dataset.group !== filter);
-        edge.classList.remove('hot');
-        edge.setAttribute('marker-end', 'url(#arrow)');
-      });
-    }));
-
-    const resizeObserver = new ResizeObserver(drawEdges);
-    resizeObserver.observe(map);
-    window.addEventListener('load', drawEdges);
-  </script>
 </body>
 </html>

@@ -16,6 +16,7 @@ KUI_CLIENT_OBJECT ?= $(USERLAND_STAGE)/kui_client.o
 KUI_FILE_DIALOG_OBJECT ?= $(USERLAND_STAGE)/kui_file_dialog.o
 KUI_DIALOG_OBJECT ?= $(USERLAND_STAGE)/kui_dialog.o
 KUI_MENU_OBJECT ?= $(USERLAND_STAGE)/kui_menu.o
+KUI_TEXT_SELECTION_OBJECT ?= $(USERLAND_STAGE)/kui_text_selection.o
 KUI_STYLE_OBJECT ?= $(USERLAND_STAGE)/kui_style.o
 KUI_STYLE_WIN95_OBJECT ?= $(USERLAND_STAGE)/kui_style_win95.o
 KUI_STYLE_AQUA_OBJECT ?= $(USERLAND_STAGE)/kui_style_aqua.o
@@ -48,6 +49,7 @@ include config.mk
 endif
 CFLAGS	= -m64 $(OPT) -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2  -I $(KERNEL_ROOT)  -g 
 GUI_CFLAGS = $(filter-out -O%,$(CFLAGS)) -O2
+KSHEET_CFLAGS = $(filter-out -mno-sse -mno-sse2,$(GUI_CFLAGS)) -msse2
 ifeq ($(SERIAL_OUTPUT),0)
 CFLAGS += -DKYLEOS_DISABLE_SERIAL_OUTPUT
 endif
@@ -118,7 +120,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit kui gui-assets desktop kuid win95-shell aqua aqua-shell finder sysmon editor cide kterm minesweeper solitaire calculator paint citybuilder parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-paint-brush test-kui-styles test-kui-shells test-suite doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
+.PHONY: toolchain userland userinit kui gui-assets desktop kuid win95-shell aqua aqua-shell finder sysmon editor cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-paint-brush test-tetris test-tetris-ui test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-suite doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD)
@@ -127,7 +129,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit desktop kuid win95-shell aqua aqua-shell finder sysmon editor cide kterm minesweeper solitaire calculator paint citybuilder parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc
+	$(MAKE) userinit desktop kuid win95-shell aqua aqua-shell finder sysmon editor cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -170,6 +172,10 @@ $(KUI_MENU_OBJECT): extras/kui/kui_menu.c extras/kui/kui_menu.h extras/kui/kui.h
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/kui/kui_menu.c -o $@
 
+$(KUI_TEXT_SELECTION_OBJECT): extras/kui/kui_text_selection.c extras/kui/kui_text_selection.h extras/kui/kui_protocol.h
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c extras/kui/kui_text_selection.c -o $@
+
 $(KUI_STYLE_OBJECT): extras/kui/kui_style.c extras/kui/kui_style.h
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c $< -o $@
@@ -182,7 +188,7 @@ $(KUI_STYLE_AQUA_OBJECT): extras/kui/kui_style_aqua.c extras/kui/kui_style.h
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -I $(SYSROOT)/include -c $< -o $@
 
-$(KUI_LIBRARY): $(KUI_OBJECT) $(KUI_CLIENT_OBJECT) $(KUI_FILE_DIALOG_OBJECT) $(KUI_DIALOG_OBJECT) $(KUI_MENU_OBJECT) $(KUI_STYLE_OBJECT) $(KUI_STYLE_WIN95_OBJECT) $(KUI_STYLE_AQUA_OBJECT)
+$(KUI_LIBRARY): $(KUI_OBJECT) $(KUI_CLIENT_OBJECT) $(KUI_FILE_DIALOG_OBJECT) $(KUI_DIALOG_OBJECT) $(KUI_MENU_OBJECT) $(KUI_TEXT_SELECTION_OBJECT) $(KUI_STYLE_OBJECT) $(KUI_STYLE_WIN95_OBJECT) $(KUI_STYLE_AQUA_OBJECT)
 	$(AR) rcs $@ $^
 
 $(MINESWEEPER_WIDGET_OBJECT): extras/minesweeper/minesweeper_widget.c extras/minesweeper/minesweeper.h $(KUI_LIBRARY)
@@ -237,6 +243,14 @@ kterm: extras/terminal/terminal.c extras/terminal/terminal_ipc.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kterm
 
+ktermtest: tests/test-terminal-async.c $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -DKYLEOS_GUEST -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/ktermtest
+
+ksheet: extras/ksheet/ksheet.c extras/ksheet/ksheet_model.c extras/ksheet/ksheet_model.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(KSHEET_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/ksheet/ksheet.c extras/ksheet/ksheet_model.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/ksheet
+
 minesweeper: extras/minesweeper/minesweeper.c $(KUI_LIBRARY) $(MINESWEEPER_WIDGET_OBJECT)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(MINESWEEPER_WIDGET_OBJECT) $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/minesweeper
@@ -256,6 +270,14 @@ paint: extras/paint/paint.c extras/paint/paint_brush.c extras/paint/paint_brush.
 citybuilder: extras/citybuilder/citybuilder.c extras/citybuilder/city_sim.c extras/citybuilder/city_sim.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/citybuilder/citybuilder.c extras/citybuilder/city_sim.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/citybuilder
+
+tetris: extras/tetris/tetris.c extras/tetris/tetris_game.c extras/tetris/tetris_game.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/tetris/tetris.c extras/tetris/tetris_game.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/tetris
+
+help: extras/help/help.c $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/help
 
 parallel-writers: extras/parallel-writer/parallel_writer.c $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
@@ -295,12 +317,100 @@ test-paint-brush:
 		-o /tmp/os3-test-paint-brush
 	/tmp/os3-test-paint-brush
 
+test-tetris:
+	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-tetris.c extras/tetris/tetris_game.c \
+		-o /tmp/os3-test-tetris
+	/tmp/os3-test-tetris
+
+test-ksheet:
+	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-ksheet.c extras/ksheet/ksheet_model.c \
+		-o /tmp/os3-test-ksheet
+	/tmp/os3-test-ksheet
+
+test-ksheet-ui:
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		-DKYLEOS_HOST extras/ksheet/ksheet.c extras/ksheet/ksheet_model.c \
+		extras/kui/kui.c extras/kui/kui_client.c \
+		extras/kui/kui_file_dialog.c extras/kui/kui_menu.c \
+		extras/kui/kui_text_selection.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-ksheet-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-ksheet-ui.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-test-ksheet-ui
+	/tmp/os3-test-ksheet-ui /tmp/os3-ksheet-host
+
+test-tetris-ui: gui-assets
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		extras/tetris/tetris.c extras/tetris/tetris_game.c \
+		extras/kui/kui.c extras/kui/kui_client.c extras/kui/kui_menu.c \
+		extras/kui/kui_style.c extras/kui/kui_style_win95.c \
+		extras/kui/kui_style_aqua.c -o /tmp/os3-tetris-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-tetris-ui.c extras/kui/kui.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-test-tetris-ui
+	/tmp/os3-test-tetris-ui /tmp/os3-tetris-host
+
 test-kui-styles:
 	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
 		tests/test-kui-styles.c extras/kui/kui_style.c \
 		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
 		-o /tmp/os3-test-kui-styles
 	/tmp/os3-test-kui-styles
+
+test-kui-text-selection:
+	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-kui-text-selection.c extras/kui/kui_text_selection.c \
+		-o /tmp/os3-test-kui-text-selection
+	/tmp/os3-test-kui-text-selection
+
+test-kui-context-menu:
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-kui-context-menu.c extras/kui/kui_menu.c \
+		extras/kui/kui.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-test-kui-context-menu
+	/tmp/os3-test-kui-context-menu
+
+test-editor-clipboard:
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		-DKYLEOS_HOST extras/editor/editor.c extras/kui/kui.c extras/kui/kui_client.c \
+		extras/kui/kui_file_dialog.c extras/kui/kui_dialog.c \
+		extras/kui/kui_menu.c extras/kui/kui_text_selection.c \
+		extras/kui/kui_style.c extras/kui/kui_style_win95.c \
+		extras/kui/kui_style_aqua.c -o /tmp/os3-editor-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-editor-clipboard.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-test-editor-clipboard
+	/tmp/os3-test-editor-clipboard /tmp/os3-editor-host
+
+test-terminal-async:
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		-DKYLEOS_HOST \
+		extras/terminal/terminal.c extras/kui/kui.c extras/kui/kui_client.c \
+		extras/kui/kui_style.c extras/kui/kui_style_win95.c \
+		extras/kui/kui_style_aqua.c -o /tmp/os3-terminal-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-terminal-async.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-test-terminal-async
+	/tmp/os3-test-terminal-async /tmp/os3-terminal-host
+
+test-help-ui:
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		extras/help/help.c extras/kui/kui.c extras/kui/kui_client.c \
+		extras/kui/kui_style.c extras/kui/kui_style_win95.c \
+		extras/kui/kui_style_aqua.c -o /tmp/os3-help-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-help-ui.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-test-help-ui
+	/tmp/os3-test-help-ui /tmp/os3-help-host
 
 test-kui-shells:
 	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
@@ -454,6 +564,6 @@ iso-test: iso
 		-cdrom bootable.iso \
 		-serial stdio
 
-test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-paint-brush test-kui-styles test-kui-shells
+test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-paint-brush test-tetris test-tetris-ui test-ksheet test-ksheet-ui test-kui-styles test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-kui-shells
 	$(MAKE) image-reset IMAGE=$(TEST_IMAGE) IMAGE_MOUNT=$(TEST_IMAGE_MOUNT)
 	TEST_KERNEL=$(KERNEL_ROOT)/kernel32.bin TEST_IMAGE=$(TEST_IMAGE) TEST_TIMEOUT=$(TEST_TIMEOUT) bash tests/e2e/all-tests.sh

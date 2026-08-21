@@ -4,6 +4,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifdef KYLEOS_HOST
+#include <poll.h>
+#endif
+
 #include "extras/kui/kui.h"
 #include "extras/kui/kui_client.h"
 #include "extras/terminal/terminal_ipc.h"
@@ -14,6 +18,10 @@ struct terminal_state {
     int terminal_length;
     char command[TERMINAL_COMMAND_MAX];
     int command_length;
+    int child_pid;
+    int output_fd;
+    int scroll_from_bottom;
+    struct kui_scrollbar_state scrollbar;
 };
 
 static void append_text(struct terminal_state *state, const char *text,
@@ -89,8 +97,9 @@ static int execute(struct terminal_state *state)
     int argc = 0;
     int output_pipe[2];
     int child;
-    int status;
     int action;
+
+    if (state->child_pid > 0) return TERMINAL_ACTION_NONE;
 
     memcpy(input, state->command, state->command_length);
     input[state->command_length] = '\0';
@@ -140,16 +149,17 @@ static int execute(struct terminal_state *state)
     child = fork();
     if (child == 0) {
         int nullfd = open("/dev/null", O_RDONLY);
+        char *environment[] = { "PATH=/bin:/usr/bin", NULL };
 
         close(output_pipe[0]);
         if (nullfd >= 0) { dup2(nullfd, 0); close(nullfd); }
         dup2(output_pipe[1], 1);
         dup2(output_pipe[1], 2);
         close(output_pipe[1]);
-        execve(program, argv, NULL);
+        execve(program, argv, environment);
         if (strchr(argv[0], '/') == NULL) {
             snprintf(program, sizeof(program), "/usr/bin/%s", argv[0]);
-            execve(program, argv, NULL);
+            execve(program, argv, environment);
         }
         fprintf(stderr, "%s: command not found\n", argv[0]);
         _exit(127);
@@ -160,22 +170,58 @@ static int execute(struct terminal_state *state)
         append_text(state, "terminal: fork failed\n", -1);
         return TERMINAL_ACTION_NONE;
     }
-    {
-        char buffer[512];
+    state->child_pid = child;
+    state->output_fd = output_pipe[0];
+    return TERMINAL_ACTION_NONE;
+}
+
+static void drain_child_output(struct terminal_state *state)
+{
+    char buffer[512];
+    struct kyleos_fd_status status;
+
+    if (state->output_fd < 0) return;
+    for (;;) {
         int count;
 
-        /* Drain while the child runs.  Waiting first can leave the child
-         * blocked on a full output channel and make command execution depend
-         * on hardware scheduler timing. */
-        while ((count = read(output_pipe[0], buffer, sizeof(buffer))) > 0)
-            append_text(state, buffer, count);
-        close(output_pipe[0]);
+#ifdef KYLEOS_HOST
+        struct pollfd descriptor;
+
+        descriptor.fd = state->output_fd;
+        descriptor.events = POLLIN;
+        descriptor.revents = 0;
+        if (poll(&descriptor, 1, 0) < 0) break;
+        status.readable = (descriptor.revents & POLLIN) ? sizeof(buffer) : 0;
+#else
+        if (kui_fd_status(state->output_fd, &status) < 0) break;
+#endif
+        if (status.readable == 0) break;
+        count = read(state->output_fd, buffer,
+                     status.readable < sizeof(buffer) ?
+                     (int)status.readable : (int)sizeof(buffer));
+        if (count <= 0) return;
+        append_text(state, buffer, count);
     }
-    waitpid(child, &status, 0);
+}
+
+static void poll_child(struct terminal_state *state)
+{
+    int status = 0;
+    int result;
+
+    if (state->child_pid <= 0) return;
+    drain_child_output(state);
+    result = waitpid(state->child_pid, &status, WNOHANG);
+    if (result == 0) return;
+    drain_child_output(state);
+    if (state->output_fd >= 0) close(state->output_fd);
+    state->output_fd = -1;
+    state->child_pid = 0;
+    if (result < 0)
+        append_text(state, "terminal: wait failed\n", -1);
     if (state->terminal_length > 0 &&
         state->terminal[state->terminal_length - 1] != '\n')
         append_text(state, "\n", 1);
-    return TERMINAL_ACTION_NONE;
 }
 
 static int terminal_rows(const char *text, int length, int columns)
@@ -191,12 +237,45 @@ static int terminal_rows(const char *text, int length, int columns)
     return rows;
 }
 
+static int terminal_view_text(const struct terminal_state *state,
+                              char *visible)
+{
+    int length = state->terminal_length;
+
+    memcpy(visible, state->terminal, length);
+    if (state->child_pid <= 0) {
+        visible[length++] = '$';
+        visible[length++] = ' ';
+        memcpy(visible + length, state->command, state->command_length);
+        length += state->command_length;
+    }
+    return length;
+}
+
+static void terminal_scroll_metrics(const struct terminal_state *state,
+                                    int width, int height,
+                                    int *rows, int *total, int *maximum)
+{
+    char visible[TERMINAL_TEXT_MAX + TERMINAL_COMMAND_MAX + 8];
+    int columns = (width - 14 - KUI_SCROLLBAR_SIZE) / 8;
+    int visible_rows = (height - 8) / 16;
+    int length;
+
+    if (columns < 1) columns = 1;
+    if (visible_rows < 1) visible_rows = 1;
+    length = terminal_view_text(state, visible);
+    *rows = visible_rows;
+    *total = terminal_rows(visible, length, columns) + 1;
+    *maximum = *total - *rows;
+    if (*maximum < 0) *maximum = 0;
+}
+
 static void terminal_render(struct kui_client *client,
                             const struct kui_event *event,
                             const struct terminal_state *state)
 {
     char visible[TERMINAL_TEXT_MAX + TERMINAL_COMMAND_MAX + 8];
-    int columns = (event->width - 14) / 8;
+    int columns = (event->width - 14 - KUI_SCROLLBAR_SIZE) / 8;
     int rows = (event->height - 8) / 16;
     int length = state->terminal_length;
     int first_row;
@@ -205,12 +284,9 @@ static void terminal_render(struct kui_client *client,
 
     if (columns < 1) columns = 1;
     if (rows < 1) rows = 1;
-    memcpy(visible, state->terminal, length);
-    visible[length++] = '$';
-    visible[length++] = ' ';
-    memcpy(visible + length, state->command, state->command_length);
-    length += state->command_length;
-    first_row = terminal_rows(visible, length, columns) + 1 - rows;
+    length = terminal_view_text(state, visible);
+    first_row = terminal_rows(visible, length, columns) + 1 - rows -
+                state->scroll_from_bottom;
     if (first_row < 0) first_row = 0;
     kui_fill_rect(&client->surface, 0, 0, event->width, event->height,
                   KUI_BLACK);
@@ -226,9 +302,14 @@ static void terminal_render(struct kui_client *client,
                                0x0000ff80U, KUI_BLACK, 0);
         if (++column >= columns) { row++; column = 0; }
     }
-    if (row >= first_row && row < first_row + rows)
+    if (state->child_pid <= 0 && row >= first_row && row < first_row + rows)
         kui_fill_rect(&client->surface, 7 + column * 8,
                       4 + (row - first_row) * 16, 2, 16, 0x0000ff80U);
+    kui_draw_vscrollbar(&client->surface,
+                        event->width - KUI_SCROLLBAR_SIZE, 0,
+                        event->height, first_row, rows,
+                        terminal_rows(visible, length, columns) + 1,
+                        &state->scrollbar);
 }
 
 static const char *terminal_action_path(int action)
@@ -248,6 +329,7 @@ int main(void)
     struct kui_event event;
 
     memset(&state, 0, sizeof(state));
+    state.output_fd = -1;
     strcpy(state.path, "/");
     append_text(&state,
                 "KyleOS Terminal\nType a command and press Enter.\n", -1);
@@ -258,19 +340,55 @@ int main(void)
 
         if (kui_client_read_event(&event) < 0) break;
         if (event.type == KUI_EVENT_CLOSE) break;
+        {
+            int rows;
+            int total;
+            int maximum;
+            int first;
+
+            terminal_scroll_metrics(&state, event.width, event.height,
+                                    &rows, &total, &maximum);
+            first = maximum - state.scroll_from_bottom;
+            first = kui_vscrollbar_handle(
+                &state.scrollbar, &event,
+                event.width - KUI_SCROLLBAR_SIZE, 0, event.height,
+                first, rows, total);
+            state.scroll_from_bottom = maximum - first;
+        }
         if (event.type == KUI_EVENT_INIT) {
             memset(&state, 0, sizeof(state));
+            state.output_fd = -1;
             strcpy(state.path, "/");
             append_text(&state,
                         "KyleOS Terminal\nType a command and press Enter.\n",
                         -1);
             chdir("/");
+        } else if (event.type == KUI_EVENT_TIMER && state.child_pid > 0) {
+            poll_child(&state);
+        } else if (event.type == KUI_EVENT_POINTER && event.wheel != 0) {
+            int rows;
+            int total;
+            int maximum;
+            int first;
+
+            terminal_scroll_metrics(&state, event.width, event.height,
+                                    &rows, &total, &maximum);
+            first = kui_scrollbar_wheel(
+                maximum - state.scroll_from_bottom, event.wheel,
+                rows, total);
+            state.scroll_from_bottom = maximum - first;
+        } else if (event.type == KUI_EVENT_POINTER && event.button == 1 &&
+                   kui_in_rect(event.x, event.y,
+                               event.width - KUI_SCROLLBAR_SIZE, 0,
+                               KUI_SCROLLBAR_SIZE, event.height)) {
+            /* The shared scrollbar owns this press and repeat timer. */
         } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
                    (event.modifiers & KUI_MOD_CTRL) &&
                    !event.key_extended && event.key_code == 38) {
             state.terminal_length = 0;
             state.terminal[0] = '\0';
-        } else if (event.type == KUI_EVENT_KEY && event.key_pressed) {
+        } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
+                   state.child_pid <= 0) {
             char key = event.character;
             if (!event.key_extended && event.key_code == 14) key = '\b';
             if (!event.key_extended && event.key_code == 28) key = '\n';
@@ -284,14 +402,37 @@ int main(void)
                 state.command[state.command_length] = '\0';
             }
         }
+        {
+            int rows;
+            int total;
+            int maximum;
+
+            terminal_scroll_metrics(&state, event.width, event.height,
+                                    &rows, &total, &maximum);
+            (void)rows;
+            (void)total;
+            if (state.scroll_from_bottom < 0) state.scroll_from_bottom = 0;
+            if (state.scroll_from_bottom > maximum)
+                state.scroll_from_bottom = maximum;
+        }
         kui_client_begin(&client, &event, "Terminal");
         kui_client_set_constraints(&client, 360, 180, 700, 481);
         terminal_render(&client, &event, &state);
+        {
+            uint32_t timer = state.child_pid > 0 ? 50U : 0U;
+            uint32_t scroll_timer =
+                kui_scrollbar_timer_ms(&state.scrollbar);
+
+            if (scroll_timer != 0 && (timer == 0 || scroll_timer < timer))
+                timer = scroll_timer;
+            kui_client_set_timer(&client, timer);
+        }
         launch_path = terminal_action_path(action);
         if (launch_path != NULL)
             kui_client_set_action(&client, KUI_ACTION_LAUNCH, launch_path);
         if (kui_client_send(&client) < 0) break;
     }
+    if (state.output_fd >= 0) close(state.output_fd);
     kui_client_free(&client);
     return 0;
 }

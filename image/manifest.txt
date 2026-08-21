@@ -26,10 +26,13 @@ waittest
 ed
 grep
 head
+help
 kedit
 kmsgtest
 kuid
 kterm
+ktermtest
+ksheet
 ls
 mkdir
 minesweeper
@@ -49,6 +52,7 @@ stat
 sysmon
 tail
 testprint
+tetris
 wc
 write
 writebomb

@@ -1,6 +1,7 @@
 #include "extras/desktop/shell.h"
 
 #include <fcntl.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,12 +82,13 @@ struct shell_window {
 
 struct shell_action {
     uint32_t type;
-    char argument[KUI_PROTOCOL_TEXT_MAX];
+    char argument[KUI_PROTOCOL_CLIPBOARD_MAX];
 };
 
 static struct shell_app apps[MAX_APPS];
 static int app_count;
 static struct shell_window windows[MAX_WINDOWS];
+static int retired_window_pids[MAX_WINDOWS];
 static int next_taskbar_order;
 static int next_window_position;
 static int screen_width;
@@ -108,7 +110,8 @@ static int resize_window = -1;
 static int resize_right_gap;
 static int resize_bottom_gap;
 static int pointer_window = -1;
-static char clipboard_path[KUI_PROTOCOL_TEXT_MAX];
+static char clipboard_data[KUI_PROTOCOL_CLIPBOARD_MAX];
+static uint32_t clipboard_kind;
 static int shell_pid = -1;
 static int shell_input = -1;
 static int shell_output = -1;
@@ -121,6 +124,25 @@ static uint32_t shell_display_bytes;
 static struct kui_shell_request shell_cached_request;
 static int shell_cache_valid;
 static void copy_text(char *destination, size_t capacity, const char *source);
+static int shell_log_fd = -1;
+
+/* stdout is the compositor protocol, so diagnostics go to a file. */
+static void shell_log(const char *format, ...)
+{
+    char buffer[512];
+    va_list arguments;
+    int length;
+
+    va_start(arguments, format);
+    length = vsnprintf(buffer, sizeof(buffer), format, arguments);
+    va_end(arguments);
+    if (length <= 0) return;
+    if (length >= (int)sizeof(buffer)) length = sizeof(buffer) - 1;
+    if (shell_log_fd < 0)
+        shell_log_fd = open("/SHELL.LOG", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (shell_log_fd >= 0)
+        write(shell_log_fd, buffer, (size_t)length);
+}
 
 static int start_shell(const char *path)
 {
@@ -408,6 +430,7 @@ static int start_process(struct shell_window *window, const char *path)
     int from_child[2];
     int child;
 
+    shell_log("START request path=%s title=%s\n", path, window->title);
     if (pipe(to_child) < 0) return -1;
     if (pipe(from_child) < 0) {
         close(to_child[0]); close(to_child[1]); return -1;
@@ -433,6 +456,7 @@ static int start_process(struct shell_window *window, const char *path)
     window->pid = child;
     window->input_fd = to_child[1];
     window->output_fd = from_child[0];
+    shell_log("START pid=%d path=%s\n", child, path);
     return 0;
 }
 
@@ -472,17 +496,24 @@ static int send_window_event(int index, uint32_t type, int x, int y,
     event.style = *kui_style_current();
     if (argument != NULL)
         copy_text(event.argument, sizeof(event.argument), argument);
-    copy_text(event.clipboard, sizeof(event.clipboard), clipboard_path);
-    if (kui_write_all(window->input_fd, &event, sizeof(event)) < 0)
+    event.clipboard_kind = clipboard_kind;
+    copy_text(event.clipboard, sizeof(event.clipboard), clipboard_data);
+    if (kui_write_all(window->input_fd, &event, sizeof(event)) < 0) {
+        shell_log("PROTO write-failed pid=%d event=%u serial=%u\n",
+                  window->pid, type, event.serial);
         return -1;
+    }
     if (type == KUI_EVENT_CLOSE) return 0;
     if (kui_read_all_timeout(window->output_fd, &response,
                              sizeof(response), 500) < 0 ||
         response.magic != KUI_PROTOCOL_MAGIC ||
         response.version != KUI_PROTOCOL_VERSION ||
         response.serial != event.serial ||
-        response.display_bytes > KUI_PROTOCOL_MAX_DISPLAY)
+        response.display_bytes > KUI_PROTOCOL_MAX_DISPLAY) {
+        shell_log("PROTO read-failed pid=%d event=%u serial=%u\n",
+                  window->pid, type, event.serial);
         return -1;
+    }
     if (response.display_bytes != 0) {
         if (response.display_bytes > window->display_capacity) {
             display = realloc(window->display_commands,
@@ -565,6 +596,32 @@ static int raise_window(int index)
     return MAX_WINDOWS - 1;
 }
 
+static void reap_retired_windows(void)
+{
+    for (int i = 0; i < MAX_WINDOWS; i++) {
+        int status;
+
+        if (retired_window_pids[i] > 0 &&
+            waitpid(retired_window_pids[i], &status, WNOHANG) != 0) {
+            shell_log("EXIT pid=%d status=%d\n", retired_window_pids[i],
+                      status);
+            retired_window_pids[i] = 0;
+        }
+    }
+}
+
+static void retire_window_process(int pid)
+{
+    int status;
+
+    if (pid <= 0 || waitpid(pid, &status, WNOHANG) != 0) return;
+    for (int i = 0; i < MAX_WINDOWS; i++)
+        if (retired_window_pids[i] == 0) {
+            retired_window_pids[i] = pid;
+            return;
+        }
+}
+
 static void position_window(struct shell_window *window)
 {
     int max_x = screen_width - window->width - 10;
@@ -582,16 +639,17 @@ static void position_window(struct shell_window *window)
 static void close_window_index(int index)
 {
     struct shell_window *window;
-    int status;
 
     if (index < 0 || index >= MAX_WINDOWS || !windows[index].visible) return;
     if (pointer_window == index) pointer_window = -1;
     window = &windows[index];
+    shell_log("CLOSE request pid=%d app=%s title=%s\n", window->pid,
+              window->application, window->title);
     send_window_event(index, KUI_EVENT_CLOSE, 0, 0, 0, 0, 0,
                       0, 0, 0, 0, 0, NULL, NULL);
     close(window->input_fd);
     close(window->output_fd);
-    waitpid(window->pid, &status, 0);
+    retire_window_process(window->pid);
     free(window->content_pixels);
     free(window->display_commands);
     memset(window, 0, sizeof(*window));
@@ -670,6 +728,8 @@ static int open_application(const struct shell_app *app, const char *argument)
         windows[slot].y = work_bottom() - windows[slot].height;
     if (windows[slot].x < 0) windows[slot].x = 0;
     if (start_process(&windows[slot], app->executable) < 0) {
+        shell_log("OPEN failed path=%s title=%s\n", app->executable,
+                  app->name);
         memset(&windows[slot], 0, sizeof(windows[slot]));
         return -1;
     }
@@ -679,8 +739,12 @@ static int open_application(const struct shell_app *app, const char *argument)
                           argument != NULL ? argument : app->argument,
                           &action) < 0) {
         close_window_index(slot);
+        shell_log("OPEN init-failed path=%s title=%s\n", app->executable,
+                  app->name);
         return -1;
     }
+    shell_log("OPEN success pid=%d path=%s title=%s\n",
+              windows[slot].pid, app->executable, app->name);
     return raise_window(slot);
 }
 
@@ -755,6 +819,16 @@ static int is_c_source_file(const char *path)
            extension == 'h' || extension == 'H';
 }
 
+static int is_csv_file(const char *path)
+{
+    size_t length = strlen(path);
+
+    if (length < 4 || path[length - 4] != '.') return 0;
+    return (path[length - 3] == 'c' || path[length - 3] == 'C') &&
+           (path[length - 2] == 's' || path[length - 2] == 'S') &&
+           (path[length - 1] == 'v' || path[length - 1] == 'V');
+}
+
 static void open_path(const char *path)
 {
     const struct shell_app *app;
@@ -773,6 +847,13 @@ static void open_path(const char *path)
             }
     }
     if (is_text_file(path)) {
+        if (is_csv_file(path)) {
+            for (int i = 0; i < app_count; i++)
+                if (strcmp(apps[i].accepts, "csv") == 0) {
+                    open_application(&apps[i], path);
+                    return;
+                }
+        }
         if (is_c_source_file(path)) {
             for (int i = 0; i < app_count; i++)
                 if (strcmp(apps[i].accepts, "c") == 0) {
@@ -812,7 +893,11 @@ static void apply_action(const struct shell_action *action)
     } else if (action->type == KUI_ACTION_FILE_SAVED) {
         broadcast_refresh();
     } else if (action->type == KUI_ACTION_COPY_PATH) {
-        copy_text(clipboard_path, sizeof(clipboard_path), action->argument);
+        copy_text(clipboard_data, sizeof(clipboard_data), action->argument);
+        clipboard_kind = KUI_CLIPBOARD_PATH;
+    } else if (action->type == KUI_ACTION_COPY_TEXT) {
+        copy_text(clipboard_data, sizeof(clipboard_data), action->argument);
+        clipboard_kind = KUI_CLIPBOARD_TEXT;
     }
 }
 
@@ -1752,6 +1837,7 @@ int desktop_shell_run(const char *shell_path)
         struct kyleos_fd_status shell_status;
         int changed = handle_mouse();
 
+        reap_retired_windows();
         if (kui_fd_status(shell_output, &shell_status) < 0 ||
             shell_status.hung_up) {
             fprintf(stderr, "kuid: shell %s disconnected\n", shell_name);

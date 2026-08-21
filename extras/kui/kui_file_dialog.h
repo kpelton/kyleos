@@ -36,6 +36,7 @@ struct kui_file_dialog {
     int item_count;
     int selected_item;
     int scroll_row;
+    struct kui_scrollbar_state scrollbar;
     int filename_selected;
     char directory[KUI_FILE_DIALOG_PATH_MAX];
     char filename[KUI_FILE_DIALOG_NAME_MAX];
@@ -54,5 +55,6 @@ int kui_file_dialog_handle(struct kui_file_dialog *dialog,
 void kui_file_dialog_render(struct kui_surface *surface,
                             const struct kui_event *event,
                             const struct kui_file_dialog *dialog);
+uint32_t kui_file_dialog_timer_ms(const struct kui_file_dialog *dialog);
 
 #endif

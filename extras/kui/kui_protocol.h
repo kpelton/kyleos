@@ -5,10 +5,11 @@
 #include "extras/kui/kui_style.h"
 
 #define KUI_PROTOCOL_MAGIC 0x3149554bU /* "KUI1" */
-#define KUI_PROTOCOL_VERSION 7U
+#define KUI_PROTOCOL_VERSION 8U
 #define KUI_PROTOCOL_TEXT_MAX 128
+#define KUI_PROTOCOL_CLIPBOARD_MAX 1024
 #define KUI_PROTOCOL_TITLE_MAX 64
-#define KUI_PROTOCOL_MAX_DISPLAY (256U * 1024U)
+#define KUI_PROTOCOL_MAX_DISPLAY (512U * 1024U)
 
 enum kui_event_type {
     KUI_EVENT_INIT = 1,
@@ -40,7 +41,14 @@ enum kui_shell_action {
     KUI_ACTION_OPEN_PATH,
     KUI_ACTION_LAUNCH,
     KUI_ACTION_FILE_SAVED,
-    KUI_ACTION_COPY_PATH
+    KUI_ACTION_COPY_PATH,
+    KUI_ACTION_COPY_TEXT
+};
+
+enum kui_clipboard_kind {
+    KUI_CLIPBOARD_NONE,
+    KUI_CLIPBOARD_PATH,
+    KUI_CLIPBOARD_TEXT
 };
 
 struct kui_event {
@@ -63,7 +71,8 @@ struct kui_event {
     char character;
     struct kui_style style;
     char argument[KUI_PROTOCOL_TEXT_MAX];
-    char clipboard[KUI_PROTOCOL_TEXT_MAX];
+    uint32_t clipboard_kind;
+    char clipboard[KUI_PROTOCOL_CLIPBOARD_MAX];
 };
 
 struct kui_response {
@@ -84,7 +93,7 @@ struct kui_response {
     int damage_height;
     uint32_t action;
     char title[KUI_PROTOCOL_TITLE_MAX];
-    char action_argument[KUI_PROTOCOL_TEXT_MAX];
+    char action_argument[KUI_PROTOCOL_CLIPBOARD_MAX];
 };
 
 enum kui_display_command_type {

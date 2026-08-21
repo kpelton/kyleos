@@ -19,6 +19,7 @@
 #define KUI_DESKTOP_DARK (kui_style_current()->desktop_dark)
 
 #define KUI_KIMG_FLAG_OPAQUE 1U
+#define KUI_SCROLLBAR_SIZE 15
 
 struct kui_surface {
     uint32_t *pixels;
@@ -40,6 +41,11 @@ struct kui_image {
     int width;
     int height;
     int opaque;
+};
+
+struct kui_scrollbar_state {
+    int active_direction;
+    int repeating;
 };
 
 void kui_surface_init(struct kui_surface *surface, uint32_t *pixels,
@@ -122,6 +128,20 @@ void kui_draw_bevel(struct kui_surface *surface, int x, int y, int w, int h,
                     uint32_t face, int pressed);
 void kui_draw_button(struct kui_surface *surface, int x, int y, int w, int h,
                      const char *label, int pressed);
+void kui_draw_vscrollbar(struct kui_surface *surface, int x, int y, int height,
+                         int position, int page, int total,
+                         const struct kui_scrollbar_state *state);
+void kui_draw_hscrollbar(struct kui_surface *surface, int x, int y, int width,
+                         int position, int page, int total,
+                         const struct kui_scrollbar_state *state);
+int kui_vscrollbar_handle(struct kui_scrollbar_state *state,
+                          const struct kui_event *event, int x, int y,
+                          int height, int position, int page, int total);
+int kui_hscrollbar_handle(struct kui_scrollbar_state *state,
+                          const struct kui_event *event, int x, int y,
+                          int width, int position, int page, int total);
+int kui_scrollbar_wheel(int position, int wheel, int page, int total);
+uint32_t kui_scrollbar_timer_ms(const struct kui_scrollbar_state *state);
 void kui_draw_window(struct kui_surface *surface, int x, int y, int w, int h,
                      const char *title, int active);
 

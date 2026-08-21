@@ -284,7 +284,7 @@ static void parent_path(const char *path, char *parent)
 
 static int finder_columns(int width)
 {
-    int columns = (width - 18) / FINDER_ITEM_WIDTH;
+    int columns = (width - 18 - KUI_SCROLLBAR_SIZE) / FINDER_ITEM_WIDTH;
     return columns > 0 ? columns : 1;
 }
 
@@ -321,6 +321,12 @@ static int finder_max_scroll(const struct finder_response *state,
                finder_columns(width);
     int maximum = rows - finder_visible_rows(height);
     return maximum > 0 ? maximum : 0;
+}
+
+static int finder_total_rows(const struct finder_response *state, int width)
+{
+    return (state->item_count + finder_columns(width) - 1) /
+           finder_columns(width);
 }
 
 static void draw_folder(struct kui_surface *surface, int x, int y)
@@ -435,7 +441,8 @@ static void finder_render(struct kui_client *client,
                           const struct finder_response *state,
                           int scroll_row, int context_kind,
                           int context_item, int context_x, int context_y,
-                          const char *status_message)
+                          const char *status_message,
+                          const struct kui_scrollbar_state *scrollbar)
 {
     int columns = finder_columns(event->width);
     int toolbar_top = finder_toolbar_top();
@@ -494,6 +501,12 @@ static void finder_render(struct kui_client *client,
                       label, KUI_BLACK,
                       label_background, 0);
     }
+    kui_draw_vscrollbar(
+        &client->surface, event->width - KUI_SCROLLBAR_SIZE, content_top,
+        event->height - content_top -
+        ((status_message != NULL && status_message[0] != '\0') ? 21 : 0),
+        scroll_row, finder_visible_rows(event->height),
+        finder_total_rows(state, event->width), scrollbar);
     if (status_message != NULL && status_message[0] != '\0') {
         kui_fill_rect(&client->surface, 0, event->height - 21,
                       event->width, 21, KUI_LIGHT);
@@ -526,7 +539,8 @@ static void finder_render(struct kui_client *client,
                 state->item_types[context_item] == FINDER_ITEM_DIRECTORY)
                 disabled = 1;
             if (context_kind == FINDER_CONTEXT_BACKGROUND && row == 2 &&
-                event->clipboard[0] == '\0')
+                (event->clipboard_kind != KUI_CLIPBOARD_PATH ||
+                 event->clipboard[0] == '\0'))
                 disabled = 1;
             color = disabled ? 0x00909090U : KUI_BLACK;
             kui_draw_text(&client->surface, context_x + 12,
@@ -544,7 +558,7 @@ static int finder_item_at(const struct finder_response *state,
     int item;
 
     if (x < 9 || y < finder_content_hit_top() ||
-        x >= width - 4 || y >= height)
+        x >= width - KUI_SCROLLBAR_SIZE || y >= height)
         return -1;
     columns = finder_columns(width);
     item = scroll_row * columns +
@@ -645,6 +659,7 @@ static int embedded_main(void)
     struct finder_response state;
     struct kui_input_dialog create_dialog;
     struct kui_menu_state menu_state;
+    struct kui_scrollbar_state scrollbar;
     char history[FINDER_HISTORY_MAX][FINDER_PATH_MAX];
     int history_count = 0;
     int history_index = -1;
@@ -660,6 +675,7 @@ static int embedded_main(void)
 
     memset(&state, 0, sizeof(state));
     memset(&create_dialog, 0, sizeof(create_dialog));
+    memset(&scrollbar, 0, sizeof(scrollbar));
     memset(history, 0, sizeof(history));
     status_message[0] = '\0';
     kui_menu_init(&menu_state);
@@ -671,15 +687,33 @@ static int embedded_main(void)
         uint32_t shell_action = KUI_ACTION_NONE;
         int menu_action = 0;
         int menu_consumed = 0;
+        int scrollbar_hit;
 
         if (kui_client_read_event(&event) < 0) break;
         if (event.type == KUI_EVENT_CLOSE) break;
+        scrollbar_hit = !create_dialog.active &&
+            event.type == KUI_EVENT_POINTER && event.button == 1 &&
+            kui_in_rect(event.x, event.y,
+                        event.width - KUI_SCROLLBAR_SIZE,
+                        finder_content_draw_top(), KUI_SCROLLBAR_SIZE,
+                        event.height - finder_content_draw_top() -
+                        (status_message[0] != '\0' ? 21 : 0));
+        if (!create_dialog.active || scrollbar.active_direction != 0)
+            scroll_row = kui_vscrollbar_handle(
+                &scrollbar, &event, event.width - KUI_SCROLLBAR_SIZE,
+                finder_content_draw_top(),
+                event.height - finder_content_draw_top() -
+                (status_message[0] != '\0' ? 21 : 0), scroll_row,
+                finder_visible_rows(event.height),
+                finder_total_rows(&state, event.width));
         response = state;
         response.status = -1;
         response.action = FINDER_ACTION_NONE;
         response.activated_path[0] = '\0';
         action_path[0] = '\0';
-        finder_file_items[2].enabled = event.clipboard[0] != '\0';
+        finder_file_items[2].enabled =
+            event.clipboard_kind == KUI_CLIPBOARD_PATH &&
+            event.clipboard[0] != '\0';
         if (event.type == KUI_EVENT_INIT) {
             const char *path = event.argument[0] != '\0' ? event.argument : "/";
             load_directory(path, &response);
@@ -755,6 +789,7 @@ static int embedded_main(void)
                                         &state, 0) < 0)
                     strcpy(status_message, "Could not choose a file name");
             } else if (menu_action == FINDER_MENU_PASTE &&
+                       event.clipboard_kind == KUI_CLIPBOARD_PATH &&
                        paste_clipboard_file(&state, event.clipboard,
                                             status_message,
                                             sizeof(status_message)) == 0) {
@@ -770,7 +805,9 @@ static int embedded_main(void)
         } else if (event.type == KUI_EVENT_RESIZE) {
             context_kind = FINDER_CONTEXT_NONE;
         } else if (event.type == KUI_EVENT_POINTER && event.wheel != 0) {
-            scroll_row -= event.wheel * 3;
+            scroll_row = kui_scrollbar_wheel(
+                scroll_row, event.wheel, finder_visible_rows(event.height),
+                finder_total_rows(&state, event.width));
             context_kind = FINDER_CONTEXT_NONE;
         } else if (event.type == KUI_EVENT_POINTER && event.button == 2) {
             if (event.y < finder_toolbar_top() + 58) {
@@ -856,7 +893,9 @@ static int embedded_main(void)
                                             &state, 0) < 0)
                         strcpy(status_message,
                                "Could not choose a file name");
-                } else if (row == 2 && event.clipboard[0] != '\0') {
+                } else if (row == 2 &&
+                           event.clipboard_kind == KUI_CLIPBOARD_PATH &&
+                           event.clipboard[0] != '\0') {
                     result = paste_clipboard_file(
                         &state, event.clipboard, status_message,
                         sizeof(status_message));
@@ -866,6 +905,8 @@ static int embedded_main(void)
                     shell_action = KUI_ACTION_FILE_SAVED;
                 }
             }
+        } else if (scrollbar_hit) {
+            context_kind = FINDER_CONTEXT_NONE;
         } else if (event.type == KUI_EVENT_POINTER && event.button == 1 &&
                    event.y >= finder_toolbar_top() &&
                    event.y < finder_toolbar_top() + 31) {
@@ -914,10 +955,11 @@ static int embedded_main(void)
         kui_client_set_constraints(&client, 360, 243, 700, 504);
         finder_render(&client, &event, &state, scroll_row,
                       context_kind, context_item, context_x, context_y,
-                      status_message);
+                      status_message, &scrollbar);
         if (!finder_is_aqua())
             kui_menu_render(&client.surface, &menu_state, finder_menus, 1);
         kui_input_dialog_render(&client.surface, &event, &create_dialog);
+        kui_client_set_timer(&client, kui_scrollbar_timer_ms(&scrollbar));
         if (shell_action != KUI_ACTION_NONE)
             kui_client_set_action(&client, shell_action, action_path);
         if (kui_client_send(&client) < 0) break;

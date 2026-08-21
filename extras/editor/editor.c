@@ -14,6 +14,7 @@
 #include "extras/kui/kui_dialog.h"
 #include "extras/kui/kui_file_dialog.h"
 #include "extras/kui/kui_menu.h"
+#include "extras/kui/kui_text_selection.h"
 
 #define CIDE_BINARY_PATH "/tmp/cide.out"
 
@@ -22,23 +23,37 @@
 #define EDITOR_STATUS_HEIGHT 22
 #define EDITOR_TEXT_TOP (KUI_MENU_BAR_HEIGHT + EDITOR_TOOLBAR_HEIGHT)
 #define EDITOR_TEXT_LEFT 49
-#define EDITOR_MENU_COUNT 2
+#define EDITOR_MENU_COUNT 3
 #define CIDE_LOG_PATH "/tmp/cide.log"
 #else
 #define EDITOR_STATUS_HEIGHT 0
 #define EDITOR_TEXT_TOP (KUI_MENU_BAR_HEIGHT + 5)
 #define EDITOR_TEXT_LEFT 7
-#define EDITOR_MENU_COUNT 1
+#define EDITOR_MENU_COUNT 2
 #endif
 
 enum editor_menu_action {
     EDITOR_MENU_OPEN = 1,
     EDITOR_MENU_SAVE,
     EDITOR_MENU_SAVE_AS,
+    EDITOR_MENU_CUT,
+    EDITOR_MENU_COPY,
+    EDITOR_MENU_PASTE,
+    EDITOR_MENU_DELETE,
+    EDITOR_MENU_SELECT_ALL,
 #ifdef C_IDE
     EDITOR_MENU_BUILD,
     EDITOR_MENU_RUN
 #endif
+};
+
+enum editor_edit_item {
+    EDITOR_EDIT_CUT,
+    EDITOR_EDIT_COPY,
+    EDITOR_EDIT_PASTE,
+    EDITOR_EDIT_DELETE,
+    EDITOR_EDIT_SELECT_ALL,
+    EDITOR_EDIT_ITEM_COUNT
 };
 
 static const struct kui_menu_item editor_file_items[] = {
@@ -46,6 +61,18 @@ static const struct kui_menu_item editor_file_items[] = {
     { "Save", "Ctrl+S", EDITOR_MENU_SAVE, 1 },
     { "Save As...", "Ctrl+Shift+S", EDITOR_MENU_SAVE_AS, 1 }
 };
+
+static struct kui_menu_item editor_edit_items[] = {
+    { "Cut", "Ctrl+X", EDITOR_MENU_CUT, 0 },
+    { "Copy", "Ctrl+C", EDITOR_MENU_COPY, 0 },
+    { "Paste", "Ctrl+V", EDITOR_MENU_PASTE, 0 },
+    { "Delete", "Del", EDITOR_MENU_DELETE, 0 },
+    { "Select All", "Ctrl+A", EDITOR_MENU_SELECT_ALL, 1 }
+};
+
+struct editor_state;
+static void update_edit_items(const struct editor_state *state,
+                              const struct kui_event *event);
 
 #ifdef C_IDE
 static const struct kui_menu_item editor_build_items[] = {
@@ -56,6 +83,7 @@ static const struct kui_menu_item editor_build_items[] = {
 
 static const struct kui_menu editor_menus[] = {
     { "File", editor_file_items, 3 },
+    { "Edit", editor_edit_items, EDITOR_EDIT_ITEM_COUNT },
 #ifdef C_IDE
     { "Build", editor_build_items, 2 }
 #endif
@@ -66,6 +94,7 @@ struct editor_state {
     char text[EDITOR_TEXT_MAX];
     int text_length;
     int text_cursor;
+    struct kui_text_selection selection;
     int dirty;
     int save_failed;
 #ifdef C_IDE
@@ -76,6 +105,19 @@ struct editor_state {
     char build_status[128];
 #endif
 };
+
+static void update_edit_items(const struct editor_state *state,
+                              const struct kui_event *event)
+{
+    int selected = kui_text_selection_has_range(&state->selection);
+
+    editor_edit_items[EDITOR_EDIT_CUT].enabled = selected;
+    editor_edit_items[EDITOR_EDIT_COPY].enabled = selected;
+    editor_edit_items[EDITOR_EDIT_DELETE].enabled = selected;
+    editor_edit_items[EDITOR_EDIT_PASTE].enabled =
+        event->clipboard_kind == KUI_CLIPBOARD_TEXT &&
+        event->clipboard[0] != '\0';
+}
 
 #ifdef C_IDE
 static unsigned char syntax_classes[EDITOR_TEXT_MAX];
@@ -112,17 +154,65 @@ static int move_vertical(const struct editor_state *state, int direction)
         (column < target_end - target_start ? column : target_end - target_start);
 }
 
-static void insert_character(struct editor_state *state, char ch)
+static int delete_selection(struct editor_state *state)
 {
-    if (state->text_length >= EDITOR_TEXT_MAX - 1) return;
-    memmove(state->text + state->text_cursor + 1,
-            state->text + state->text_cursor,
-            state->text_length - state->text_cursor);
-    state->text[state->text_cursor++] = ch;
-    state->text_length++;
-    state->text[state->text_length] = '\0';
+    if (!kui_text_selection_delete(&state->selection, state->text,
+                                   &state->text_length,
+                                   &state->text_cursor))
+        return 0;
     state->dirty = 1;
     state->save_failed = 0;
+    return 1;
+}
+
+static void insert_character(struct editor_state *state, char ch)
+{
+    if (!kui_text_selection_replace(&state->selection, state->text,
+                                    &state->text_length, EDITOR_TEXT_MAX,
+                                    &state->text_cursor, &ch, 1))
+        return;
+    state->dirty = 1;
+    state->save_failed = 0;
+}
+
+static int replace_selection(struct editor_state *state,
+                             const char *text, int length)
+{
+    if (!kui_text_selection_replace(&state->selection, state->text,
+                                    &state->text_length, EDITOR_TEXT_MAX,
+                                    &state->text_cursor, text, length))
+        return 0;
+    state->dirty = 1;
+    state->save_failed = 0;
+    return 1;
+}
+
+static int editor_edit_action(struct editor_state *state, int action,
+                              const struct kui_event *event,
+                              char clipboard[KUI_PROTOCOL_CLIPBOARD_MAX],
+                              int *copied)
+{
+    int changed = 0;
+
+    *copied = 0;
+    if (action == EDITOR_MENU_COPY || action == EDITOR_MENU_CUT) {
+        *copied = kui_text_selection_copy(
+            &state->selection, state->text, state->text_length,
+            clipboard, KUI_PROTOCOL_CLIPBOARD_MAX) > 0;
+        if (action == EDITOR_MENU_CUT && *copied)
+            changed = delete_selection(state);
+    } else if (action == EDITOR_MENU_PASTE) {
+        if (event->clipboard_kind == KUI_CLIPBOARD_TEXT &&
+            event->clipboard[0] != '\0')
+            changed = replace_selection(state, event->clipboard,
+                                        (int)strlen(event->clipboard));
+    } else if (action == EDITOR_MENU_DELETE) {
+        changed = delete_selection(state);
+    } else if (action == EDITOR_MENU_SELECT_ALL) {
+        kui_text_selection_select_all(&state->selection, state->text_length);
+        state->text_cursor = state->text_length;
+    }
+    return changed;
 }
 
 static int load_document(struct editor_state *state, const char *path)
@@ -168,8 +258,11 @@ static int save_document_to(struct editor_state *state, const char *path)
     }
     state->save_failed = fd < 0 || total != state->text_length;
     if (!state->save_failed) {
-        strncpy(state->path, path, sizeof(state->path) - 1);
-        state->path[sizeof(state->path) - 1] = '\0';
+        size_t length = strlen(path);
+
+        if (length >= sizeof(state->path)) length = sizeof(state->path) - 1;
+        memmove(state->path, path, length);
+        state->path[length] = '\0';
         state->dirty = 0;
         return 0;
     }
@@ -343,7 +436,7 @@ static void apply_request(struct editor_state *state,
             insert_character(state, (char)request->value);
         break;
     case EDITOR_COMMAND_BACKSPACE:
-        if (state->text_cursor > 0) {
+        if (!delete_selection(state) && state->text_cursor > 0) {
             memmove(state->text + state->text_cursor - 1,
                     state->text + state->text_cursor,
                     state->text_length - state->text_cursor);
@@ -351,39 +444,61 @@ static void apply_request(struct editor_state *state,
             state->text_length--;
             state->dirty = 1;
             state->save_failed = 0;
+            kui_text_selection_collapse(&state->selection,
+                                         state->text_cursor);
         }
         break;
     case EDITOR_COMMAND_DELETE:
-        if (state->text_cursor < state->text_length) {
+        if (!delete_selection(state) &&
+            state->text_cursor < state->text_length) {
             memmove(state->text + state->text_cursor,
                     state->text + state->text_cursor + 1,
                     state->text_length - state->text_cursor - 1);
             state->text_length--;
             state->dirty = 1;
             state->save_failed = 0;
+            kui_text_selection_collapse(&state->selection,
+                                         state->text_cursor);
         }
         break;
     case EDITOR_COMMAND_LEFT:
-        if (state->text_cursor > 0) state->text_cursor--;
+        if (kui_text_selection_has_range(&state->selection)) {
+            int start;
+            kui_text_selection_range(&state->selection, &start, 0);
+            state->text_cursor = start;
+        } else if (state->text_cursor > 0) {
+            state->text_cursor--;
+        }
+        kui_text_selection_collapse(&state->selection, state->text_cursor);
         break;
     case EDITOR_COMMAND_RIGHT:
-        if (state->text_cursor < state->text_length) state->text_cursor++;
+        if (kui_text_selection_has_range(&state->selection)) {
+            int end;
+            kui_text_selection_range(&state->selection, 0, &end);
+            state->text_cursor = end;
+        } else if (state->text_cursor < state->text_length) {
+            state->text_cursor++;
+        }
+        kui_text_selection_collapse(&state->selection, state->text_cursor);
         break;
     case EDITOR_COMMAND_UP:
     case EDITOR_COMMAND_PAGE_UP:
         for (int i = 0; i < repeat; i++)
             state->text_cursor = move_vertical(state, -1);
+        kui_text_selection_collapse(&state->selection, state->text_cursor);
         break;
     case EDITOR_COMMAND_DOWN:
     case EDITOR_COMMAND_PAGE_DOWN:
         for (int i = 0; i < repeat; i++)
             state->text_cursor = move_vertical(state, 1);
+        kui_text_selection_collapse(&state->selection, state->text_cursor);
         break;
     case EDITOR_COMMAND_SET_CURSOR:
         state->text_cursor = request->value;
         if (state->text_cursor < 0) state->text_cursor = 0;
         if (state->text_cursor > state->text_length)
             state->text_cursor = state->text_length;
+        kui_text_selection_collapse(&state->selection, state->text_cursor);
         break;
     case EDITOR_COMMAND_SAVE:
         save_document(state);
@@ -396,7 +511,7 @@ static void apply_request(struct editor_state *state,
 
 static int editor_columns(int width)
 {
-    int columns = (width - EDITOR_TEXT_LEFT - 9) / 8;
+    int columns = (width - EDITOR_TEXT_LEFT - KUI_SCROLLBAR_SIZE - 9) / 8;
     return columns > 0 ? columns : 1;
 }
 
@@ -427,31 +542,22 @@ static int editor_max_scroll(const struct editor_state *state,
     return maximum > 0 ? maximum : 0;
 }
 
-static int editor_position_at(const struct editor_state *state,
-                              int width, int scroll_row, int x, int y)
+static void editor_text_layout(int width, int height, int scroll_row,
+                               struct kui_mono_text_layout *layout)
 {
-    int columns = editor_columns(width);
-    int target_row = scroll_row + (y - EDITOR_TEXT_TOP) / 16;
-    int target_column = (x - EDITOR_TEXT_LEFT) / 8;
-    int row = 0;
-    int column = 0;
-
-    if (target_column < 0) target_column = 0;
-    for (int position = 0; position <= state->text_length; position++) {
-        if (row == target_row &&
-            (column >= target_column || position == state->text_length ||
-             state->text[position] == '\n'))
-            return position;
-        if (position == state->text_length) break;
-        if (state->text[position] == '\n') { row++; column = 0; }
-        else if (++column >= columns) { row++; column = 0; }
-    }
-    return state->text_length;
+    layout->left = EDITOR_TEXT_LEFT;
+    layout->top = EDITOR_TEXT_TOP;
+    layout->columns = editor_columns(width);
+    layout->visible_rows = editor_visible_rows(height);
+    layout->cell_width = 8;
+    layout->row_height = 16;
+    layout->scroll_row = scroll_row;
 }
 
 static void editor_render(struct kui_client *client,
                           const struct kui_event *event,
-                          const struct editor_state *state, int scroll_row)
+                          const struct editor_state *state, int scroll_row,
+                          const struct kui_scrollbar_state *scrollbar)
 {
     int columns = editor_columns(event->width);
     int row = 0;
@@ -486,6 +592,8 @@ static void editor_render(struct kui_client *client,
 #endif
     for (int i = 0; i <= state->text_length; i++) {
         int visible_row = row - scroll_row;
+        int selected = i < state->text_length &&
+            kui_text_selection_contains(&state->selection, i);
 
 #ifdef C_IDE
         if (column == 0 &&
@@ -500,7 +608,13 @@ static void editor_render(struct kui_client *client,
                                number, 0x006b737bU, 0x00eef1f4U, 0);
         }
 #endif
-        if (i == state->text_cursor && visible_row >= 0 &&
+        if (selected && visible_row >= 0 &&
+            visible_row < editor_visible_rows(event->height))
+            kui_fill_rect(&client->surface, EDITOR_TEXT_LEFT + column * 8,
+                          EDITOR_TEXT_TOP + visible_row * 16,
+                          8, 16, event->style.selection);
+        if (!kui_text_selection_has_range(&state->selection) &&
+            i == state->text_cursor && visible_row >= 0 &&
             visible_row < editor_visible_rows(event->height))
             kui_fill_rect(&client->surface, EDITOR_TEXT_LEFT - 1 + column * 8,
                           EDITOR_TEXT_TOP + visible_row * 16,
@@ -521,11 +635,12 @@ static void editor_render(struct kui_client *client,
                                EDITOR_TEXT_TOP + visible_row * 16,
                                (unsigned char)state->text[i],
 #ifdef C_IDE
+                          selected ? KUI_WHITE :
                           cide_syntax_color(syntax_classes[i]),
 #else
-                          KUI_BLACK,
+                          selected ? KUI_WHITE : KUI_BLACK,
 #endif
-                          KUI_WHITE, 0);
+                          selected ? event->style.selection : KUI_WHITE, 0);
         if (++column >= columns) { row++; column = 0; }
     }
 #ifdef C_IDE
@@ -551,6 +666,13 @@ static void editor_render(struct kui_client *client,
                           0x00e8edf2U, 0);
     }
 #endif
+    kui_draw_vscrollbar(
+        &client->surface, event->width - KUI_SCROLLBAR_SIZE,
+        EDITOR_TEXT_TOP,
+        event->height - EDITOR_TEXT_TOP - EDITOR_STATUS_HEIGHT,
+        scroll_row, editor_visible_rows(event->height),
+        editor_max_scroll(state, event->width, event->height) +
+        editor_visible_rows(event->height), scrollbar);
     if (state->save_failed)
         kui_draw_text(&client->surface, EDITOR_TEXT_LEFT,
                       event->height - 18 - EDITOR_STATUS_HEIGHT,
@@ -569,6 +691,8 @@ int main(void)
     struct kui_file_dialog file_dialog;
     struct kui_confirm_dialog discard_dialog;
     struct kui_menu_state menu_state;
+    struct kui_context_menu_state context_menu;
+    struct kui_scrollbar_state scrollbar;
     struct kui_client client;
     struct kui_event event;
     char pending_open_path[EDITOR_PATH_MAX];
@@ -577,16 +701,24 @@ int main(void)
     memset(&state, 0, sizeof(state));
     memset(&file_dialog, 0, sizeof(file_dialog));
     memset(&discard_dialog, 0, sizeof(discard_dialog));
+    memset(&scrollbar, 0, sizeof(scrollbar));
     pending_open_path[0] = '\0';
     kui_menu_init(&menu_state);
+    kui_context_menu_init(&context_menu);
     kui_client_init(&client);
     for (;;) {
         struct editor_request request;
         int saved = 0;
         int menu_action = 0;
         int menu_consumed = 0;
+        int context_consumed = 0;
+        int edit_action = 0;
+        int clipboard_copied = 0;
+        int edit_changed = 0;
+        int scrollbar_hit;
         int launch_requested = 0;
         char title[KUI_PROTOCOL_TITLE_MAX];
+        char copied_text[KUI_PROTOCOL_CLIPBOARD_MAX];
 #ifdef C_IDE
         int build_requested = 0;
         int run_requested = 0;
@@ -594,6 +726,24 @@ int main(void)
 
         if (kui_client_read_event(&event) < 0) break;
         if (event.type == KUI_EVENT_CLOSE) break;
+        scrollbar_hit = !file_dialog.active && !discard_dialog.active &&
+            event.type == KUI_EVENT_POINTER && event.button == 1 &&
+            kui_in_rect(event.x, event.y,
+                        event.width - KUI_SCROLLBAR_SIZE,
+                        EDITOR_TEXT_TOP, KUI_SCROLLBAR_SIZE,
+                        event.height - EDITOR_TEXT_TOP -
+                        EDITOR_STATUS_HEIGHT);
+        if ((!file_dialog.active && !discard_dialog.active) ||
+            scrollbar.active_direction != 0)
+            scroll_row = kui_vscrollbar_handle(
+                &scrollbar, &event,
+                event.width - KUI_SCROLLBAR_SIZE, EDITOR_TEXT_TOP,
+                event.height - EDITOR_TEXT_TOP - EDITOR_STATUS_HEIGHT,
+                scroll_row, editor_visible_rows(event.height),
+                editor_max_scroll(&state, event.width, event.height) +
+                editor_visible_rows(event.height));
+        copied_text[0] = '\0';
+        update_edit_items(&state, &event);
         memset(&request, 0, sizeof(request));
         request.repeat = 1;
         if (event.type == KUI_EVENT_INIT) {
@@ -608,6 +758,7 @@ int main(void)
                     sizeof(request.path) - 1);
             scroll_row = 0;
             kui_menu_close(&menu_state);
+            kui_context_menu_close(&context_menu);
             pending_open_path[0] = '\0';
             kui_file_dialog_close(&file_dialog);
             kui_confirm_dialog_close(&discard_dialog);
@@ -674,6 +825,35 @@ int main(void)
                                               "Save failed (try an 8.3 name)");
                 }
             }
+        } else if (event.type == KUI_EVENT_POINTER && event.button == 2) {
+            struct kui_mono_text_layout layout;
+            int position;
+
+            editor_text_layout(event.width, event.height, scroll_row, &layout);
+            if (event.x >= layout.left &&
+                event.x < layout.left + layout.columns * layout.cell_width &&
+                event.y >= layout.top &&
+                event.y < layout.top +
+                          layout.visible_rows * layout.row_height) {
+                position = kui_mono_text_position_at(
+                    state.text, state.text_length, &layout,
+                    event.x, event.y);
+                if (!kui_text_selection_contains(&state.selection,
+                                                 position)) {
+                    state.text_cursor = position;
+                    kui_text_selection_collapse(&state.selection, position);
+                }
+                kui_menu_close(&menu_state);
+                kui_context_menu_open(&context_menu, event.x, event.y);
+            } else {
+                kui_context_menu_close(&context_menu);
+            }
+        } else if ((edit_action = kui_context_menu_handle(
+                        &context_menu, &event, editor_edit_items,
+                        EDITOR_EDIT_ITEM_COUNT, &context_consumed)) != 0) {
+            /* Applied after event dispatch with keyboard Edit actions. */
+        } else if (context_consumed) {
+            /* The shared context menu owns this event. */
         } else if ((menu_action = kui_menu_handle(
                         &menu_state, &event, editor_menus, EDITOR_MENU_COUNT,
                         &menu_consumed)) != 0) {
@@ -685,6 +865,9 @@ int main(void)
             } else if (menu_action == EDITOR_MENU_SAVE_AS) {
                 kui_file_dialog_open(&file_dialog, KUI_FILE_DIALOG_SAVE,
                                      state.path);
+            } else if (menu_action >= EDITOR_MENU_CUT &&
+                       menu_action <= EDITOR_MENU_SELECT_ALL) {
+                edit_action = menu_action;
 #ifdef C_IDE
             } else if (menu_action == EDITOR_MENU_BUILD) {
                 build_requested = 1;
@@ -709,13 +892,20 @@ int main(void)
                 run_requested = 1;
             }
 #endif
+        } else if (scrollbar_hit) {
+            /* The shared scrollbar owns this press and repeat timer. */
         } else if (event.type == KUI_EVENT_POINTER && event.wheel != 0) {
-            scroll_row -= event.wheel * 3;
-        } else if (event.type == KUI_EVENT_POINTER && event.button == 1 &&
-                   event.y >= EDITOR_TEXT_TOP) {
-            request.command = EDITOR_COMMAND_SET_CURSOR;
-            request.value = editor_position_at(&state, event.width,
-                                               scroll_row, event.x, event.y);
+            scroll_row = kui_scrollbar_wheel(
+                scroll_row, event.wheel, editor_visible_rows(event.height),
+                editor_max_scroll(&state, event.width, event.height) +
+                editor_visible_rows(event.height));
+        } else if (event.type == KUI_EVENT_POINTER) {
+            struct kui_mono_text_layout layout;
+
+            editor_text_layout(event.width, event.height, scroll_row, &layout);
+            kui_text_selection_handle_pointer(
+                &state.selection, &event, state.text, state.text_length,
+                &layout, &state.text_cursor);
         } else if (event.type == KUI_EVENT_KEY && event.key_pressed) {
 #ifdef C_IDE
             if (!event.key_extended && event.key_code == 63) {
@@ -738,6 +928,18 @@ int main(void)
                 kui_menu_close(&menu_state);
                 kui_file_dialog_open(&file_dialog, KUI_FILE_DIALOG_OPEN,
                                      state.path);
+            } else if ((event.modifiers & KUI_MOD_CTRL) &&
+                       !event.key_extended && event.key_code == 46) {
+                edit_action = EDITOR_MENU_COPY;
+            } else if ((event.modifiers & KUI_MOD_CTRL) &&
+                       !event.key_extended && event.key_code == 45) {
+                edit_action = EDITOR_MENU_CUT;
+            } else if ((event.modifiers & KUI_MOD_CTRL) &&
+                       !event.key_extended && event.key_code == 47) {
+                edit_action = EDITOR_MENU_PASTE;
+            } else if ((event.modifiers & KUI_MOD_CTRL) &&
+                       !event.key_extended && event.key_code == 30) {
+                edit_action = EDITOR_MENU_SELECT_ALL;
             } else if (event.key_extended && event.key_code == 73) {
                 request.command = EDITOR_COMMAND_PAGE_UP;
                 request.repeat = editor_visible_rows(event.height);
@@ -767,10 +969,15 @@ int main(void)
             }
         }
         if (request.command != 0) apply_request(&state, &request);
+        if (edit_action != 0)
+            edit_changed = editor_edit_action(
+                &state, edit_action, &event, copied_text,
+                &clipboard_copied);
+        if (edit_changed) kui_context_menu_close(&context_menu);
 #ifdef C_IDE
         if (request.command == EDITOR_COMMAND_INSERT ||
             request.command == EDITOR_COMMAND_BACKSPACE ||
-            request.command == EDITOR_COMMAND_DELETE) {
+            request.command == EDITOR_COMMAND_DELETE || edit_changed) {
             state.build_ok = 0;
             state.build_status[0] = '\0';
         }
@@ -791,6 +998,7 @@ int main(void)
         if (scroll_row < 0) scroll_row = 0;
         if (scroll_row > editor_max_scroll(&state, event.width, event.height))
             scroll_row = editor_max_scroll(&state, event.width, event.height);
+        update_edit_items(&state, &event);
         snprintf(title, sizeof(title),
 #ifdef C_IDE
                  "C IDE - %s%s",
@@ -805,16 +1013,31 @@ int main(void)
 #else
                                    440, 300, 700, 481);
 #endif
-        editor_render(&client, &event, &state, scroll_row);
+        editor_render(&client, &event, &state, scroll_row, &scrollbar);
         kui_menu_render(&client.surface, &menu_state, editor_menus,
                         EDITOR_MENU_COUNT);
+        kui_context_menu_render(&client.surface, &context_menu,
+                                editor_edit_items,
+                                EDITOR_EDIT_ITEM_COUNT);
         kui_file_dialog_render(&client.surface, &event, &file_dialog);
         kui_confirm_dialog_render(&client.surface, &event, &discard_dialog);
+        {
+            uint32_t timer = kui_scrollbar_timer_ms(&scrollbar);
+            uint32_t dialog_timer = kui_file_dialog_timer_ms(&file_dialog);
 #ifdef C_IDE
-        kui_client_set_timer(&client, state.build_pid > 0 ? 50 :
-                                      state.build_queued != 0 ? 1 : 0);
+            uint32_t build_timer = state.build_pid > 0 ? 50U :
+                                   state.build_queued != 0 ? 1U : 0U;
+
+            if (build_timer != 0 && (timer == 0 || build_timer < timer))
+                timer = build_timer;
 #endif
-        if (launch_requested)
+            if (dialog_timer != 0 && (timer == 0 || dialog_timer < timer))
+                timer = dialog_timer;
+            kui_client_set_timer(&client, timer);
+        }
+        if (clipboard_copied)
+            kui_client_set_action(&client, KUI_ACTION_COPY_TEXT, copied_text);
+        else if (launch_requested)
             kui_client_set_action(&client, KUI_ACTION_LAUNCH,
                                   CIDE_BINARY_PATH);
         else if (saved)
