@@ -23,10 +23,10 @@ KUI_STYLE_AQUA_OBJECT ?= $(USERLAND_STAGE)/kui_style_aqua.o
 MINESWEEPER_WIDGET_OBJECT ?= $(USERLAND_STAGE)/minesweeper_widget.o
 SOLITAIRE_WIDGET_OBJECT ?= $(USERLAND_STAGE)/solitaire_widget.o
 CALCULATOR_WIDGET_OBJECT ?= $(USERLAND_STAGE)/calculator_widget.o
-CORE_SRC ?= $(KERNEL_ROOT)/../../kyleos-userspace
-PROGS_SRC ?= $(KERNEL_ROOT)/../../newlib-progs
-NEWLIB_BUILD ?= $(KERNEL_ROOT)/../../newlib-build
-SYSROOT ?= /tmp/z
+CORE_SRC ?= $(KERNEL_ROOT)/userspace/core
+PROGS_SRC ?= $(KERNEL_ROOT)/userspace/programs
+NEWLIB_BUILD ?= $(KERNEL_ROOT)/toolchain/newlib-build
+SYSROOT ?= $(KERNEL_ROOT)/build/sysroot
 DOOM_BINARY ?= $(KERNEL_ROOT)/build/extras/doom/doom
 DOOM_WAD ?= /home/kyle/Downloads/DOOM.WAD
 QUAKE_BINARY ?= $(KERNEL_ROOT)/build/extras/quake/quake
@@ -123,8 +123,10 @@ user:kernel.img
 .PHONY: toolchain userland userinit kui gui-assets desktop kuid win95-shell aqua aqua-shell finder sysmon editor cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-paint-brush test-tetris test-tetris-ui test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-suite doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
-	$(MAKE) -C $(NEWLIB_BUILD)
-	$(MAKE) -C $(NEWLIB_BUILD) install
+	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
+		DESTDIR= all
+	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
+		DESTDIR= install
 
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)

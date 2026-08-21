@@ -142,7 +142,7 @@ for tool in git make; do
     }
 done
 
-sysroot=${SYSROOT:-/tmp/z}
+sysroot=${SYSROOT:-"$root/build/sysroot"}
 if [[ ! -f $sysroot/lib/libc.a || ! -f $sysroot/lib/libm.a ]]; then
     echo "KyleOS Newlib sysroot is missing from $sysroot" >&2
     echo "Build it first with: make toolchain" >&2

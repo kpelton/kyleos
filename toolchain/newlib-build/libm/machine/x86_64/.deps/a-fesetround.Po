@@ -1,0 +1,6 @@
+libm/machine/x86_64/a-fesetround.o: \
+ /home/kyle/dev/newlib-cygwin/newlib/libm/machine/x86_64/fesetround.c \
+ /usr/include/stdc-predef.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libm/machine/x86_64/../../fenv/fenv_stub.c
+/usr/include/stdc-predef.h:
+/home/kyle/dev/newlib-cygwin/newlib/libm/machine/x86_64/../../fenv/fenv_stub.c:

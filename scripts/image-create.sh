@@ -35,8 +35,8 @@ tcc_runtime=${TCC_RUNTIME:-"$root/build/extras/tinycc/root"}
 tcc_source=${TCC_SOURCE:-"$root/build/extras/tinycc/src"}
 tcc_port=${TCC_PORT:-"$root/build/extras/tinycc/tinycc-kyleos"}
 
-core_source=${CORE_SRC:-"$root/../../kyleos-userspace"}
-progs_source=${PROGS_SRC:-"$root/../../newlib-progs"}
+core_source=${CORE_SRC:-"$root/userspace/core"}
+progs_source=${PROGS_SRC:-"$root/userspace/programs"}
 
 ready_file="$image.ready"
 

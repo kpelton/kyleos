@@ -5,7 +5,7 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 source_dir=${TCC_SOURCE:-"$root/extras/tinycc"}
 patched_source=${TCC_PATCHED_SOURCE:-"$root/build/extras/tinycc/src"}
 patched_port=${TCC_PATCHED_PORT:-"$root/build/extras/tinycc/tinycc-kyleos"}
-sysroot=${SYSROOT:-/tmp/z}
+sysroot=${SYSROOT:-"$root/build/sysroot"}
 output=${TCC_BINARY:-"$root/build/userland/cc"}
 runtime=${TCC_RUNTIME:-"$root/build/extras/tinycc/root"}
 host_cc=${HOST_CC:-gcc}

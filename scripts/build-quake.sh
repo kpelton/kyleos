@@ -21,6 +21,6 @@ done
 cp "$port_dir"/Makefile "$port_dir"/*.c "$port_dir"/*.h \
     "$work_dir/WinQuake/"
 
-make -C "$work_dir/WinQuake" NEWLIB_INSTALL="${SYSROOT:-/tmp/z}"
+make -C "$work_dir/WinQuake" NEWLIB_INSTALL="${SYSROOT:-$root/build/sysroot}"
 mkdir -p "$(dirname -- "$output")"
 cp "$work_dir/WinQuake/quake" "$output"

@@ -1,0 +1,38 @@
+libc/stdlib/a-lldiv.o: \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/stdlib/lldiv.c \
+ /usr/include/stdc-predef.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/stdlib.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/ieeefp.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h \
+ /home/kyle/dev/newlib-build/targ-include/newlib.h \
+ /home/kyle/dev/newlib-build/targ-include/_newlib_version.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/config.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/features.h \
+ /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/reent.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_types.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_types.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_default_types.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/lock.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/cdefs.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/stdlib.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/alloca.h
+/usr/include/stdc-predef.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/stdlib.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/ieeefp.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h:
+/home/kyle/dev/newlib-build/targ-include/newlib.h:
+/home/kyle/dev/newlib-build/targ-include/_newlib_version.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/config.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/features.h:
+/usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/reent.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_types.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_types.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_default_types.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/lock.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/cdefs.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/stdlib.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/alloca.h:

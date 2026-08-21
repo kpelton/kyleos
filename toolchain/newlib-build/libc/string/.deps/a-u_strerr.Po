@@ -1,0 +1,16 @@
+libc/string/a-u_strerr.o: \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/string/u_strerr.c \
+ /usr/include/stdc-predef.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h \
+ /home/kyle/dev/newlib-build/targ-include/newlib.h \
+ /home/kyle/dev/newlib-build/targ-include/_newlib_version.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/config.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/ieeefp.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/features.h
+/usr/include/stdc-predef.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h:
+/home/kyle/dev/newlib-build/targ-include/newlib.h:
+/home/kyle/dev/newlib-build/targ-include/_newlib_version.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/config.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/ieeefp.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/features.h:

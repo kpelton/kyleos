@@ -1,0 +1,28 @@
+libc/string/a-ffsll.o: \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/string/ffsll.c \
+ /usr/include/stdc-predef.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/strings.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/cdefs.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_default_types.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/features.h \
+ /home/kyle/dev/newlib-build/targ-include/_newlib_version.h \
+ /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_types.h \
+ /home/kyle/dev/newlib-build/targ-include/newlib.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/config.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/ieeefp.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_types.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_locale.h
+/usr/include/stdc-predef.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/strings.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/cdefs.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_default_types.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/features.h:
+/home/kyle/dev/newlib-build/targ-include/_newlib_version.h:
+/usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_types.h:
+/home/kyle/dev/newlib-build/targ-include/newlib.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/config.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/ieeefp.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_types.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_locale.h:

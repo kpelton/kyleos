@@ -1,0 +1,16 @@
+libc/misc/a-unctrl.o: \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/misc/unctrl.c \
+ /usr/include/stdc-predef.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h \
+ /home/kyle/dev/newlib-build/targ-include/newlib.h \
+ /home/kyle/dev/newlib-build/targ-include/_newlib_version.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/config.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/ieeefp.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/features.h
+/usr/include/stdc-predef.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h:
+/home/kyle/dev/newlib-build/targ-include/newlib.h:
+/home/kyle/dev/newlib-build/targ-include/_newlib_version.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/config.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/ieeefp.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/features.h:

@@ -1,0 +1,8 @@
+libc/ctype/a-jp2uc.o: \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/ctype/jp2uc.c \
+ /usr/include/stdc-predef.h \
+ /home/kyle/dev/newlib-build/targ-include/newlib.h \
+ /home/kyle/dev/newlib-build/targ-include/_newlib_version.h
+/usr/include/stdc-predef.h:
+/home/kyle/dev/newlib-build/targ-include/newlib.h:
+/home/kyle/dev/newlib-build/targ-include/_newlib_version.h:

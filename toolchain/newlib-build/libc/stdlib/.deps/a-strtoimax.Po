@@ -1,0 +1,76 @@
+libc/stdlib/a-strtoimax.o: \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/stdlib/strtoimax.c \
+ /usr/include/stdc-predef.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/cdefs.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_default_types.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/features.h \
+ /home/kyle/dev/newlib-build/targ-include/_newlib_version.h \
+ /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/ctype.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h \
+ /home/kyle/dev/newlib-build/targ-include/newlib.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/config.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/ieeefp.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_locale.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/errno.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/errno.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/reent.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_types.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_types.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/lock.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/stdlib.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/stdlib.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/alloca.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/inttypes.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_intsup.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/stdint.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_stdint.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/reent.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/stdlib/../locale/setlocale.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/limits.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/syslimits.h \
+ /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/string.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/strings.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/string.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/wchar.h \
+ /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/include/locale.h
+/usr/include/stdc-predef.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/cdefs.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_default_types.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/features.h:
+/home/kyle/dev/newlib-build/targ-include/_newlib_version.h:
+/usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/ctype.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h:
+/home/kyle/dev/newlib-build/targ-include/newlib.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/config.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/ieeefp.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_locale.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/errno.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/errno.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/reent.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/_ansi.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_types.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/_types.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/lock.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/stdlib.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/machine/stdlib.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/alloca.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/inttypes.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_intsup.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/stdint.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/_stdint.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/reent.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/stdlib/../locale/setlocale.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/limits.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/syslimits.h:
+/usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/string.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/strings.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/sys/string.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/wchar.h:
+/usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/include/locale.h:

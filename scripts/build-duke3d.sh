@@ -13,7 +13,7 @@ work_dir="$root/build/extras/duke3d/src"
     exit 1
 }
 
-[[ -f ${SYSROOT:-/tmp/z}/lib/libc.a ]] || {
+[[ -f ${SYSROOT:-$root/build/sysroot}/lib/libc.a ]] || {
     echo "missing Newlib sysroot: run 'make toolchain' first" >&2
     exit 1
 }
@@ -35,6 +35,6 @@ cp -R "$port_dir" "$work_dir/kyleos"
 cp "$port_dir/Makefile" "$work_dir/Makefile.kyleos"
 
 make -C "$work_dir" -f Makefile.kyleos \
-    CC="${CC:-gcc}" NEWLIB_INSTALL="${SYSROOT:-/tmp/z}"
+    CC="${CC:-gcc}" NEWLIB_INSTALL="${SYSROOT:-$root/build/sysroot}"
 mkdir -p "$(dirname -- "$output")"
 cp "$work_dir/duke3d" "$output"

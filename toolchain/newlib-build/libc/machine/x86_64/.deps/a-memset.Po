@@ -1,0 +1,6 @@
+libc/machine/x86_64/a-memset.o: \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/machine/x86_64/memset.S \
+ /usr/include/stdc-predef.h \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/machine/x86_64/x86_64mach.h
+/usr/include/stdc-predef.h:
+/home/kyle/dev/newlib-cygwin/newlib/libc/machine/x86_64/x86_64mach.h:

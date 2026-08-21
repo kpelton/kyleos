@@ -1,0 +1,4 @@
+libc/signal/a-raise.o: \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/signal/raise.c \
+ /usr/include/stdc-predef.h
+/usr/include/stdc-predef.h:

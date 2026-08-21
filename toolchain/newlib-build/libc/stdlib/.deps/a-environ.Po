@@ -1,0 +1,4 @@
+libc/stdlib/a-environ.o: \
+ /home/kyle/dev/newlib-cygwin/newlib/libc/stdlib/environ.c \
+ /usr/include/stdc-predef.h
+/usr/include/stdc-predef.h:

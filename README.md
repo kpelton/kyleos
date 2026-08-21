@@ -174,24 +174,30 @@ git submodule update --init --recursive
 ## Current source layout
 
 The kernel and reproducible image tooling live in this repository.  During
-the ongoing migration, Newlib and the two userspace source trees are still
-configured through local paths.  Copy the example configuration and adjust it
-if your layout differs:
+all core userspace, helper programs, and Newlib sources are kept in-tree. Copy
+the example configuration only when overriding the defaults:
 
 ```bash
 cp config.mk.example config.mk
 ```
 
-The default configuration expects these existing trees relative to this repo:
+The default configuration uses these repository-local trees:
 
 ```text
-../../newlib-build
-../../kyleos-userspace
-../../newlib-progs
+userspace/core
+userspace/programs
+external/newlib
+toolchain/newlib-build
 ```
 
-`config.mk` is ignored by Git.  The long-term layout is to move these trees
-under this repository and use the pinned Newlib fork/submodule.
+The repository-local dependency policy is intentional: source dependencies are
+checked in under `userspace/` and `external/`, while compiler output, sysroots,
+userland staging files, and disk images are generated only under `build/`.
+No build target should require `/tmp/z` or a sibling checkout.
+
+`config.mk` is ignored by Git. The checked-in `toolchain/newlib-build` metadata
+keeps the Newlib build self-contained; generated libraries and headers are
+installed under `build/sysroot`.
 
 ## Build and boot
 
