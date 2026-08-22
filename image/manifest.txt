@@ -13,12 +13,15 @@ cc
 cide
 citybuilder
 constest
+controlcenter
 cp
 donut
 demandtest
 desktop
 echo
 editor
+notes
+writer
 finder
 flappy
 kylekart

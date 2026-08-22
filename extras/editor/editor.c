@@ -18,6 +18,14 @@
 
 #define CIDE_BINARY_PATH "/tmp/cide.out"
 
+#ifdef NOTES_APP
+#define EDITOR_DEFAULT_PATH "/NOTES.TXT"
+#define EDITOR_WINDOW_TITLE "Notes - %s%s"
+#else
+#define EDITOR_DEFAULT_PATH "/NOTE.TXT"
+#define EDITOR_WINDOW_TITLE "%s%s"
+#endif
+
 #ifdef C_IDE
 #define EDITOR_TOOLBAR_HEIGHT 34
 #define EDITOR_STATUS_HEIGHT 22
@@ -762,7 +770,7 @@ int main(void)
 #ifdef C_IDE
                     "/hello.c",
 #else
-                    "/NOTE.TXT",
+                    EDITOR_DEFAULT_PATH,
 #endif
                     sizeof(request.path) - 1);
             scroll_row = 0;
@@ -1009,7 +1017,7 @@ int main(void)
 #ifdef C_IDE
                  "C IDE - %s%s",
 #else
-                 "%s%s",
+                 EDITOR_WINDOW_TITLE,
 #endif
                  editor_path_name(state.path), state.dirty ? " *" : "");
         kui_client_begin(&client, &event, title);

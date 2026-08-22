@@ -449,22 +449,30 @@ int kui_display_replay(struct kui_surface *surface,
         } else if (command->type == KUI_DISPLAY_TEXT) {
             uint32_t text_bytes = command->size - sizeof(*command);
             const char *text = (const char *)(command + 1);
+            int scale = (int)((command->flags & KUI_TEXT_SCALE_MASK) >>
+                              KUI_TEXT_SCALE_SHIFT) + 1;
 
             if (command->x0 < -8192 || command->x0 > 8192 ||
                 command->y0 < -8192 || command->y0 > 8192 ||
                 text_bytes == 0 || text_bytes > 4096 ||
                 text[text_bytes - 1] != '\0' ||
                 (command->flags & ~(KUI_TEXT_OPAQUE |
-                                    KUI_TEXT_MONOSPACE)) != 0)
+                                    KUI_TEXT_MONOSPACE |
+                                    KUI_TEXT_BOLD |
+                                    KUI_TEXT_SCALE_MASK)) != 0)
                 return -1;
             if (command->flags & KUI_TEXT_MONOSPACE)
-                kui_draw_mono_text(surface, command->x0, command->y0, text,
-                                   command->foreground, command->background,
-                                   (command->flags & KUI_TEXT_OPAQUE) != 0);
+                kui_draw_mono_text_styled(
+                    surface, command->x0, command->y0, text,
+                    command->foreground, command->background,
+                    (command->flags & KUI_TEXT_OPAQUE) != 0, scale,
+                    (command->flags & KUI_TEXT_BOLD) != 0);
             else
-                kui_draw_text(surface, command->x0, command->y0, text,
-                              command->foreground, command->background,
-                              (command->flags & KUI_TEXT_OPAQUE) != 0);
+                kui_draw_text_styled(
+                    surface, command->x0, command->y0, text,
+                    command->foreground, command->background,
+                    (command->flags & KUI_TEXT_OPAQUE) != 0, scale,
+                    (command->flags & KUI_TEXT_BOLD) != 0);
         } else if (command->type == KUI_DISPLAY_BITMAP_ROW ||
                    command->type == KUI_DISPLAY_BITMAP_ALPHA_ROW) {
             uint32_t source_width = command->foreground;
@@ -828,25 +836,28 @@ void kui_line(struct kui_surface *surface, int x0, int y0, int x1, int y1,
 
 static int kui_draw_fallback_char(struct kui_surface *surface, int x, int y,
                                   unsigned char ch, uint32_t foreground,
-                                  uint32_t background, int opaque)
+                                  uint32_t background, int opaque,
+                                  int scale, int bold)
 {
+    if (opaque)
+        kui_fill_rect(surface, x, y, 8 * scale, 16 * scale, background);
     for (int row = 0; row < 16; row++) {
         uint8_t bits = terminal_font[(unsigned)ch * 16 + row];
 
         for (int col = 0; col < 8; col++) {
             if (bits & (0x80 >> col))
-                kui_pixel(surface, x + col, y + row, foreground);
-            else if (opaque)
-                kui_pixel(surface, x + col, y + row, background);
+                kui_fill_rect(surface, x + col * scale, y + row * scale,
+                              scale + (bold ? 1 : 0), scale, foreground);
         }
     }
-    return 8;
+    return 8 * scale;
 }
 
 static int kui_draw_kfont_char(struct kui_surface *surface, int x, int y,
                                unsigned char ch, uint32_t foreground,
                                uint32_t background, int opaque,
-                               const struct kui_kfont *font)
+                               const struct kui_kfont *font,
+                               int scale, int bold)
 {
     const struct kui_kfont_glyph *glyph = &font->glyphs[ch];
     int advance;
@@ -855,69 +866,73 @@ static int kui_draw_kfont_char(struct kui_surface *surface, int x, int y,
         glyph = &font->glyphs[(unsigned char)'?'];
     advance = glyph->advance > 0 ? glyph->advance : 8;
     if (opaque)
-        kui_fill_rect(surface, x, y, advance, font->line_height, background);
+        kui_fill_rect(surface, x, y, advance * scale,
+                      font->line_height * scale, background);
     for (int row = 0; row < glyph->height; row++) {
-        int destination_y = y + glyph->offset_y + row;
+        int destination_y = y + (glyph->offset_y + row) * scale;
 
-        if ((unsigned)destination_y >= (unsigned)surface->height)
-            continue;
         for (int column = 0; column < glyph->width; column++) {
-            int destination_x = x + glyph->offset_x + column;
+            int destination_x = x + (glyph->offset_x + column) * scale;
             unsigned char alpha;
             uint32_t source;
-            uint32_t *destination;
 
-            if ((unsigned)destination_x >= (unsigned)surface->width)
-                continue;
             alpha = font->alpha[(glyph->y + row) * font->atlas_width +
                                 glyph->x + column];
             if (alpha == 0) continue;
             source = ((uint32_t)alpha << 24) | (foreground & 0x00ffffffU);
-            destination = &surface->pixels[
-                destination_y * surface->stride + destination_x];
-            *destination = kui_alpha_pixel(*destination, source);
+            kui_fill_rect_alpha(surface, destination_x, destination_y,
+                                scale + (bold ? 1 : 0), scale, source);
         }
     }
-    return advance;
+    return advance * scale;
 }
 
 static int kui_draw_font_char(struct kui_surface *surface, int x, int y,
                               unsigned char ch, uint32_t foreground,
-                              uint32_t background, int opaque, int monospace)
+                              uint32_t background, int opaque, int monospace,
+                              int scale, int bold)
 {
     const struct kui_kfont *font = kui_kfont_current(monospace);
 
     if (font == NULL)
         return kui_draw_fallback_char(surface, x, y, ch, foreground,
-                                      background, opaque);
+                                      background, opaque, scale, bold);
     return kui_draw_kfont_char(surface, x, y, ch, foreground,
-                               background, opaque, font);
+                               background, opaque, font, scale, bold);
 }
 
 static void kui_draw_text_role(struct kui_surface *surface, int x, int y,
                                const char *text, uint32_t foreground,
-                               uint32_t background, int opaque, int monospace)
+                               uint32_t background, int opaque, int monospace,
+                               int scale, int bold)
 {
+    if (scale < 1) scale = 1;
+    if (scale > KUI_TEXT_MAX_SCALE) scale = KUI_TEXT_MAX_SCALE;
     if (surface->commands != NULL) {
         uint32_t flags = opaque ? KUI_TEXT_OPAQUE : 0;
 
         if (monospace) flags |= KUI_TEXT_MONOSPACE;
+        if (bold) flags |= KUI_TEXT_BOLD;
+        flags |= (uint32_t)(scale - 1) << KUI_TEXT_SCALE_SHIFT;
         kui_record_command(surface, KUI_DISPLAY_TEXT, x, y, 0, 0,
                            foreground, background, flags, text);
         return;
     }
     while (*text != '\0') {
         x += kui_draw_font_char(surface, x, y, (unsigned char)*text++,
-                                foreground, background, opaque, monospace);
+                                foreground, background, opaque, monospace,
+                                scale, bold);
     }
 }
 
-static int kui_text_width_role(const char *text, int monospace)
+static int kui_text_width_role(const char *text, int monospace, int scale)
 {
     const struct kui_kfont *font = kui_kfont_current(monospace);
     int width = 0;
 
-    if (font == NULL) return (int)strlen(text) * 8;
+    if (scale < 1) scale = 1;
+    if (scale > KUI_TEXT_MAX_SCALE) scale = KUI_TEXT_MAX_SCALE;
+    if (font == NULL) return (int)strlen(text) * 8 * scale;
     while (*text != '\0') {
         const struct kui_kfont_glyph *glyph =
             &font->glyphs[(unsigned char)*text++];
@@ -926,7 +941,7 @@ static int kui_text_width_role(const char *text, int monospace)
             glyph = &font->glyphs[(unsigned char)'?'];
         width += glyph->advance > 0 ? glyph->advance : 8;
     }
-    return width;
+    return width * scale;
 }
 
 void kui_draw_char(struct kui_surface *surface, int x, int y,
@@ -936,7 +951,7 @@ void kui_draw_char(struct kui_surface *surface, int x, int y,
     char text[2] = { (char)ch, '\0' };
 
     kui_draw_text_role(surface, x, y, text, foreground, background,
-                       opaque, 0);
+                       opaque, 0, 1, 0);
 }
 
 void kui_draw_text(struct kui_surface *surface, int x, int y,
@@ -944,12 +959,26 @@ void kui_draw_text(struct kui_surface *surface, int x, int y,
                    uint32_t background, int opaque)
 {
     kui_draw_text_role(surface, x, y, text, foreground, background,
-                       opaque, 0);
+                       opaque, 0, 1, 0);
 }
 
 int kui_text_width(const char *text)
 {
-    return kui_text_width_role(text, 0);
+    return kui_text_width_role(text, 0, 1);
+}
+
+void kui_draw_text_styled(struct kui_surface *surface, int x, int y,
+                          const char *text, uint32_t foreground,
+                          uint32_t background, int opaque,
+                          int scale, int bold)
+{
+    kui_draw_text_role(surface, x, y, text, foreground, background,
+                       opaque, 0, scale, bold);
+}
+
+int kui_text_width_scaled(const char *text, int scale)
+{
+    return kui_text_width_role(text, 0, scale);
 }
 
 int kui_text_ellipsize(char *destination, int capacity, const char *text,
@@ -1005,7 +1034,7 @@ void kui_draw_mono_char(struct kui_surface *surface, int x, int y,
     char text[2] = { (char)ch, '\0' };
 
     kui_draw_text_role(surface, x, y, text, foreground, background,
-                       opaque, 1);
+                       opaque, 1, 1, 0);
 }
 
 void kui_draw_mono_text(struct kui_surface *surface, int x, int y,
@@ -1013,12 +1042,37 @@ void kui_draw_mono_text(struct kui_surface *surface, int x, int y,
                         uint32_t background, int opaque)
 {
     kui_draw_text_role(surface, x, y, text, foreground, background,
-                       opaque, 1);
+                       opaque, 1, 1, 0);
 }
 
 int kui_mono_text_width(const char *text)
 {
-    return kui_text_width_role(text, 1);
+    return kui_text_width_role(text, 1, 1);
+}
+
+void kui_draw_mono_char_styled(struct kui_surface *surface, int x, int y,
+                               unsigned char ch, uint32_t foreground,
+                               uint32_t background, int opaque,
+                               int scale, int bold)
+{
+    char text[2] = { (char)ch, '\0' };
+
+    kui_draw_text_role(surface, x, y, text, foreground, background,
+                       opaque, 1, scale, bold);
+}
+
+void kui_draw_mono_text_styled(struct kui_surface *surface, int x, int y,
+                               const char *text, uint32_t foreground,
+                               uint32_t background, int opaque,
+                               int scale, int bold)
+{
+    kui_draw_text_role(surface, x, y, text, foreground, background,
+                       opaque, 1, scale, bold);
+}
+
+int kui_mono_text_width_scaled(const char *text, int scale)
+{
+    return kui_text_width_role(text, 1, scale);
 }
 
 struct kui_kimg_header {

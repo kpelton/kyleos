@@ -95,6 +95,11 @@ void kui_draw_text(struct kui_surface *surface, int x, int y,
                    const char *text, uint32_t foreground,
                    uint32_t background, int opaque);
 int kui_text_width(const char *text);
+void kui_draw_text_styled(struct kui_surface *surface, int x, int y,
+                          const char *text, uint32_t foreground,
+                          uint32_t background, int opaque,
+                          int scale, int bold);
+int kui_text_width_scaled(const char *text, int scale);
 int kui_text_ellipsize(char *destination, int capacity, const char *text,
                        int maximum_width);
 void kui_draw_mono_char(struct kui_surface *surface, int x, int y,
@@ -104,6 +109,15 @@ void kui_draw_mono_text(struct kui_surface *surface, int x, int y,
                         const char *text, uint32_t foreground,
                         uint32_t background, int opaque);
 int kui_mono_text_width(const char *text);
+void kui_draw_mono_char_styled(struct kui_surface *surface, int x, int y,
+                               unsigned char ch, uint32_t foreground,
+                               uint32_t background, int opaque,
+                               int scale, int bold);
+void kui_draw_mono_text_styled(struct kui_surface *surface, int x, int y,
+                               const char *text, uint32_t foreground,
+                               uint32_t background, int opaque,
+                               int scale, int bold);
+int kui_mono_text_width_scaled(const char *text, int scale);
 
 int kui_image_load(const char *path, struct kui_image *image);
 void kui_image_free(struct kui_image *image);

@@ -1,0 +1,10 @@
+id=writer
+name=Writer
+exec=/bin/writer
+icon=/usr/share/gui/editor.kimg
+argument=/DOC.KWP
+accepts=kwp
+desktop=true
+start_menu=true
+width=760
+height=540

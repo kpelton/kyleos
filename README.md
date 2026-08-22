@@ -49,8 +49,9 @@ protocol over pipes.
   scrollbars.
 - Shared KUI menus, text selection, file dialogs, Save As confirmation, wheel
   scrolling, repeating scrollbar arrows, and window resize handling.
-- Applications include Finder, Text Editor, C IDE, Terminal, KSheet, Paint,
-  Help, System Monitor, games, and parallel-writer demonstrations.
+- Applications include Finder, Notes, Writer, Text Editor, C IDE, Terminal,
+  KSheet, Paint, Control Center, Help, System Monitor, games, and parallel-writer
+  demonstrations.
 
 See the [GUI architecture guide](docs/gui-architecture.html),
 [Markdown architecture notes](docs/gui-architecture.md), and the
@@ -66,9 +67,10 @@ See the [GUI architecture guide](docs/gui-architecture.html),
 
 ### GUI applications
 
-Finder, Text Editor, C IDE, Terminal, KSheet spreadsheet, Paint, Help,
-Calculator, System Monitor, Minesweeper, Solitaire, Tetris, City Builder,
-Parallel Writers, and the Aqua/Win95 shell demos.
+Finder, Notes, Writer, Text Editor, C IDE, Terminal, KSheet spreadsheet,
+Paint, Control Center, Help, Calculator, System Monitor, Minesweeper,
+Solitaire, Tetris, City Builder, Parallel Writers, and the Aqua/Win95 shell
+demos.
 
 ### Optional extras
 
@@ -360,12 +362,14 @@ select, and Escape to open or close the menu.
 
 ## Testing and diagnostics
 
-Host-side integration tests cover KUI shell protocol behavior, KSheet and
-Editor Save As, terminal responsiveness, Help navigation, text selection,
-scrollbar behavior, and widget styles. Run the focused GUI checks with:
+Host-side integration tests cover KUI shell protocol behavior, KSheet,
+Editor Save As, Writer formatting and KWP persistence, terminal
+responsiveness, Help navigation, text selection, scrollbar behavior, and
+widget styles. Run the focused GUI checks with:
 
 ```bash
 make test-kui-shells test-ksheet-ui test-editor-clipboard \
+  test-writer-document test-writer-ui test-kui-scaled-text \
   test-terminal-async test-help-ui
 ```
 

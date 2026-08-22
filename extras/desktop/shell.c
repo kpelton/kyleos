@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "extras/desktop/desktop_config.h"
 #include "extras/kui/kui.h"
 #include "extras/kui/kui_protocol.h"
 #include "extras/kuid/shell_protocol.h"
@@ -99,6 +100,8 @@ static uint32_t *frame_pixels;
 static uint32_t frame_bytes;
 static struct kui_surface frame;
 static struct kui_image wallpaper;
+static struct desktop_config desktop_settings;
+static char wallpaper_path[DESKTOP_CONFIG_PATH_MAX];
 static int cursor_x;
 static int cursor_y;
 static uint8_t mouse_buttons;
@@ -111,6 +114,8 @@ static int drag_dy;
 static int resize_window = -1;
 static int resize_right_gap;
 static int resize_bottom_gap;
+static int resize_preview_width;
+static int resize_preview_height;
 static int pointer_window = -1;
 static int drag_icon = -1;
 static int drag_icon_dx;
@@ -130,6 +135,7 @@ static uint32_t shell_display_bytes;
 static struct kui_shell_request shell_cached_request;
 static int shell_cache_valid;
 static void copy_text(char *destination, size_t capacity, const char *source);
+static void reload_desktop_settings(void);
 static int shell_log_fd = -1;
 
 /* stdout is the compositor protocol, so diagnostics go to a file. */
@@ -223,6 +229,33 @@ static void stop_shell(void)
 static int aqua_shell(void)
 {
     return (kui_style_current()->flags & KUI_STYLE_AQUA) != 0;
+}
+
+static void reload_desktop_settings(void)
+{
+    struct desktop_config updated;
+    struct kui_image updated_wallpaper;
+    const char *path;
+
+    desktop_config_load(&updated, DESKTOP_CONFIG_PATH);
+    desktop_settings = updated;
+    path = desktop_config_wallpaper(&desktop_settings, aqua_shell());
+    if (strcmp(path, wallpaper_path) == 0 && wallpaper.pixels != NULL)
+        return;
+    memset(&updated_wallpaper, 0, sizeof(updated_wallpaper));
+    if (kui_image_load(path, &updated_wallpaper) < 0) {
+        path = aqua_shell() ? DESKTOP_WALLPAPER_AQUA :
+                              DESKTOP_WALLPAPER_WIN95;
+        if (kui_image_load(path, &updated_wallpaper) < 0) return;
+    }
+    kui_image_free(&wallpaper);
+    wallpaper = updated_wallpaper;
+    copy_text(wallpaper_path, sizeof(wallpaper_path), path);
+}
+
+static int desktop_pointer_delta(int delta)
+{
+    return kui_pointer_delta(delta) * desktop_settings.pointer_speed / 2;
 }
 
 static int work_top(void)
@@ -695,6 +728,12 @@ static void close_window_index(int index)
 
     if (index < 0 || index >= MAX_WINDOWS || !windows[index].visible) return;
     if (pointer_window == index) pointer_window = -1;
+    if (drag_window == index) drag_window = -1;
+    if (resize_window == index) {
+        resize_window = -1;
+        resize_preview_width = 0;
+        resize_preview_height = 0;
+    }
     window = &windows[index];
     shell_log("CLOSE request pid=%d app=%s title=%s\n", window->pid,
               window->application, window->title);
@@ -882,6 +921,16 @@ static int is_csv_file(const char *path)
            (path[length - 1] == 'v' || path[length - 1] == 'V');
 }
 
+static int is_kwp_file(const char *path)
+{
+    size_t length = strlen(path);
+
+    if (length < 4 || path[length - 4] != '.') return 0;
+    return (path[length - 3] == 'k' || path[length - 3] == 'K') &&
+           (path[length - 2] == 'w' || path[length - 2] == 'W') &&
+           (path[length - 1] == 'p' || path[length - 1] == 'P');
+}
+
 static void open_path(const char *path)
 {
     const struct shell_app *app;
@@ -895,6 +944,13 @@ static void open_path(const char *path)
     if (is_kimg_file(path)) {
         for (int i = 0; i < app_count; i++)
             if (strcmp(apps[i].accepts, "image") == 0) {
+                open_application(&apps[i], path);
+                return;
+            }
+    }
+    if (is_kwp_file(path)) {
+        for (int i = 0; i < app_count; i++)
+            if (strcmp(apps[i].accepts, "kwp") == 0) {
                 open_application(&apps[i], path);
                 return;
             }
@@ -951,6 +1007,8 @@ static void apply_action(const struct shell_action *action)
     } else if (action->type == KUI_ACTION_COPY_TEXT) {
         copy_text(clipboard_data, sizeof(clipboard_data), action->argument);
         clipboard_kind = KUI_CLIPBOARD_TEXT;
+    } else if (action->type == KUI_ACTION_SETTINGS_CHANGED) {
+        reload_desktop_settings();
     }
 }
 
@@ -968,6 +1026,7 @@ static int desktop_app_at(int x, int y)
 {
     int icon = 0;
     int rows = (work_height() - 12) / 82;
+    if (!desktop_settings.show_desktop_icons) return -1;
     if (rows < 1) rows = 1;
     for (int i = 0; i < app_count; i++) {
         int ix;
@@ -991,8 +1050,12 @@ static void blit_content(const struct shell_window *window)
     int y = content_y(window);
     int width = window->content_width;
     int height = window->content_height;
+    int client_width = content_width(window);
+    int client_height = content_height(window);
 
     if (window->content_pixels == NULL) return;
+    if (width > client_width) width = client_width;
+    if (height > client_height) height = client_height;
     if (width > screen_width - x) width = screen_width - x;
     if (height > screen_height - y) height = screen_height - y;
     if (width <= 0 || height <= 0) return;
@@ -1047,6 +1110,27 @@ static void draw_window(const struct shell_window *window, int active)
     for (int offset = 2; offset < 12; offset += 3)
         kui_line(&frame, x + width - 15 + offset, y + height - 2,
                  x + width - 2, y + height - 15 + offset, KUI_BLACK);
+}
+
+static void draw_resize_outline(const struct shell_window *window)
+{
+    int left = window->x;
+    int top = window->y;
+    int right = left + resize_preview_width - 1;
+    int bottom = top + resize_preview_height - 1;
+
+    for (int x = left; x <= right; x++) {
+        uint32_t color = ((x - left) & 1) ? KUI_WHITE : KUI_BLACK;
+
+        kui_pixel(&frame, x, top, color);
+        kui_pixel(&frame, x, bottom, color);
+    }
+    for (int y = top + 1; y < bottom; y++) {
+        uint32_t color = ((y - top) & 1) ? KUI_WHITE : KUI_BLACK;
+
+        kui_pixel(&frame, left, y, color);
+        kui_pixel(&frame, right, y, color);
+    }
 }
 
 static int taskbar_window_count(void)
@@ -1463,6 +1547,7 @@ static void draw_desktop_icons(void)
 {
     int icon = 0;
     int rows = (work_height() - 12) / 82;
+    if (!desktop_settings.show_desktop_icons) return;
     if (rows < 1) rows = 1;
     for (int i = 0; i < app_count; i++) {
         int x;
@@ -1516,6 +1601,8 @@ static void render(void)
     for (int i = 0; i < MAX_WINDOWS; i++)
         if (windows[i].visible && !windows[i].minimized)
             draw_window(&windows[i], i == active);
+    if (resize_window >= 0 && windows[resize_window].visible)
+        draw_resize_outline(&windows[resize_window]);
     if (shell_exchange(KUI_SHELL_RENDER, cursor_x, cursor_y, 0, NULL) < 0) {
         fprintf(stderr, "kuid: shell frame render failed\n");
         running = 0;
@@ -1717,6 +1804,8 @@ static void handle_mouse_down(int button)
             resize_window = index;
             resize_right_gap = windows[index].x + windows[index].width - cursor_x;
             resize_bottom_gap = windows[index].y + windows[index].height - cursor_y;
+            resize_preview_width = windows[index].width;
+            resize_preview_height = windows[index].height;
         } else if (button == 1 &&
                    kui_in_rect(cursor_x, cursor_y, windows[index].x,
                                windows[index].y, windows[index].width,
@@ -1772,8 +1861,8 @@ static int handle_mouse(void)
         int released_left = !(buttons & 1) && (mouse_buttons & 1);
 
         events_handled++;
-        cursor_x += kui_pointer_delta(dx);
-        cursor_y -= kui_pointer_delta(dy);
+        cursor_x += desktop_pointer_delta(dx);
+        cursor_y -= desktop_pointer_delta(dy);
         if (cursor_x < 0) cursor_x = 0;
         if (cursor_y < 0) cursor_y = 0;
         if (cursor_x > screen_width - 11) cursor_x = screen_width - 11;
@@ -1815,11 +1904,8 @@ static int handle_mouse(void)
             if (window->x + width > screen_width) width = screen_width - window->x;
             if (window->y + height > work_bottom())
                 height = work_bottom() - window->y;
-            if (width != window->width || height != window->height) {
-                window->width = width;
-                window->height = height;
-                notify_resize(resize_window);
-            }
+            resize_preview_width = width;
+            resize_preview_height = height;
         }
         if (released_left) {
             if (pointer_moved && pointer_window >= 0 &&
@@ -1836,7 +1922,25 @@ static int handle_mouse(void)
                     snap_window(drag_window, 1);
             }
             drag_window = -1;
-            resize_window = -1;
+            if (resize_window >= 0 && windows[resize_window].visible) {
+                int index = resize_window;
+                struct shell_window *window = &windows[index];
+                int resized = resize_preview_width != window->width ||
+                              resize_preview_height != window->height;
+
+                window->width = resize_preview_width;
+                window->height = resize_preview_height;
+                resize_window = -1;
+                resize_preview_width = 0;
+                resize_preview_height = 0;
+                if (window->timer_ms != 0)
+                    window->next_timer = kui_ticks_ms() + window->timer_ms;
+                if (resized) notify_resize(index);
+            } else {
+                resize_window = -1;
+                resize_preview_width = 0;
+                resize_preview_height = 0;
+            }
             if (drag_icon >= 0) {
                 if (!drag_icon_moved)
                     open_application(&apps[drag_icon], NULL);
@@ -1862,6 +1966,10 @@ static int handle_keyboard(void)
     int pressed;
     uint8_t code;
     uint8_t extended;
+
+    /* Leave key events queued while an interactive resize owns the active
+     * window. They will be delivered after its final-size repaint. */
+    if (resize_window >= 0) return 0;
 
     while (kui_key_poll(&pressed, &code, &extended) > 0) {
         uint32_t modifiers;
@@ -1912,6 +2020,10 @@ static int handle_timers(void)
         if (!windows[i].visible || windows[i].timer_ms == 0 ||
             (int32_t)(now - windows[i].next_timer) < 0)
             continue;
+        if (i == resize_window) {
+            windows[i].next_timer = now + windows[i].timer_ms;
+            continue;
+        }
         windows[i].next_timer = now + windows[i].timer_ms;
         memset(&action, 0, sizeof(action));
         if (send_window_event(i, KUI_EVENT_TIMER, 0, 0, 0, 0, 0,
@@ -1955,9 +2067,7 @@ int desktop_shell_run(const char *shell_path)
         return 1;
     }
     kui_surface_init(&frame, frame_pixels, screen_width, screen_height);
-    kui_image_load(aqua_shell() ? "/usr/share/gui/aqua-wallpaper.kimg" :
-                                 "/usr/share/gui/wallpaper.kimg",
-                   &wallpaper);
+    reload_desktop_settings();
     load_applications();
     load_dock_config();
     if (aqua_shell()) save_dock_config();

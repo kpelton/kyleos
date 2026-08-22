@@ -9,7 +9,7 @@ flowchart TB
     S[Shell window manager\nextras/desktop/shell.c]
     P[KUI protocol\nextras/kui/kui_protocol.h]
     L[libkui\nrendering, widgets, menus, scrollbars]
-    A[GUI applications\nFinder, Editor, KSheet, Paint, Help, SysMon, Terminal]
+    A[GUI applications\nFinder, Notes, Writer, Editor, KSheet, Paint, Help]
     F[Shared file dialog\nopen/save/overwrite confirmation]
 
     K --> D
@@ -60,6 +60,10 @@ sequenceDiagram
 6. The compositor composites windows, menus, taskbar, and cursor into the frame.
 
 The current display-command limit is 512 KiB (`KUI_PROTOCOL_MAX_DISPLAY`).
+Text commands can request monospace or proportional glyphs, opacity, bold
+stroke weight, and integer scaling from 1x through 4x. Writer uses these
+validated command flags so styled text follows the same client/compositor path
+as every other KUI primitive.
 
 ## Input and scrolling
 
@@ -115,6 +119,7 @@ protocol.
 | Shared file dialog | `extras/kui/kui_file_dialog.c` |
 | KSheet | `extras/ksheet/ksheet.c` |
 | Editor/CIDE | `extras/editor/editor.c`, `extras/cide/cide.c` |
+| Notes | `extras/editor/editor.c` (`NOTES_APP`) |
+| Writer/KWP documents | `extras/wordprocessor` |
 | Terminal | `extras/terminal/terminal.c` |
 | Help | `extras/help/help.c` |
-

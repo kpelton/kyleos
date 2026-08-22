@@ -124,7 +124,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit kui gui-assets desktop kuid win95-shell aqua aqua-shell finder sysmon editor cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-paint-brush test-tetris test-tetris-ui test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-suite doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
+.PHONY: toolchain userland userinit kui gui-assets desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-desktop-config test-controlcenter-ui test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-suite doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
@@ -135,7 +135,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit desktop kuid win95-shell aqua aqua-shell finder sysmon editor cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc
+	$(MAKE) userinit desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -213,9 +213,9 @@ desktop: extras/desktop/desktop.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/desktop
 
-kuid: extras/kuid/kuid.c extras/desktop/shell.c extras/desktop/shell.h extras/kuid/shell_protocol.h $(KUI_LIBRARY)
+kuid: extras/kuid/kuid.c extras/desktop/shell.c extras/desktop/shell.h extras/desktop/desktop_config.c extras/desktop/desktop_config.h extras/kuid/shell_protocol.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
-	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/kuid/kuid.c extras/desktop/shell.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kuid
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/kuid/kuid.c extras/desktop/shell.c extras/desktop/desktop_config.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kuid
 
 win95-shell: extras/kuid/win95_shell.c extras/kuid/shell_protocol.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
@@ -229,6 +229,10 @@ aqua-shell: extras/kuid/aqua_shell.c extras/kuid/shell_protocol.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/aqua-shell
 
+controlcenter: extras/controlcenter/controlcenter.c extras/desktop/desktop_config.c extras/desktop/desktop_config.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/controlcenter/controlcenter.c extras/desktop/desktop_config.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/controlcenter
+
 finder: extras/finder/finder.c extras/finder/finder_ipc.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/finder
@@ -240,6 +244,14 @@ sysmon: extras/sysmon/sysmon.c extras/sysmon/sysmon_ipc.h $(KUI_LIBRARY)
 editor: extras/editor/editor.c extras/editor/editor_ipc.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/editor
+
+notes: extras/editor/editor.c extras/editor/editor_ipc.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -DNOTES_APP -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/notes
+
+writer: extras/wordprocessor/wordprocessor.c extras/wordprocessor/writer_document.c extras/wordprocessor/writer_document.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/wordprocessor/wordprocessor.c extras/wordprocessor/writer_document.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/writer
 
 cide: extras/cide/cide.c extras/editor/editor.c extras/editor/editor_ipc.h extras/editor/c_syntax.c extras/editor/c_syntax.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
@@ -324,6 +336,54 @@ test-city-sim:
 		tests/test-city-sim.c extras/citybuilder/city_sim.c \
 		-o /tmp/os3-test-city-sim
 	/tmp/os3-test-city-sim
+
+test-desktop-config:
+	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-desktop-config.c extras/desktop/desktop_config.c \
+		-o /tmp/os3-test-desktop-config
+	/tmp/os3-test-desktop-config
+
+test-controlcenter-ui:
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		-DDESKTOP_CONFIG_PATH='"/tmp/os3-control-center.cfg"' \
+		extras/controlcenter/controlcenter.c extras/desktop/desktop_config.c \
+		extras/kui/kui.c extras/kui/kui_client.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-controlcenter-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		-DDESKTOP_CONFIG_PATH='"/tmp/os3-control-center.cfg"' \
+		tests/test-controlcenter-ui.c extras/desktop/desktop_config.c \
+		extras/kui/kui.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-test-controlcenter-ui
+	/tmp/os3-test-controlcenter-ui /tmp/os3-controlcenter-host
+
+test-writer-document:
+	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-writer-document.c extras/wordprocessor/writer_document.c \
+		-o /tmp/os3-test-writer-document
+	/tmp/os3-test-writer-document
+
+test-writer-ui:
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		extras/wordprocessor/wordprocessor.c \
+		extras/wordprocessor/writer_document.c extras/kui/kui.c \
+		extras/kui/kui_client.c extras/kui/kui_file_dialog.c \
+		extras/kui/kui_dialog.c extras/kui/kui_text_selection.c \
+		extras/kui/kui_style.c extras/kui/kui_style_win95.c \
+		extras/kui/kui_style_aqua.c -o /tmp/os3-writer-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-writer-ui.c extras/wordprocessor/writer_document.c \
+		extras/kui/kui_style.c extras/kui/kui_style_win95.c \
+		extras/kui/kui_style_aqua.c -o /tmp/os3-test-writer-ui
+	/tmp/os3-test-writer-ui /tmp/os3-writer-host
+
+test-kui-scaled-text: gui-assets
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-kui-scaled-text.c extras/kui/kui.c \
+		extras/kui/kui_style.c extras/kui/kui_style_win95.c \
+		extras/kui/kui_style_aqua.c -o /tmp/os3-test-kui-scaled-text
+	/tmp/os3-test-kui-scaled-text
 
 test-paint-brush:
 	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
@@ -578,6 +638,6 @@ iso-test: iso
 		-cdrom bootable.iso \
 		-serial stdio
 
-test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-paint-brush test-tetris test-tetris-ui test-ksheet test-ksheet-ui test-kui-styles test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-kui-shells
+test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-ksheet test-ksheet-ui test-kui-styles test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-kui-shells
 	$(MAKE) image-reset IMAGE=$(TEST_IMAGE) IMAGE_MOUNT=$(TEST_IMAGE_MOUNT)
 	QEMU=$(QEMU) QEMU_OPTS='$(QEMU_OPTS)' TEST_KERNEL=$(KERNEL_ROOT)/kernel32.bin TEST_IMAGE=$(TEST_IMAGE) TEST_TIMEOUT=$(TEST_TIMEOUT) bash tests/e2e/all-tests.sh

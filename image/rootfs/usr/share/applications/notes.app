@@ -1,0 +1,9 @@
+id=notes
+name=Notes
+exec=/bin/notes
+icon=/usr/share/gui/readme.kimg
+argument=/NOTES.TXT
+desktop=true
+start_menu=true
+width=620
+height=440

@@ -199,8 +199,6 @@ void calculator_draw(struct kui_surface *surface,
             int bx = layout.left + col * (layout.button_w + layout.gap);
             int by = buttons_y + row * (layout.button_h + layout.gap);
             int bw = layout.button_w;
-            if (row == 4 && col == 2) bw = layout.button_w * 2 + layout.gap;
-            if (row == 4 && col == 3) continue;
             kui_draw_button(surface, bx, by, bw, layout.button_h,
                             button_labels[row][col],
                             state->pressed_row == row &&
@@ -229,8 +227,6 @@ int calculator_click(struct calculator_state *state,
             int bx = layout.left + col * (layout.button_w + layout.gap);
             int by = buttons_y + row * (layout.button_h + layout.gap);
             int bw = layout.button_w;
-            if (row == 4 && col == 2) bw = layout.button_w * 2 + layout.gap;
-            if (row == 4 && col == 3) continue;
             if (kui_in_rect(pointer_x, pointer_y, bx, by,
                             bw, layout.button_h))
             {

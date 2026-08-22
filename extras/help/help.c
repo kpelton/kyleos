@@ -115,6 +115,42 @@ static const struct help_topic topics[] = {
         "- Right-click for the editing menu.\n"
     },
     {
+        "Notes",
+        "Notes is a quick plain-text notebook.\n"
+        "\n"
+        "- It opens /NOTES.TXT by default.\n"
+        "- Click or drag to place and select text.\n"
+        "- Ctrl+X/C/V cuts, copies, and pastes.\n"
+        "- Ctrl+A selects all text.\n"
+        "- Ctrl+O opens another text file.\n"
+        "- Ctrl+S saves; Ctrl+Shift+S uses Save As.\n"
+        "- The wheel and scroll bar move the page.\n"
+        "\n"
+        "Notes always saves ordinary plain text, so\n"
+        "its files also work in Text Editor.\n"
+    },
+    {
+        "Writer",
+        "Writer creates formatted KWP documents.\n"
+        "\n"
+        "Toolbar\n"
+        "- Open, Save, and Save As manage documents.\n"
+        "- B toggles bold for the document.\n"
+        "- A- and A+ decrease or increase font size.\n"
+        "- Size 1, 2, and 3 are available.\n"
+        "\n"
+        "Keyboard\n"
+        "- Ctrl+B toggles bold.\n"
+        "- Ctrl+plus/minus changes font size.\n"
+        "- Ctrl+X/C/V and Ctrl+A edit selections.\n"
+        "- Ctrl+O/S opens or saves a document.\n"
+        "- Ctrl+Shift+S opens Save As.\n"
+        "\n"
+        "KWP files preserve the text, size, and bold\n"
+        "setting. Formatting applies to the complete\n"
+        "document. Use an 8.3 filename when saving.\n"
+    },
+    {
         "C IDE",
         "C IDE adds source tools to Text Editor.\n"
         "\n"

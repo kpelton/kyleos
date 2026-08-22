@@ -42,7 +42,8 @@ enum kui_shell_action {
     KUI_ACTION_LAUNCH,
     KUI_ACTION_FILE_SAVED,
     KUI_ACTION_COPY_PATH,
-    KUI_ACTION_COPY_TEXT
+    KUI_ACTION_COPY_TEXT,
+    KUI_ACTION_SETTINGS_CHANGED
 };
 
 enum kui_clipboard_kind {
@@ -108,8 +109,13 @@ enum kui_display_command_type {
 
 enum kui_text_flag {
     KUI_TEXT_OPAQUE = 1U,
-    KUI_TEXT_MONOSPACE = 2U
+    KUI_TEXT_MONOSPACE = 2U,
+    KUI_TEXT_BOLD = 4U,
+    KUI_TEXT_SCALE_SHIFT = 8U,
+    KUI_TEXT_SCALE_MASK = 3U << KUI_TEXT_SCALE_SHIFT
 };
+
+#define KUI_TEXT_MAX_SCALE 4
 
 struct kui_display_command {
     uint16_t type;
