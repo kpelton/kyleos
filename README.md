@@ -54,6 +54,7 @@ protocol over pipes.
 
 See the [GUI architecture guide](docs/gui-architecture.html),
 [Markdown architecture notes](docs/gui-architecture.md), and the
+[project growth graph](docs/project-growth.html), and the
 [Aqua desktop screenshot](docs/kyleos-aqua-desktop.png).
 
 ## Included programs

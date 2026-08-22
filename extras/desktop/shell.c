@@ -112,6 +112,10 @@ static int resize_window = -1;
 static int resize_right_gap;
 static int resize_bottom_gap;
 static int pointer_window = -1;
+static int drag_icon = -1;
+static int drag_icon_dx;
+static int drag_icon_dy;
+static int drag_icon_moved;
 static char clipboard_data[KUI_PROTOCOL_CLIPBOARD_MAX];
 static uint32_t clipboard_kind;
 static int shell_pid = -1;
@@ -404,6 +408,16 @@ static void load_dock_config(void)
         if (sscanf(line, "pin=%63s", id) == 1) {
             int app = dock_app_by_id(id);
             if (app >= 0) apps[app].pinned = 1;
+        } else {
+            int x;
+            int y;
+            if (sscanf(line, "icon=%63[^,],%d,%d", id, &x, &y) == 3) {
+                int app = dock_app_by_id(id);
+                if (app >= 0) {
+                    apps[app].position_x = x;
+                    apps[app].position_y = y;
+                }
+            }
         }
     }
     fclose(file);
@@ -415,6 +429,10 @@ static void save_dock_config(void)
     if (file == NULL) return;
     for (int i = 0; i < app_count; i++)
         if (apps[i].pinned) fprintf(file, "pin=%s\n", apps[i].id);
+    for (int i = 0; i < app_count; i++)
+        if (apps[i].position_x >= 0 && apps[i].position_y >= 0)
+            fprintf(file, "icon=%s,%d,%d\n", apps[i].id,
+                    apps[i].position_x, apps[i].position_y);
     fclose(file);
 }
 
@@ -957,9 +975,10 @@ static int desktop_app_at(int x, int y)
         if (!apps[i].desktop ||
             (aqua_shell() && strcmp(apps[i].id, "system-disk") != 0))
             continue;
-        ix = aqua_shell() ? screen_width - 94 :
-                            12 + (icon / rows) * 94;
-        iy = work_top() + 8 + (icon % rows) * 82;
+        ix = apps[i].position_x >= 0 ? apps[i].position_x :
+             (aqua_shell() ? screen_width - 94 : 12 + (icon / rows) * 94);
+        iy = apps[i].position_y >= 0 ? apps[i].position_y :
+             work_top() + 8 + (icon % rows) * 82;
         if (kui_in_rect(x, y, ix, iy, 82, 77)) return i;
         icon++;
     }
@@ -1447,9 +1466,10 @@ static void draw_desktop_icons(void)
         if (!apps[i].desktop ||
             (aqua_shell() && strcmp(apps[i].id, "system-disk") != 0))
             continue;
-        x = aqua_shell() ? screen_width - 94 :
-                           12 + (icon / rows) * 94;
-        y = work_top() + 8 + (icon % rows) * 82;
+        x = apps[i].position_x >= 0 ? apps[i].position_x :
+            (aqua_shell() ? screen_width - 94 : 12 + (icon / rows) * 94);
+        y = apps[i].position_y >= 0 ? apps[i].position_y :
+            work_top() + 8 + (icon % rows) * 82;
         if (apps[i].icon.pixels != NULL)
             kui_blit_image(&frame, &apps[i].icon, x + 9, y);
         else {
@@ -1721,7 +1741,14 @@ static void handle_mouse_down(int button)
     if (button == 1) {
         index = desktop_app_at(cursor_x, cursor_y);
         selected_icon = index;
-        if (index >= 0) open_application(&apps[index], NULL);
+        if (index >= 0) {
+            drag_icon = index;
+            drag_icon_moved = 0;
+            drag_icon_dx = cursor_x - (apps[index].position_x >= 0 ?
+                                       apps[index].position_x : cursor_x);
+            drag_icon_dy = cursor_y - (apps[index].position_y >= 0 ?
+                                       apps[index].position_y : cursor_y);
+        }
     }
 }
 
@@ -1768,6 +1795,12 @@ static int handle_mouse(void)
             if (window->y + window->height > work_bottom())
                 window->y = work_bottom() - window->height;
         }
+        if (drag_icon >= 0 && (buttons & 1) &&
+            (dx != 0 || dy != 0)) {
+            apps[drag_icon].position_x = cursor_x - drag_icon_dx;
+            apps[drag_icon].position_y = cursor_y - drag_icon_dy;
+            drag_icon_moved = 1;
+        }
         if (resize_window >= 0 && windows[resize_window].visible) {
             struct shell_window *window = &windows[resize_window];
             int width = cursor_x - window->x + resize_right_gap;
@@ -1799,6 +1832,13 @@ static int handle_mouse(void)
             }
             drag_window = -1;
             resize_window = -1;
+            if (drag_icon >= 0) {
+                if (!drag_icon_moved)
+                    open_application(&apps[drag_icon], NULL);
+                else
+                    save_dock_config();
+                drag_icon = -1;
+            }
         }
         changed = 1;
     }

@@ -268,8 +268,8 @@ static int run_shell(const char *path, int aqua)
                          &response, &surface) < 0;
     failures += response.display_bytes == 0;
     if (aqua) {
-        int dock_y = 600 - 86;
-        int dock_x = (800 - (20 + request.app_count * 70)) / 2;
+        int dock_y = 600 - 74;
+        int dock_x = (800 - (20 + request.app_count * 62)) / 2;
         int zoom_pixels = 0;
 
         failures += pixels[2 * 800 + 400] == pixels[3 * 800 + 400];

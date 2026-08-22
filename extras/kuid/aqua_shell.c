@@ -7,15 +7,16 @@
 
 static int menu_open;
 static int menu_submenu = -1;
+static int zoom_level;
 static int dock_menu_rank = -1;
 static int dock_menu_window = -1;
 
-#define DOCK_HEIGHT 86
+#define DOCK_HEIGHT 74
 #define DOCK_BOTTOM_GAP 0
-#define DOCK_ICON_SIZE 64
-#define DOCK_ITEM_STEP 70
+#define DOCK_ICON_SIZE 56
+#define DOCK_ITEM_STEP 62
 #define DOCK_ZOOM_SIZE 88
-#define DOCK_NEIGHBOR_SIZE 74
+#define DOCK_NEIGHBOR_SIZE 72
 
 static int menu_is_game(const char *title)
 {
@@ -209,9 +210,9 @@ static int magnified_size(int rank, int hovered, int normal)
     if (hovered < 0) return normal;
     distance = rank > hovered ? rank - hovered : hovered - rank;
     if (distance == 0)
-        return normal + (DOCK_ZOOM_SIZE - DOCK_ICON_SIZE);
+        return normal + ((DOCK_ZOOM_SIZE - DOCK_ICON_SIZE) * zoom_level) / 60;
     if (distance == 1)
-        return normal + (DOCK_NEIGHBOR_SIZE - DOCK_ICON_SIZE);
+        return normal + ((DOCK_NEIGHBOR_SIZE - DOCK_ICON_SIZE) * zoom_level) / 60;
     return normal;
 }
 
@@ -251,6 +252,11 @@ static void render(struct kui_surface *surface,
 
     gettimeofday(&now, NULL);
     minutes = (uint32_t)((now.tv_sec / 60) % (24 * 60));
+    if (hovered >= 0) {
+        if (zoom_level < 60) zoom_level++;
+    } else if (zoom_level > 0) {
+        zoom_level--;
+    }
 
     snprintf(clock, sizeof(clock), "%02u:%02u",
              (unsigned)((minutes / 60U) % 24U),
@@ -284,9 +290,9 @@ static void render(struct kui_surface *surface,
         int window = extra_window_by_rank(request, rank);
         int x = dock_x + 10 + (apps + rank) * DOCK_ITEM_STEP;
         int item_rank = apps + rank;
-        int size = magnified_size(item_rank, hovered, 52);
-        int icon_x = x + 5 + (52 - size) / 2;
-        int icon_y = dock_y + 7 + 52 - size;
+        int size = magnified_size(item_rank, hovered, DOCK_ICON_SIZE);
+        int icon_x = x + 2 + (DOCK_ICON_SIZE - size) / 2;
+        int icon_y = dock_y + 3 + DOCK_ICON_SIZE - size;
         const struct kui_image *icon;
 
         if (window < 0) continue;
