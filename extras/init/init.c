@@ -4,7 +4,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define CONSOLE_SHELL "/bin/nushell"
+#define CONSOLE_SHELL "/bin/aqua"
 
 static pid_t start_console(void)
 {
@@ -18,7 +18,7 @@ static pid_t start_console(void)
         char *argv[] = { "nushell", NULL };
 
         execve(CONSOLE_SHELL, argv, NULL);
-        perror("init: exec /bin/nushell");
+        perror("init: exec /bin/aqua");
         _exit(127);
     }
     return pid;

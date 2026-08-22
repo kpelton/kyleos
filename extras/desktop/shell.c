@@ -1322,7 +1322,12 @@ static int shell_exchange(uint32_t type, int x, int y, int button,
         request.windows[rank].active = index == top_window();
         request.windows[rank].app_index = app_rank_for_window(index);
     }
-    if (type == KUI_SHELL_RENDER && shell_cache_valid) {
+    /* The Aqua shell eases Dock magnification over multiple frames. Keep the
+     * normal frame cache everywhere else, but let Dock-near pointer frames
+     * reach the shell so that animation can advance without stale replay. */
+    int dock_animation = aqua_shell() && request.x >= 0 &&
+                         request.y >= screen_height - 100;
+    if (type == KUI_SHELL_RENDER && shell_cache_valid && !dock_animation) {
         uint32_t serial = request.serial;
 
         request.serial = 0;

@@ -51,7 +51,7 @@ ifneq (,$(wildcard config.mk))
 include config.mk
 endif
 CFLAGS	= -m64 $(OPT) -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2  -I $(KERNEL_ROOT)  -g 
-USER_CFLAGS = $(filter-out -mno-mmx -mno-sse -mno-sse2,$(CFLAGS)) -msse2
+USER_CFLAGS = $(filter-out -mno-mmx -mno-sse -mno-sse2,$(CFLAGS)) -msse4.2
 GUI_CFLAGS = $(filter-out -O%,$(USER_CFLAGS)) -O2
 KSHEET_CFLAGS = $(GUI_CFLAGS)
 ifeq ($(SERIAL_OUTPUT),0)

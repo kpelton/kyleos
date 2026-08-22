@@ -19,7 +19,7 @@
 #define STACK_PAGES 256
 //#define DSHELL_EN
 #define INIT "/sbin/init"
-#define SHELL "/bin/nushell"
+#define SHELL "/bin/aqua"
 #define LEGACY_SHELL "nushell"
 
 //copy before switching paging mode
