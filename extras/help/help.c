@@ -184,10 +184,10 @@ static const struct help_topic topics[] = {
     },
     {
         "Calculator",
-        "Calculator performs integer arithmetic.\n"
+        "Calculator performs floating-point arithmetic.\n"
         "\n"
         "- Click the on-screen keys or use keyboard\n"
-        "  digits and +, -, *, /.\n"
+        "  digits, decimal point, and +, -, *, /.\n"
         "- Enter or = calculates the result.\n"
         "- C clears the calculator.\n"
         "- Backspace removes the last digit.\n"

@@ -1249,11 +1249,13 @@ static int shell_exchange(uint32_t type, int x, int y, int button,
         request.y = -1;
     }
     request.button = button;
-    request.app_count = dock_entry_count();
+    /* Aqua's list is the Dock; Win95's list is the Start menu. */
+    request.app_count = aqua_shell() ? dock_entry_count() : start_entry_count();
     if (request.app_count > KUI_SHELL_MAX_APPS)
         request.app_count = KUI_SHELL_MAX_APPS;
     for (int rank = 0; rank < request.app_count; rank++) {
-        int app = dock_app_by_rank(rank);
+        int app = aqua_shell() ? dock_app_by_rank(rank) :
+                  start_app_by_rank(rank);
 
         if (app >= 0)
             copy_text(request.apps[rank].title,
@@ -1632,7 +1634,7 @@ static void handle_mouse_down(int button)
 {
     int index;
     pointer_window = -1;
-    if (aqua_shell() && (button == 1 || button == 2) &&
+    if ((button == 1 || button == 2) &&
         dispatch_shell_pointer(cursor_x, cursor_y, button))
         return;
     if (aqua_shell() && cursor_y < work_top()) {

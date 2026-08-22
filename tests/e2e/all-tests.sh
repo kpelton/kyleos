@@ -4,6 +4,11 @@ set -euo pipefail
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 kernel=${TEST_KERNEL:-"$repo_root/kernel32.bin"}
 image=${TEST_IMAGE:-"$repo_root/build/image/test-suite.img"}
+qemu=${QEMU:-qemu-system-x86_64}
+qemu_opts=()
+if [[ -n ${QEMU_OPTS:-} ]]; then
+    read -r -a qemu_opts <<< "$QEMU_OPTS"
+fi
 timeout_seconds=${TEST_TIMEOUT:-180}
 log=${TEST_LOG:-"$repo_root/build/test/all-tests.log"}
 runtime=$(mktemp -d /tmp/os3-qemu-test.XXXXXX)
@@ -54,7 +59,7 @@ mkdir -p "$(dirname -- "$log")"
 mkfifo "$serial_input"
 exec 3<> "$serial_input"
 
-qemu-system-x86_64 \
+"$qemu" "${qemu_opts[@]}" \
     -snapshot \
     -no-reboot \
     -display none \
@@ -63,7 +68,6 @@ qemu-system-x86_64 \
     -kernel "$kernel" \
     -hda "$image" \
     -serial stdio \
-    -rtc base=localtime \
     < "$serial_input" > "$log" 2>&1 &
 qemu_pid=$!
 

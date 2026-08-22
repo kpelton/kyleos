@@ -245,6 +245,7 @@ static int run_shell(const char *path, int aqua)
     request.ticks_ms = 3720000;
     strcpy(request.active_application, "Finder");
     request.app_count = aqua ? 9 : 2;
+    request.menu_app_count = request.app_count;
     request.window_count = 1;
     strcpy(request.apps[0].title, "Finder");
     strcpy(request.apps[1].title, "Paint");
@@ -267,8 +268,8 @@ static int run_shell(const char *path, int aqua)
                          &response, &surface) < 0;
     failures += response.display_bytes == 0;
     if (aqua) {
-        int dock_y = 600 - 74 - 4;
-        int dock_x = (800 - (20 + request.app_count * 62)) / 2;
+        int dock_y = 600 - 86;
+        int dock_x = (800 - (20 + request.app_count * 70)) / 2;
         int zoom_pixels = 0;
 
         failures += pixels[2 * 800 + 400] == pixels[3 * 800 + 400];

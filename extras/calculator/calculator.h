@@ -1,15 +1,17 @@
 #ifndef KYLEOS_CALCULATOR_H
 #define KYLEOS_CALCULATOR_H
 
-#include <stdint.h>
-
 #include "extras/kui/kui.h"
 
 struct calculator_state {
-    int64_t value;
-    int64_t accumulator;
+    double value;
+    double accumulator;
     char pending_operator;
     int entering;
+    int decimal_mode;
+    double decimal_factor;
+    int pressed_row;
+    int pressed_col;
     int error;
 };
 

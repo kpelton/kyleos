@@ -14,7 +14,7 @@
 #define FINDER_HISTORY_MAX 16
 #define CONTEXT_MENU_WIDTH 176
 #define CONTEXT_MENU_ROW_HEIGHT 24
-#define CONTEXT_MENU_HEIGHT (CONTEXT_MENU_ROW_HEIGHT * 3 + 4)
+#define CONTEXT_MENU_HEIGHT (CONTEXT_MENU_ROW_HEIGHT * 4 + 4)
 #define FINDER_TOOLBAR_HEIGHT 60
 #define FINDER_ITEM_WIDTH 88
 #define FINDER_LABEL_WIDTH 72
@@ -36,17 +36,19 @@ enum finder_create_kind {
 enum finder_menu_action {
     FINDER_MENU_NEW_FOLDER = 1,
     FINDER_MENU_NEW_TEXT_FILE,
-    FINDER_MENU_PASTE
+    FINDER_MENU_PASTE,
+    FINDER_MENU_SORT_TYPE
 };
 
 static struct kui_menu_item finder_file_items[] = {
     { "New Folder", NULL, FINDER_MENU_NEW_FOLDER, 1 },
     { "New Text File", NULL, FINDER_MENU_NEW_TEXT_FILE, 1 },
-    { "Paste", NULL, FINDER_MENU_PASTE, 0 }
+    { "Paste", NULL, FINDER_MENU_PASTE, 0 },
+    { "Sort by Type", NULL, FINDER_MENU_SORT_TYPE, 1 }
 };
 
 static const struct kui_menu finder_menus[] = {
-    { "File", finder_file_items, 3 }
+    { "File", finder_file_items, 4 }
 };
 
 struct kyleos_dirent {
@@ -64,6 +66,27 @@ static int get_directory_entries(int fd, struct kyleos_dirent *entries,
                  : "D"((long)fd), "S"(entries), "d"((long)count)
                  : "memory");
     return (int)rax;
+}
+
+static void sort_by_type(struct finder_response *state)
+{
+    for (int i = 0; i < state->item_count; i++) {
+        for (int j = i + 1; j < state->item_count; j++) {
+            int swap = state->item_types[j] < state->item_types[i];
+            if (!swap && state->item_types[j] == state->item_types[i] &&
+                strcmp(state->item_names[j], state->item_names[i]) < 0)
+                swap = 1;
+            if (swap) {
+                int type = state->item_types[i];
+                char name[FINDER_NAME_MAX];
+                state->item_types[i] = state->item_types[j];
+                state->item_types[j] = type;
+                strcpy(name, state->item_names[i]);
+                strcpy(state->item_names[i], state->item_names[j]);
+                strcpy(state->item_names[j], name);
+            }
+        }
+    }
 }
 
 static const char *path_name(const char *path)
@@ -363,19 +386,24 @@ static int finder_total_rows(const struct finder_response *state, int width)
 static void draw_folder(struct kui_surface *surface, int x, int y)
 {
     if (finder_is_aqua()) {
-        kui_fill_rect_alpha(surface, x + 6, y + 1, 21, 8,
-                            0xd06caee8U);
-        kui_fill_rect_alpha(surface, x + 8, y, 17, 2, 0xd0d9f4ffU);
-        kui_fill_rect_alpha(surface, x + 1, y + 7, 46, 29,
-                            0xe04691d2U);
-        kui_fill_rect_alpha(surface, x, y + 11, 48, 23,
-                            0xe07bc7f2U);
-        kui_fill_rect_alpha(surface, x + 1, y + 12, 46, 4,
-                            0xb0e4f8ffU);
-        kui_fill_rect_alpha(surface, x + 2, y + 17, 44, 15,
-                            0x706ab9ebU);
-        kui_line(surface, x + 1, y + 34, x + 46, y + 34, 0x002d78b7U);
-        kui_line(surface, x + 3, y + 35, x + 44, y + 35, 0x006eaad5U);
+        kui_fill_rect_alpha(surface, x + 4, y + 40, 54, 3, 0x40000000U);
+        kui_fill_rect_alpha(surface, x + 7, y + 2, 25, 10, 0xe05b9bd8U);
+        kui_fill_rect_alpha(surface, x + 10, y, 20, 3, 0xd0d9f4ffU);
+        kui_fill_rect_alpha(surface, x + 2, y + 9, 56, 31, 0xe03583c9U);
+        for (int row = 0; row < 25; row++) {
+            uint32_t top = 0x0097dcf7U, bottom = 0x004b9edcU;
+            uint32_t r = ((top >> 16) * (24 - row) +
+                          (bottom >> 16) * row) / 24;
+            uint32_t g = (((top >> 8) & 255) * (24 - row) +
+                          ((bottom >> 8) & 255) * row) / 24;
+            uint32_t b = ((top & 255) * (24 - row) +
+                          (bottom & 255) * row) / 24;
+            kui_fill_rect_alpha(surface, x + 2, y + 14 + row, 56, 1,
+                                0xd0000000U | (r << 16) | (g << 8) | b);
+        }
+        kui_fill_rect_alpha(surface, x + 4, y + 15, 52, 4, 0x80e8f9ffU);
+        kui_line(surface, x + 2, y + 39, x + 57, y + 39, 0x00316faeU);
+        kui_line(surface, x + 5, y + 40, x + 54, y + 40, 0x007bc4edU);
         return;
     }
     kui_fill_rect(surface, x + 4, y, 22, 6, 0x00f2b632U);
@@ -386,14 +414,14 @@ static void draw_folder(struct kui_surface *surface, int x, int y)
 static void draw_document(struct kui_surface *surface, int x, int y)
 {
     if (finder_is_aqua()) {
-        kui_fill_rect_alpha(surface, x + 10, y + 3, 32, 39,
+        kui_fill_rect_alpha(surface, x + 8, y + 4, 38, 45,
                             0x50000000U);
-        kui_fill_rect(surface, x + 7, y, 28, 40, 0x00fbfdffU);
-        kui_outline_rect(surface, x + 7, y, 28, 40, 0x006c8297U);
-        kui_fill_rect(surface, x + 28, y + 1, 6, 7, 0x00c9d9e8U);
-        kui_line(surface, x + 27, y + 1, x + 34, y + 8, 0x006c8297U);
-        for (int row = 0; row < 4; row++)
-            kui_fill_rect(surface, x + 12, y + 13 + row * 5, 17, 1,
+        kui_fill_rect(surface, x + 6, y, 36, 46, 0x00fbfdffU);
+        kui_outline_rect(surface, x + 6, y, 36, 46, 0x006c8297U);
+        kui_fill_rect(surface, x + 33, y + 1, 8, 9, 0x00c9d9e8U);
+        kui_line(surface, x + 32, y + 1, x + 41, y + 10, 0x006c8297U);
+        for (int row = 0; row < 5; row++)
+            kui_fill_rect(surface, x + 11, y + 14 + row * 6, 23, 1,
                           0x00799dccU);
         return;
     }
@@ -536,9 +564,9 @@ static void finder_render(struct kui_client *client,
         y = content_top + row * 82;
         if (context_kind == FINDER_CONTEXT_ITEM && item == context_item) {
             label_background = 0x00cde8ffU;
-            kui_fill_rect(&client->surface, x + 2, y - 3, 76, 68,
+            kui_fill_rect(&client->surface, x + 2, y - 3, 76, 73,
                           label_background);
-            kui_outline_rect(&client->surface, x + 2, y - 3, 76, 68,
+            kui_outline_rect(&client->surface, x + 2, y - 3, 76, 73,
                              0x00316ac5U);
         }
         if (state->item_types[item] == FINDER_ITEM_DIRECTORY)
@@ -549,7 +577,7 @@ static void finder_render(struct kui_client *client,
                                          state->item_names[item],
                                          FINDER_LABEL_WIDTH);
         kui_draw_text(&client->surface,
-                      x + 40 - label_width / 2, y + 47,
+                      x + 40 - label_width / 2, y + 52,
                       label, KUI_BLACK,
                       label_background, 0);
     }
@@ -570,7 +598,7 @@ static void finder_render(struct kui_client *client,
     if (context_kind != FINDER_CONTEXT_NONE) {
         static const char *item_labels[] = { "Open", "Copy", "Delete" };
         static const char *background_labels[] = {
-            "New Folder", "New Text File", "Paste"
+            "New Folder", "New Text File", "Paste", "Sort by Type"
         };
         const char **labels = context_kind == FINDER_CONTEXT_ITEM ?
                               item_labels : background_labels;
@@ -578,11 +606,18 @@ static void finder_render(struct kui_client *client,
         kui_fill_rect(&client->surface, context_x + 4, context_y + 4,
                       CONTEXT_MENU_WIDTH, CONTEXT_MENU_HEIGHT,
                       0x00606060U);
-        kui_fill_rect(&client->surface, context_x, context_y,
-                      CONTEXT_MENU_WIDTH, CONTEXT_MENU_HEIGHT, KUI_FACE);
+        if (finder_is_aqua()) {
+            for (int stripe = 0; stripe < CONTEXT_MENU_HEIGHT; stripe++)
+                kui_fill_rect(&client->surface, context_x,
+                              context_y + stripe, CONTEXT_MENU_WIDTH, 1,
+                              stripe & 1 ? 0x00e0e5e9U : 0x00f9fafbU);
+        } else {
+            kui_fill_rect(&client->surface, context_x, context_y,
+                          CONTEXT_MENU_WIDTH, CONTEXT_MENU_HEIGHT, KUI_FACE);
+        }
         kui_outline_rect(&client->surface, context_x, context_y,
                          CONTEXT_MENU_WIDTH, CONTEXT_MENU_HEIGHT, KUI_BLACK);
-        for (int row = 0; row < 3; row++) {
+        for (int row = 0; row < (context_kind == FINDER_CONTEXT_ITEM ? 3 : 4); row++) {
             int disabled = 0;
             uint32_t color;
 
@@ -595,9 +630,20 @@ static void finder_render(struct kui_client *client,
                  event->clipboard[0] == '\0'))
                 disabled = 1;
             color = disabled ? 0x00909090U : KUI_BLACK;
+            if (context_kind == FINDER_CONTEXT_BACKGROUND) {
+                if (row == 0) draw_folder(&client->surface,
+                                         context_x + 3,
+                                         context_y + 5 + row * CONTEXT_MENU_ROW_HEIGHT);
+                else if (row == 1) draw_document(&client->surface,
+                                                 context_x + 3,
+                                                 context_y + 5 + row * CONTEXT_MENU_ROW_HEIGHT);
+            }
             kui_draw_text(&client->surface, context_x + 12,
                           context_y + 9 + row * CONTEXT_MENU_ROW_HEIGHT,
-                          labels[row], color, KUI_FACE, 0);
+                          labels[row], color,
+                          finder_is_aqua() ?
+                          (row & 1 ? 0x00e0e5e9U : 0x00f9fafbU) : KUI_FACE,
+                          0);
         }
     }
 }
@@ -854,6 +900,11 @@ static int embedded_main(void)
                                             sizeof(status_message)) == 0) {
                 reload_current_directory(&state);
                 shell_action = KUI_ACTION_FILE_SAVED;
+            } else if (menu_action == FINDER_MENU_SORT_TYPE) {
+                sort_by_type(&directory_state);
+                finder_filter(&directory_state, &state, search);
+                scroll_row = 0;
+                strcpy(status_message, "Sorted by type");
             }
         } else if (menu_consumed) {
             context_kind = FINDER_CONTEXT_NONE;
@@ -961,6 +1012,12 @@ static int embedded_main(void)
                     result = paste_clipboard_file(
                         &state, event.clipboard, status_message,
                         sizeof(status_message));
+                } else if (row == 3) {
+                    sort_by_type(&directory_state);
+                    finder_filter(&directory_state, &state, search);
+                    scroll_row = 0;
+                    strcpy(status_message, "Sorted by type");
+                    result = 0;
                 }
                 if (result == 0) {
                     reload_current_directory(&state);

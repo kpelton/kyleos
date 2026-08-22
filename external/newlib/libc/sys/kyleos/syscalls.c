@@ -19,6 +19,14 @@ static int sys_sleep(unsigned int msec)
     return val;
 }
 
+static int sys_gettimeofday(struct timeval *tv)
+{
+    long val = 0;
+    (void)tv;
+    asm volatile("mov $34, %%rax; int $0x80; movq %%rax, %0" : "=g"(val));
+    return val;
+}
+
 static int sys_stat(char *path, struct stat *statbuf)
 {
     long val = 0;
@@ -334,8 +342,6 @@ int write(int file, char *ptr, int len)
 
 int gettimeofday(struct timeval *__restrict __p, void *__restrict __tz)
 {
-    __p->tv_usec = 0;
-    __p->tv_sec = 0;
-
-    return 0;
+    (void)__tz;
+    return sys_gettimeofday(__p);
 }

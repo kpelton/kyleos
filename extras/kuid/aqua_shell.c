@@ -1,19 +1,36 @@
 #include <stdio.h>
+#include <sys/time.h>
 #include <string.h>
 
 #include "extras/kui/kui.h"
 #include "extras/kuid/shell_protocol.h"
 
 static int menu_open;
+static int menu_submenu = -1;
 static int dock_menu_rank = -1;
 static int dock_menu_window = -1;
 
-#define DOCK_HEIGHT 74
-#define DOCK_BOTTOM_GAP 4
-#define DOCK_ICON_SIZE 58
-#define DOCK_ITEM_STEP 62
-#define DOCK_ZOOM_SIZE 76
-#define DOCK_NEIGHBOR_SIZE 66
+#define DOCK_HEIGHT 86
+#define DOCK_BOTTOM_GAP 0
+#define DOCK_ICON_SIZE 64
+#define DOCK_ITEM_STEP 70
+#define DOCK_ZOOM_SIZE 88
+#define DOCK_NEIGHBOR_SIZE 74
+
+static int menu_is_game(const char *title)
+{
+    return strstr(title, "Tetris") != NULL || strstr(title, "Mines") != NULL ||
+           strstr(title, "Solitaire") != NULL || strstr(title, "Flappy") != NULL ||
+           strstr(title, "KyleKart") != NULL || strstr(title, "Duke") != NULL;
+}
+
+static int menu_category_count(const struct kui_shell_request *request, int game)
+{
+    int count = 0;
+    for (int i = 0; i < request->menu_app_count; i++)
+        if (menu_is_game(request->menu_apps[i].title) == game) count++;
+    return count;
+}
 
 struct cached_icon {
     char path[KUI_SHELL_ICON_PATH_MAX];
@@ -69,21 +86,21 @@ static uint32_t color_between(uint32_t top, uint32_t bottom,
 static void draw_glass_dock(struct kui_surface *surface, int x, int y,
                             int width)
 {
-    kui_fill_rect_alpha(surface, x + 7, y + 8, width,
-                        DOCK_HEIGHT - 2, 0x48000000U);
+    kui_fill_rect_alpha(surface, x + 9, y + 10, width,
+                        DOCK_HEIGHT - 2, 0x50000000U);
     for (int row = 0; row < DOCK_HEIGHT; row++) {
         int inset = row < 5 ? 5 - row :
                     row >= DOCK_HEIGHT - 5 ?
                     row - (DOCK_HEIGHT - 6) : 0;
-        uint32_t rgb = row < 24 ?
-            color_between(0x00ffffffU, 0x00d6e4f0U, row, 23) :
-            color_between(0x00bfd2e2U, 0x006f8fabU, row - 24,
-                          DOCK_HEIGHT - 25);
+        uint32_t rgb = row < 30 ?
+            color_between(0x00ffffffU, 0x00d9e8f3U, row, 29) :
+            color_between(0x00bfd2e2U, 0x005a7895U, row - 30,
+                          DOCK_HEIGHT - 31);
         uint32_t color = (row < 24 ? 0xd0000000U : 0xc0000000U) | rgb;
 
         kui_fill_rect_alpha(surface, x + inset, y + row,
                             width - inset * 2, 1, color);
-        if (row > 5 && row < DOCK_HEIGHT - 5 && (row & 1) == 0)
+        if (row > 7 && row < DOCK_HEIGHT - 7 && (row & 1) == 0)
             kui_fill_rect_alpha(surface, x + 2, y + row, width - 4, 1,
                                 0x24ffffffU);
     }
@@ -221,13 +238,19 @@ static void render(struct kui_surface *surface,
                    const struct kui_shell_request *request)
 {
     int apps = dock_app_count(request);
+    int menu_apps = request->menu_app_count > 0 ?
+                    request->menu_app_count : request->app_count;
     int items = dock_item_count(request);
     int dock_width = 20 + items * DOCK_ITEM_STEP;
     int dock_x = (request->screen_width - dock_width) / 2;
     int dock_y = request->screen_height - DOCK_HEIGHT - DOCK_BOTTOM_GAP;
     int hovered = hovered_dock_item(request, dock_x, dock_y, items);
     char clock[16];
-    uint32_t minutes = request->ticks_ms / 60000U;
+    struct timeval now;
+    uint32_t minutes;
+
+    gettimeofday(&now, NULL);
+    minutes = (uint32_t)((now.tv_sec / 60) % (24 * 60));
 
     snprintf(clock, sizeof(clock), "%02u:%02u",
              (unsigned)((minutes / 60U) % 24U),
@@ -309,16 +332,32 @@ static void render(struct kui_surface *surface,
                           "Keep in Dock", KUI_BLACK, 0x00f5f5f5U, 0);
             return;
         }
-        int height = 12 + (request->menu_app_count + 1) * 26;
-
-        kui_fill_rect_alpha(surface, 4, 24, 250, height, 0xe8f5f5f5U);
-        kui_outline_rect(surface, 4, 24, 250, height, 0x00656565U);
-        for (int rank = 0; rank < request->menu_app_count; rank++)
-            kui_draw_text(surface, 18, 32 + rank * 26,
-                          request->menu_apps[rank].title, KUI_BLACK,
-                          0x00f5f5f5U, 0);
-        kui_draw_text(surface, 18, 32 + request->menu_app_count * 26,
-                      "Quit Aqua", KUI_BLACK, 0x00f5f5f5U, 0);
+        int category_count = menu_submenu >= 0 ?
+                             menu_category_count(request, menu_submenu) : 0;
+        int child_height = 12 + (category_count + 1) * 26;
+        for (int row = 0; row < 90; row++)
+            kui_fill_rect(surface, 4, 24 + row, 250, 1,
+                          row & 1 ? 0x00e0e5e9U : 0x00f9fafbU);
+        kui_outline_rect(surface, 4, 24, 250, 90, 0x00656565U);
+        kui_draw_text(surface, 18, 32, "Applications   >", KUI_BLACK, 0x00f9fafbU, 0);
+        kui_draw_text(surface, 18, 58, "Games         >", KUI_BLACK, 0x00e0e5e9U, 0);
+        kui_draw_text(surface, 18, 84, "Quit Aqua", KUI_BLACK, 0x00f9fafbU, 0);
+        if (menu_submenu >= 0) {
+            for (int row = 0; row < child_height; row++)
+                kui_fill_rect(surface, 258, 24 + row, 300, 1,
+                              row & 1 ? 0x00e0e5e9U : 0x00f9fafbU);
+            kui_outline_rect(surface, 258, 24, 300, child_height, 0x00656565U);
+            int row = 0;
+            for (int rank = 0; rank < menu_apps; rank++) {
+                const char *title = request->menu_apps[rank].title;
+                if (menu_is_game(title) != menu_submenu) continue;
+                kui_draw_text(surface, 272, 32 + row * 26, title, KUI_BLACK,
+                              row & 1 ? 0x00e0e5e9U : 0x00f9fafbU, 0);
+                row++;
+            }
+            kui_draw_text(surface, 272, 32 + category_count * 26,
+                          "< Back", KUI_BLACK, 0x00f5f5f5U, 0);
+        }
     }
 }
 
@@ -326,6 +365,8 @@ static void pointer(const struct kui_shell_request *request,
                     struct kui_shell_response *response)
 {
     int apps = dock_app_count(request);
+    int menu_apps = request->menu_app_count > 0 ?
+                    request->menu_app_count : request->app_count;
     int items = dock_item_count(request);
     int dock_width = 20 + items * DOCK_ITEM_STEP;
     int dock_x = (request->screen_width - dock_width) / 2;
@@ -366,18 +407,58 @@ static void pointer(const struct kui_shell_request *request,
             dock_menu_window = -1;
             return;
         }
-        int height = 12 + (request->menu_app_count + 1) * 26;
+        int category_count = menu_submenu >= 0 ?
+                             menu_category_count(request, menu_submenu) : 2;
+        int height = 90;
+        int child_height = 12 + (category_count + 1) * 26;
+
+        if (menu_submenu >= 0 &&
+            kui_in_rect(request->x, request->y, 258, 24, 300, child_height)) {
+            int row = (request->y - 29) / 26;
+            response->consumed = 1;
+            if (row < category_count) {
+                int found = 0;
+                for (int app = 0; app < menu_apps; app++) {
+                    if (menu_is_game(request->menu_apps[app].title) != menu_submenu) continue;
+                    if (found++ == row) { response->action = KUI_SHELL_ACTION_OPEN_MENU_APP; response->index = app; break; }
+                }
+                menu_open = 0;
+                menu_submenu = -1;
+            } else {
+                menu_submenu = -1;
+            }
+            return;
+        }
 
         if (kui_in_rect(request->x, request->y, 4, 24, 250, height)) {
             int rank = (request->y - 29) / 26;
 
             response->consumed = 1;
+            if (menu_submenu >= 0) {
+                if (rank < 2) {
+                    menu_submenu = rank;
+                    menu_open = 1;
+                } else {
+                    menu_open = 0;
+                    menu_submenu = -1;
+                    response->action = KUI_SHELL_ACTION_QUIT;
+                }
+                return;
+            }
             menu_open = 0;
-            if (rank < request->menu_app_count) {
-                response->action = KUI_SHELL_ACTION_OPEN_MENU_APP;
-                response->index = rank;
-            } else {
+            if (menu_submenu < 0) {
+                if (rank < 2) { menu_submenu = rank; menu_open = 1; return; }
                 response->action = KUI_SHELL_ACTION_QUIT;
+            } else if (rank < category_count) {
+                int found = 0;
+                for (int app = 0; app < menu_apps; app++) {
+                    if (menu_is_game(request->menu_apps[app].title) != menu_submenu) continue;
+                    if (found++ == rank) { response->action = KUI_SHELL_ACTION_OPEN_MENU_APP; response->index = app; break; }
+                }
+            } else {
+                menu_submenu = -1;
+                menu_open = 1;
+                return;
             }
             return;
         }
@@ -387,7 +468,7 @@ static void pointer(const struct kui_shell_request *request,
     }
     if (request->y < 24) {
         response->consumed = 1;
-        if (request->x < 30) menu_open = 1;
+        if (request->x < 30) { menu_open = 1; menu_submenu = -1; }
         return;
     }
     if (!kui_in_rect(request->x, request->y, dock_x,

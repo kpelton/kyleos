@@ -10,6 +10,7 @@
 #include <sched/ps.h>
 #include <sched/sched.h>
 #include <timer/pit.h>
+#include <timer/rtc.h>
 typedef int (*sys_call)(void);
 
 static int sleep(int msec)
@@ -310,6 +311,43 @@ static int tty_raw_syscall(int enabled)
 static uint32_t ticks_ms_syscall(void)
 {
     return (read_jiffies() * 1000) / TICK_HZ;
+}
+
+struct kyleos_timeval {
+    long tv_sec;
+    long tv_usec;
+};
+
+/* Convert the RTC calendar date to Unix seconds (UTC-style epoch). */
+static long rtc_epoch_seconds(struct sys_time now)
+{
+    long days = 0;
+    int year;
+    int month;
+    for (year = 1970; year < (int)now.year; year++)
+        days += 365 + ((year % 4 == 0 && year % 100 != 0) ||
+                       year % 400 == 0);
+    for (month = 1; month < now.month; month++) {
+        static const uint8_t month_days[] =
+            { 31,28,31,30,31,30,31,31,30,31,30,31 };
+        days += month_days[month - 1];
+        if (month == 2 && (now.year % 4 == 0 &&
+                           (now.year % 100 != 0 || now.year % 400 == 0)))
+            days++;
+    }
+    days += now.day > 0 ? now.day - 1 : 0;
+    return days * 86400L + now.hour * 3600L + now.min * 60L + now.sec;
+}
+
+static int gettimeofday_syscall(struct kyleos_timeval *out)
+{
+    struct sys_time now;
+    if (out == NULL || out >= (struct kyleos_timeval *)KERN_SPACE_BOUNDRY)
+        return -1;
+    now = get_time();
+    out->tv_sec = rtc_epoch_seconds(now);
+    out->tv_usec = 0;
+    return 0;
 }
 
 static int mouse_poll_syscall(int *dx, int *dy, uint8_t *buttons)
@@ -809,7 +847,8 @@ void *syscall_tbl[] = {
     (void *)&mouse_poll_syscall,          // 30
     (void *)&framebuffer_size_syscall,          // 31
     (void *)&framebuffer_present_rect_syscall,  // 32
-    (void *)&fd_status_syscall                  // 33
+    (void *)&fd_status_syscall,                 // 33
+    (void *)&gettimeofday_syscall               // 34
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

@@ -9,6 +9,9 @@ IMAGE_MOUNT ?= $(KERNEL_ROOT)/build/image/mnt
 TEST_IMAGE ?= $(KERNEL_ROOT)/build/image/test-suite.img
 TEST_IMAGE_MOUNT ?= $(KERNEL_ROOT)/build/image/test-suite-mnt
 TEST_TIMEOUT ?= 180
+QEMU ?= qemu-system-x86_64
+# Extra options are intentionally overridable: e.g. `make test QEMU_OPTS="-enable-kvm"`.
+QEMU_OPTS ?= -rtc base=localtime
 USERLAND_STAGE ?= $(KERNEL_ROOT)/build/userland
 KUI_LIBRARY ?= $(USERLAND_STAGE)/libkui.a
 KUI_OBJECT ?= $(USERLAND_STAGE)/kui.o
@@ -542,21 +545,21 @@ kernel32.bin: kernel.bin
 kernel.img: kernel32.bin
 
 test: kernel32.bin image
-	qemu-system-x86_64 -m 64M -vga std -kernel kernel32.bin  -hda $(IMAGE) -serial stdio -rtc base=localtime
+	$(QEMU) $(QEMU_OPTS) -m 64M -vga std -kernel kernel32.bin -hda $(IMAGE) -serial stdio
 
 test-nox: kernel32.bin image
-	qemu-system-x86_64 -m 4G -kernel kernel32.bin  -hda $(IMAGE) -display none -serial stdio -rtc base=localtime
-test-log: kernel32.bin
-	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -serial stdio 2>log
+	$(QEMU) $(QEMU_OPTS) -m 4G -kernel kernel32.bin -hda $(IMAGE) -display none -serial stdio
+test-log: kernel32.bin image
+	$(QEMU) $(QEMU_OPTS) -m 8G -kernel kernel32.bin -d int,cpu_reset -hda $(IMAGE) -serial stdio 2>log
 kvm-test: kernel32.bin image
-	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda $(IMAGE) -serial stdio -enable-kvm 2>log
+	$(QEMU) $(QEMU_OPTS) -m 8G -kernel kernel32.bin -d int,cpu_reset -hda $(IMAGE) -serial stdio -enable-kvm 2>log
 
-test-c: kernel32.bin
-	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -display none -serial stdio 2>log
+test-c: kernel32.bin image
+	$(QEMU) $(QEMU_OPTS) -m 8G -kernel kernel32.bin -d int,cpu_reset -hda $(IMAGE) -display none -serial stdio 2>log
 debug: kernel32.bin
-	qemu-system-x86_64 -m 8G -kernel kernel32.bin -hda $(IMAGE) -serial stdio -s -S
+	$(QEMU) $(QEMU_OPTS) -m 8G -kernel kernel32.bin -hda $(IMAGE) -serial stdio -s -S
 debug-nox: kernel32.bin
-	qemu-system-x86_64 -m 8G -display none -kernel kernel32.bin -hda test-hd.img -serial stdio -s -S
+	$(QEMU) $(QEMU_OPTS) -m 8G -display none -kernel kernel32.bin -hda $(IMAGE) -serial stdio -s -S
 
 gdb: kernel.bin
 	gdb -ex "target remote localhost:1234" kernel.bin
@@ -570,11 +573,11 @@ iso: kernel.bin $(GRUB_CFG)
 	grub-mkrescue -o bootable.iso $(GRUB_ISO_DIR)
 
 iso-test: iso
-	qemu-system-x86_64 \
+	$(QEMU) $(QEMU_OPTS) \
 		-m 60M \
 		-cdrom bootable.iso \
 		-serial stdio
 
 test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-paint-brush test-tetris test-tetris-ui test-ksheet test-ksheet-ui test-kui-styles test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-kui-shells
 	$(MAKE) image-reset IMAGE=$(TEST_IMAGE) IMAGE_MOUNT=$(TEST_IMAGE_MOUNT)
-	TEST_KERNEL=$(KERNEL_ROOT)/kernel32.bin TEST_IMAGE=$(TEST_IMAGE) TEST_TIMEOUT=$(TEST_TIMEOUT) bash tests/e2e/all-tests.sh
+	QEMU=$(QEMU) QEMU_OPTS='$(QEMU_OPTS)' TEST_KERNEL=$(KERNEL_ROOT)/kernel32.bin TEST_IMAGE=$(TEST_IMAGE) TEST_TIMEOUT=$(TEST_TIMEOUT) bash tests/e2e/all-tests.sh

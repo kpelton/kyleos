@@ -303,7 +303,7 @@ start without it but will stop with an `IWAD file ... not found` message.
 
 The original GPL Quake engine is pinned as the `extras/quake` submodule. The
 KyleOS port uses the portable C software renderer at 320x200, scaled to a
-640x400 presentation surface on the 1920x1080 framebuffer. Sound, mouse input, and external networking are disabled
+640x400 presentation surface on the 1280x720 framebuffer. Sound, mouse input, and external networking are disabled
 for the first port; single-player and loopback games use the keyboard.
 
 Place legally obtained Quake data in an `id1` directory containing at least

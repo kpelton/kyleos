@@ -4,7 +4,6 @@
 #include <string.h>
 
 #define DISPLAY_BG 0x00f4f0dcU
-#define OP_FACE 0x00e0b060U
 #define ERROR_RED 0x00c00000U
 
 struct calculator_layout {
@@ -22,7 +21,7 @@ static const char *button_labels[5][4] = {
     { "7", "8", "9", "*" },
     { "4", "5", "6", "-" },
     { "1", "2", "3", "+" },
-    { "+/-", "0", "=", "=" }
+    { "+/-", "0", ".", "=" }
 };
 
 static const char button_keys[5][4] = {
@@ -30,7 +29,7 @@ static const char button_keys[5][4] = {
     { '7', '8', '9', '*' },
     { '4', '5', '6', '-' },
     { '1', '2', '3', '+' },
-    { 'n', '0', '=', '=' }
+    { 'n', '0', '.', '=' }
 };
 
 static struct calculator_layout calculate_layout(int x, int y,
@@ -60,12 +59,15 @@ static struct calculator_layout calculate_layout(int x, int y,
 void calculator_reset(struct calculator_state *state)
 {
     memset(state, 0, sizeof(*state));
+    state->decimal_factor = 1.0;
+    state->pressed_row = -1;
+    state->pressed_col = -1;
 }
 
 static int apply_pending(struct calculator_state *state)
 {
-    int64_t right = state->value;
-    int64_t result = state->accumulator;
+    double right = state->value;
+    double result = state->accumulator;
 
     if (state->pending_operator == '+') result += right;
     else if (state->pending_operator == '-') result -= right;
@@ -97,11 +99,17 @@ int calculator_key(struct calculator_state *state, char key)
         if (!state->entering) {
             state->value = 0;
             state->entering = 1;
+            state->decimal_mode = 0;
+            state->decimal_factor = 1.0;
         }
-        if (state->value <= 922337203685477580LL &&
-            state->value >= -922337203685477580LL)
+        if (state->decimal_mode) {
+            state->decimal_factor *= 0.1;
+            state->value += (state->value < 0 ? -digit : digit) *
+                            state->decimal_factor;
+        } else {
             state->value = state->value * 10 +
                            (state->value < 0 ? -digit : digit);
+        }
         return 1;
     }
     if (key == 'c') {
@@ -109,7 +117,22 @@ int calculator_key(struct calculator_state *state, char key)
         return 1;
     }
     if (key == '\b') {
-        state->value /= 10;
+        if (state->decimal_mode && state->decimal_factor > 1e-12) {
+            state->value = (double)((long long)(state->value * 10.0)) / 10.0;
+            state->decimal_factor *= 10.0;
+            if (state->decimal_factor >= 1.0) {
+                state->decimal_mode = 0;
+                state->decimal_factor = 1.0;
+            }
+        } else state->value = (double)((long long)(state->value / 10.0));
+        return 1;
+    }
+    if (key == '.') {
+        if (!state->entering) {
+            state->value = 0;
+            state->entering = 1;
+        }
+        state->decimal_mode = 1;
         return 1;
     }
     if (key == 'n') {
@@ -119,6 +142,8 @@ int calculator_key(struct calculator_state *state, char key)
     if (key == '%') {
         state->value /= 100;
         state->entering = 0;
+        state->decimal_mode = 0;
+        state->decimal_factor = 1.0;
         return 1;
     }
     if (key == '+' || key == '-' || key == '*' || key == '/') {
@@ -129,12 +154,16 @@ int calculator_key(struct calculator_state *state, char key)
             state->accumulator = state->value;
         state->pending_operator = key;
         state->entering = 0;
+        state->decimal_mode = 0;
+        state->decimal_factor = 1.0;
         return 1;
     }
     if (key == '=') {
         if (state->pending_operator) apply_pending(state);
         state->pending_operator = 0;
         state->entering = 0;
+        state->decimal_mode = 0;
+        state->decimal_factor = 1.0;
         return 1;
     }
     return 0;
@@ -144,7 +173,7 @@ static void value_text(const struct calculator_state *state,
                        char *text, int length)
 {
     if (state->error) snprintf(text, length, "DIVIDE BY ZERO");
-    else snprintf(text, length, "%lld", (long long)state->value);
+    else snprintf(text, length, "%.12g", state->value);
 }
 
 void calculator_draw(struct kui_surface *surface,
@@ -172,15 +201,10 @@ void calculator_draw(struct kui_surface *surface,
             int bw = layout.button_w;
             if (row == 4 && col == 2) bw = layout.button_w * 2 + layout.gap;
             if (row == 4 && col == 3) continue;
-            kui_draw_bevel(surface, bx, by, bw, layout.button_h,
-                           (col == 3 || (row == 4 && col >= 2)) ? OP_FACE :
-                           KUI_FACE, 0);
-            kui_draw_text(surface,
-                          bx + (bw - kui_text_width(button_labels[row][col])) / 2,
-                          by + (layout.button_h - 16) / 2,
-                          button_labels[row][col], KUI_BLACK,
-                          (col == 3 || (row == 4 && col >= 2)) ? OP_FACE :
-                          KUI_FACE, 0);
+            kui_draw_button(surface, bx, by, bw, layout.button_h,
+                            button_labels[row][col],
+                            state->pressed_row == row &&
+                            state->pressed_col == col);
         }
     }
     if (state->pending_operator) {
@@ -197,6 +221,9 @@ int calculator_click(struct calculator_state *state,
     struct calculator_layout layout = calculate_layout(x, y, width, height);
     int buttons_y = layout.top + layout.display_h + layout.gap;
 
+    state->pressed_row = -1;
+    state->pressed_col = -1;
+
     for (int row = 0; row < 5; row++) {
         for (int col = 0; col < 4; col++) {
             int bx = layout.left + col * (layout.button_w + layout.gap);
@@ -206,7 +233,11 @@ int calculator_click(struct calculator_state *state,
             if (row == 4 && col == 3) continue;
             if (kui_in_rect(pointer_x, pointer_y, bx, by,
                             bw, layout.button_h))
+            {
+                state->pressed_row = row;
+                state->pressed_col = col;
                 return calculator_key(state, button_keys[row][col]);
+            }
         }
     }
     return 0;

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <sys/time.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -22,7 +23,10 @@ static void render(struct kui_surface *surface,
     int button_width = window_button_width(request);
     int x = 102;
     char clock[16];
-    uint32_t minutes = request->ticks_ms / 60000U;
+    struct timeval now;
+    uint32_t minutes;
+    gettimeofday(&now, NULL);
+    minutes = (uint32_t)((now.tv_sec / 60) % (24 * 60));
 
     kui_fill_rect(surface, 0, y, request->screen_width, 32, KUI_TITLE_BLUE);
     kui_fill_rect(surface, 0, y, request->screen_width, 2, 0x0085bcffU);

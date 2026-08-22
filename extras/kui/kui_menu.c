@@ -193,10 +193,15 @@ void kui_menu_render(struct kui_surface *surface,
         else
             kui_fill_rect(surface, x + 4, KUI_MENU_BAR_HEIGHT + 4,
                           width, height, 0x00505050U);
-        kui_fill_rect(surface, x, KUI_MENU_BAR_HEIGHT,
-                      width, height,
-                      style->flags & KUI_STYLE_AQUA ? 0x00f4f6f8U :
-                                                     style->face);
+        if (style->flags & KUI_STYLE_AQUA) {
+            for (int stripe = 0; stripe < height; stripe++)
+                kui_fill_rect(surface, x, KUI_MENU_BAR_HEIGHT + stripe,
+                              width, 1,
+                              stripe & 1 ? 0x00e0e5e9U : 0x00f9fafbU);
+        } else {
+            kui_fill_rect(surface, x, KUI_MENU_BAR_HEIGHT,
+                          width, height, style->face);
+        }
         kui_outline_rect(surface, x, KUI_MENU_BAR_HEIGHT,
                          width, height,
                          style->flags & KUI_STYLE_AQUA ? 0x006d747bU :
@@ -207,8 +212,9 @@ void kui_menu_render(struct kui_surface *surface,
             int y = KUI_MENU_BAR_HEIGHT + 8 + row * KUI_MENU_ROW_HEIGHT;
 
             kui_draw_text(surface, x + 12, y, item->label, color,
-                          style->flags & KUI_STYLE_AQUA ? 0x00f4f6f8U :
-                                                         KUI_FACE, 0);
+                          style->flags & KUI_STYLE_AQUA ?
+                          (row & 1 ? 0x00e0e5e9U : 0x00f9fafbU) :
+                          KUI_FACE, 0);
             if (item->shortcut != NULL)
                 kui_draw_text(surface,
                               x + width - 10 - kui_text_width(item->shortcut),
@@ -293,8 +299,13 @@ void kui_context_menu_render(struct kui_surface *surface,
     else
         kui_fill_rect(surface, x + 4, y + 4,
                       width, height, 0x00505050U);
-    kui_fill_rect(surface, x, y, width, height,
-                  style->flags & KUI_STYLE_AQUA ? 0x00f4f6f8U : style->face);
+    if (style->flags & KUI_STYLE_AQUA) {
+        for (int stripe = 0; stripe < height; stripe++)
+            kui_fill_rect(surface, x, y + stripe, width, 1,
+                          stripe & 1 ? 0x00e0e5e9U : 0x00f9fafbU);
+    } else {
+        kui_fill_rect(surface, x, y, width, height, style->face);
+    }
     kui_outline_rect(surface, x, y, width, height,
                      style->flags & KUI_STYLE_AQUA ? 0x006d747bU : KUI_BLACK);
     for (int row = 0; row < item_count; row++) {
@@ -303,7 +314,8 @@ void kui_context_menu_render(struct kui_surface *surface,
         int item_y = y + 8 + row * KUI_MENU_ROW_HEIGHT;
 
         kui_draw_text(surface, x + 12, item_y, item->label, color,
-                      style->flags & KUI_STYLE_AQUA ? 0x00f4f6f8U : KUI_FACE,
+                      style->flags & KUI_STYLE_AQUA ?
+                      (row & 1 ? 0x00e0e5e9U : 0x00f9fafbU) : KUI_FACE,
                       0);
         if (item->shortcut != NULL)
             kui_draw_text(surface,

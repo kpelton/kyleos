@@ -19,6 +19,9 @@ static int embedded_main(void)
     for (;;) {
         if (kui_client_read_event(&event) < 0) break;
         if (event.type == KUI_EVENT_CLOSE) break;
+        /* The click response is drawn pressed for one frame. */
+        if (event.type != KUI_EVENT_POINTER || event.button != 1)
+            state.pressed_row = state.pressed_col = -1;
         if (event.type == KUI_EVENT_INIT)
             calculator_reset(&state);
         else if (event.type == KUI_EVENT_POINTER && event.button == 1)
