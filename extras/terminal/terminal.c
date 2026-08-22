@@ -327,6 +327,7 @@ int main(void)
     struct terminal_state state;
     struct kui_client client;
     struct kui_event event;
+    char copy_buffer[KUI_PROTOCOL_CLIPBOARD_MAX];
 
     memset(&state, 0, sizeof(state));
     state.output_fd = -1;
@@ -334,6 +335,7 @@ int main(void)
     append_text(&state,
                 "KyleOS Terminal\nType a command and press Enter.\n", -1);
     kui_client_init(&client);
+    copy_buffer[0] = '\0';
     for (;;) {
         int action = TERMINAL_ACTION_NONE;
         const char *launch_path;
@@ -384,6 +386,29 @@ int main(void)
             /* The shared scrollbar owns this press and repeat timer. */
         } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
                    (event.modifiers & KUI_MOD_CTRL) &&
+                   (event.modifiers & KUI_MOD_SHIFT) &&
+                   !event.key_extended && event.key_code == 46) {
+            size_t length = state.command_length;
+            if (length >= sizeof(copy_buffer)) length = sizeof(copy_buffer) - 1;
+            memcpy(copy_buffer, state.command, length);
+            copy_buffer[length] = '\0';
+        } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
+                   (event.modifiers & KUI_MOD_CTRL) &&
+                   (event.modifiers & KUI_MOD_SHIFT) &&
+                   !event.key_extended && event.key_code == 47) {
+            if (event.clipboard_kind == KUI_CLIPBOARD_TEXT) {
+                size_t length = strlen(event.clipboard);
+                if (length > TERMINAL_COMMAND_MAX - 1 -
+                            (size_t)state.command_length)
+                    length = TERMINAL_COMMAND_MAX - 1 -
+                             (size_t)state.command_length;
+                memcpy(state.command + state.command_length,
+                       event.clipboard, length);
+                state.command_length += length;
+                state.command[state.command_length] = '\0';
+            }
+        } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
+                   (event.modifiers & KUI_MOD_CTRL) &&
                    !event.key_extended && event.key_code == 38) {
             state.terminal_length = 0;
             state.terminal[0] = '\0';
@@ -430,6 +455,10 @@ int main(void)
         launch_path = terminal_action_path(action);
         if (launch_path != NULL)
             kui_client_set_action(&client, KUI_ACTION_LAUNCH, launch_path);
+        if (copy_buffer[0] != '\0') {
+            kui_client_set_action(&client, KUI_ACTION_COPY_TEXT, copy_buffer);
+            copy_buffer[0] = '\0';
+        }
         if (kui_client_send(&client) < 0) break;
     }
     if (state.output_fd >= 0) close(state.output_fd);

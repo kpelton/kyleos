@@ -742,6 +742,15 @@ int main(void)
                 scroll_row, editor_visible_rows(event.height),
                 editor_max_scroll(&state, event.width, event.height) +
                 editor_visible_rows(event.height));
+        /* Keep C IDE scrolling independent of text-selection dispatch.  Some
+         * compositor paths deliver wheel events with a button flag set, so
+         * handle the wheel before the toolbar/menu branches below. */
+        if (!file_dialog.active && !discard_dialog.active &&
+            event.type == KUI_EVENT_POINTER && event.wheel != 0)
+            scroll_row = kui_scrollbar_wheel(
+                scroll_row, event.wheel, editor_visible_rows(event.height),
+                editor_max_scroll(&state, event.width, event.height) +
+                editor_visible_rows(event.height));
         copied_text[0] = '\0';
         update_edit_items(&state, &event);
         memset(&request, 0, sizeof(request));
@@ -895,10 +904,7 @@ int main(void)
         } else if (scrollbar_hit) {
             /* The shared scrollbar owns this press and repeat timer. */
         } else if (event.type == KUI_EVENT_POINTER && event.wheel != 0) {
-            scroll_row = kui_scrollbar_wheel(
-                scroll_row, event.wheel, editor_visible_rows(event.height),
-                editor_max_scroll(&state, event.width, event.height) +
-                editor_visible_rows(event.height));
+            /* Wheel scrolling is applied before dispatch above. */
         } else if (event.type == KUI_EVENT_POINTER) {
             struct kui_mono_text_layout layout;
 

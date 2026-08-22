@@ -16,6 +16,7 @@
 #define MAX_APPS 24
 #define MAX_WINDOWS 10
 #define MANIFEST_PATH_MAX 160
+#define AQUA_DOCK_CONFIG "/etc/aqua-dock.conf"
 #define TASKBAR_HEIGHT (kui_style_current()->panel_bottom)
 #define WINDOW_BORDER (kui_style_current()->window_border)
 #define WINDOW_TITLE_HEIGHT (kui_style_current()->title_height)
@@ -39,6 +40,7 @@ struct shell_app {
     char accepts[32];
     int desktop;
     int start_menu;
+    int pinned;
     int autostart;
     int exclusive;
     int width;
@@ -381,6 +383,39 @@ static void load_applications(void)
         memcpy(path + sizeof(prefix) - 1, entries[i].name, name_length + 1);
         if (load_manifest(path, &apps[app_count]) == 0) app_count++;
     }
+}
+
+static int dock_app_by_id(const char *id)
+{
+    for (int i = 0; i < app_count; i++)
+        if (strcmp(apps[i].id, id) == 0) return i;
+    return -1;
+}
+
+static void load_dock_config(void)
+{
+    FILE *file = fopen(AQUA_DOCK_CONFIG, "r");
+    char line[96];
+    for (int i = 0; i < app_count; i++) apps[i].pinned = apps[i].start_menu;
+    if (file == NULL) return;
+    for (int i = 0; i < app_count; i++) apps[i].pinned = 0;
+    while (fgets(line, sizeof(line), file) != NULL) {
+        char id[64];
+        if (sscanf(line, "pin=%63s", id) == 1) {
+            int app = dock_app_by_id(id);
+            if (app >= 0) apps[app].pinned = 1;
+        }
+    }
+    fclose(file);
+}
+
+static void save_dock_config(void)
+{
+    FILE *file = fopen(AQUA_DOCK_CONFIG, "w");
+    if (file == NULL) return;
+    for (int i = 0; i < app_count; i++)
+        if (apps[i].pinned) fprintf(file, "pin=%s\n", apps[i].id);
+    fclose(file);
 }
 
 static int content_width(const struct shell_window *window)
@@ -1030,11 +1065,13 @@ static int taskbar_button_width(void)
 
 static int start_entry_count(void);
 static int start_app_by_rank(int rank);
+static int dock_entry_count(void);
+static int dock_app_by_rank(int rank);
 
 static void __attribute__((unused)) draw_taskbar(void)
 {
     if (aqua_shell()) {
-        int app_icons = start_entry_count();
+        int app_icons = dock_entry_count();
         int window_icons = taskbar_window_count();
         int dock_count;
         int dock_width;
@@ -1069,7 +1106,7 @@ static void __attribute__((unused)) draw_taskbar(void)
         kui_outline_rect(&frame, dock_x, dock_y, dock_width, 52,
                          0x006b7f93U);
         for (int rank = 0; rank < app_icons && rank < dock_count; rank++) {
-            int app = start_app_by_rank(rank);
+            int app = dock_app_by_rank(rank);
             int x = dock_x + 10 + rank * 48;
 
             if (app < 0) continue;
@@ -1142,14 +1179,29 @@ static void __attribute__((unused)) draw_taskbar(void)
 static int start_entry_count(void)
 {
     int count = 0;
-    for (int i = 0; i < app_count; i++) if (apps[i].start_menu) count++;
+    for (int i = 0; i < app_count; i++)
+        if (aqua_shell() || apps[i].start_menu) count++;
     return count;
 }
 
 static int start_app_by_rank(int rank)
 {
     for (int i = 0; i < app_count; i++)
-        if (apps[i].start_menu && rank-- == 0) return i;
+        if ((aqua_shell() || apps[i].start_menu) && rank-- == 0) return i;
+    return -1;
+}
+
+static int dock_entry_count(void)
+{
+    int count = 0;
+    for (int i = 0; i < app_count; i++) if (apps[i].pinned) count++;
+    return count;
+}
+
+static int dock_app_by_rank(int rank)
+{
+    for (int i = 0; i < app_count; i++)
+        if (apps[i].pinned && rank-- == 0) return i;
     return -1;
 }
 
@@ -1157,8 +1209,8 @@ static int app_rank_for_window(int window)
 {
     int fallback = -1;
 
-    for (int rank = 0; rank < start_entry_count(); rank++) {
-        int app = start_app_by_rank(rank);
+    for (int rank = 0; rank < dock_entry_count(); rank++) {
+        int app = dock_app_by_rank(rank);
 
         if (app < 0 || strcmp(application_name(&apps[app]),
                               windows[window].application) != 0)
@@ -1170,7 +1222,7 @@ static int app_rank_for_window(int window)
     return fallback;
 }
 
-static int shell_exchange(uint32_t type, int x, int y,
+static int shell_exchange(uint32_t type, int x, int y, int button,
                           struct kui_shell_response *result)
 {
     struct kui_shell_request request;
@@ -1196,12 +1248,12 @@ static int shell_exchange(uint32_t type, int x, int y,
         request.x = -1;
         request.y = -1;
     }
-    request.button = 1;
-    request.app_count = start_entry_count();
+    request.button = button;
+    request.app_count = dock_entry_count();
     if (request.app_count > KUI_SHELL_MAX_APPS)
         request.app_count = KUI_SHELL_MAX_APPS;
     for (int rank = 0; rank < request.app_count; rank++) {
-        int app = start_app_by_rank(rank);
+        int app = dock_app_by_rank(rank);
 
         if (app >= 0)
             copy_text(request.apps[rank].title,
@@ -1210,6 +1262,15 @@ static int shell_exchange(uint32_t type, int x, int y,
             copy_text(request.apps[rank].icon_path,
                       sizeof(request.apps[rank].icon_path),
                       apps[app].icon_path);
+    }
+    request.menu_app_count = app_count > KUI_SHELL_MAX_APPS ?
+                             KUI_SHELL_MAX_APPS : app_count;
+    for (int rank = 0; rank < request.menu_app_count; rank++) {
+        copy_text(request.menu_apps[rank].title,
+                  sizeof(request.menu_apps[rank].title), apps[rank].name);
+        copy_text(request.menu_apps[rank].icon_path,
+                  sizeof(request.menu_apps[rank].icon_path),
+                  apps[rank].icon_path);
     }
     request.window_count = taskbar_window_count();
     {
@@ -1285,20 +1346,45 @@ static int shell_exchange(uint32_t type, int x, int y,
     return 0;
 }
 
-static int dispatch_shell_pointer(int x, int y)
+static int dispatch_shell_pointer(int x, int y, int button)
 {
     struct kui_shell_response response;
 
     memset(&response, 0, sizeof(response));
-    if (shell_exchange(KUI_SHELL_POINTER, x, y, &response) < 0) {
+    if (shell_exchange(KUI_SHELL_POINTER, x, y, button, &response) < 0) {
         fprintf(stderr, "kuid: shell pointer exchange failed at %d,%d\n",
                 x, y);
         running = 0;
         return 1;
     }
     if (response.action == KUI_SHELL_ACTION_OPEN_APP) {
+        int app = dock_app_by_rank(response.index);
+        if (app >= 0) open_application(&apps[app], NULL);
+    } else if (response.action == KUI_SHELL_ACTION_OPEN_MENU_APP) {
         int app = start_app_by_rank(response.index);
         if (app >= 0) open_application(&apps[app], NULL);
+    } else if (response.action == KUI_SHELL_ACTION_TOGGLE_PIN) {
+        int app = -1;
+        if (response.index >= 100 && response.index < 100 + MAX_WINDOWS) {
+            int window = taskbar_window_by_rank(response.index - 100);
+            if (window < 0) return response.consumed != 0;
+            for (int i = 0; i < app_count; i++)
+                if (strcmp(application_name(&apps[i]),
+                           windows[window].application) == 0 ||
+                    strcmp(apps[i].name, windows[window].application) == 0 ||
+                    strcmp(apps[i].icon_path, windows[window].icon_path) == 0)
+                    app = i;
+        } else {
+            app = dock_app_by_rank(response.index);
+        }
+        shell_log("DOCK toggle index=%d app=%d window=%d\n", response.index,
+                  app, response.index >= 100 ? response.index - 100 : -1);
+        if (app >= 0) {
+            apps[app].pinned = !apps[app].pinned;
+            save_dock_config();
+            shell_log("DOCK pin id=%s value=%d\n", apps[app].id,
+                      apps[app].pinned);
+        }
     } else if (response.action == KUI_SHELL_ACTION_ACTIVATE_WINDOW) {
         int index = taskbar_window_by_rank(response.index);
         if (index >= 0) {
@@ -1403,7 +1489,7 @@ static void render(void)
     for (int i = 0; i < MAX_WINDOWS; i++)
         if (windows[i].visible && !windows[i].minimized)
             draw_window(&windows[i], i == active);
-    if (shell_exchange(KUI_SHELL_RENDER, cursor_x, cursor_y, NULL) < 0) {
+    if (shell_exchange(KUI_SHELL_RENDER, cursor_x, cursor_y, 0, NULL) < 0) {
         fprintf(stderr, "kuid: shell frame render failed\n");
         running = 0;
     }
@@ -1514,7 +1600,7 @@ static void activate_start_item(int x, int y)
 
 static void activate_dock(int x, int y)
 {
-    int app_icons = start_entry_count();
+    int app_icons = dock_entry_count();
     int window_icons = taskbar_window_count();
     int count;
     int width;
@@ -1531,7 +1617,7 @@ static void activate_dock(int x, int y)
         return;
     rank = (x - left - 10) / 48;
     if (rank >= 0 && rank < app_icons && rank < count) {
-        int app = start_app_by_rank(rank);
+        int app = dock_app_by_rank(rank);
         if (app >= 0) open_application(&apps[app], NULL);
     } else if (rank >= app_icons && rank < count) {
         int index = taskbar_window_by_rank(rank - app_icons);
@@ -1546,7 +1632,8 @@ static void handle_mouse_down(int button)
 {
     int index;
     pointer_window = -1;
-    if (button == 1 && dispatch_shell_pointer(cursor_x, cursor_y))
+    if (aqua_shell() && (button == 1 || button == 2) &&
+        dispatch_shell_pointer(cursor_x, cursor_y, button))
         return;
     if (aqua_shell() && cursor_y < work_top()) {
         if (button == 1 && cursor_x < 30)
@@ -1825,6 +1912,8 @@ int desktop_shell_run(const char *shell_path)
                                  "/usr/share/gui/wallpaper.kimg",
                    &wallpaper);
     load_applications();
+    load_dock_config();
+    if (aqua_shell()) save_dock_config();
     cursor_x = screen_width / 2;
     cursor_y = screen_height / 2;
     kui_tty_raw(1);

@@ -18,6 +18,8 @@
 #define FINDER_TOOLBAR_HEIGHT 60
 #define FINDER_ITEM_WIDTH 88
 #define FINDER_LABEL_WIDTH 72
+#define FINDER_SEARCH_WIDTH 220
+#define FINDER_SEARCH_MAX 63
 
 enum finder_context_kind {
     FINDER_CONTEXT_NONE,
@@ -247,6 +249,35 @@ static void load_directory(const char *path, struct finder_response *response)
     response->status = 0;
 }
 
+static void finder_filter(const struct finder_response *source,
+                          struct finder_response *result, const char *query)
+{
+    size_t query_length = strlen(query);
+
+    *result = *source;
+    if (query_length == 0) return;
+    result->item_count = 0;
+    for (int i = 0; i < source->item_count; i++) {
+        int match = 1;
+        for (size_t q = 0; q < query_length && match; q++) {
+            char wanted = query[q];
+            int found = 0;
+            if (wanted >= 'A' && wanted <= 'Z') wanted += 'a' - 'A';
+            for (size_t n = 0; source->item_names[i][n] != '\0'; n++) {
+                char actual = source->item_names[i][n];
+                if (actual >= 'A' && actual <= 'Z') actual += 'a' - 'A';
+                if (actual == wanted) { found = 1; break; }
+            }
+            if (!found) match = 0;
+        }
+        if (match && result->item_count < FINDER_MAX_ITEMS) {
+            int slot = result->item_count++;
+            strcpy(result->item_names[slot], source->item_names[i]);
+            result->item_types[slot] = source->item_types[i];
+        }
+    }
+}
+
 static void history_push(char history[FINDER_HISTORY_MAX][FINDER_PATH_MAX],
                          int *history_count, int *history_index,
                          const char *path)
@@ -419,7 +450,8 @@ static void draw_aqua_toolbar_button(struct kui_surface *surface, int center_x,
 }
 
 static void draw_aqua_toolbar(struct kui_surface *surface, int width,
-                              const struct finder_response *state)
+                              const struct finder_response *state,
+                              const char *search, int search_focused)
 {
     for (int row = 0; row < FINDER_TOOLBAR_HEIGHT; row++)
         kui_fill_rect(surface, 0, row, width, 1,
@@ -434,6 +466,24 @@ static void draw_aqua_toolbar(struct kui_surface *surface, int width,
                              !state->can_forward);
     draw_aqua_toolbar_button(surface, 155, 20, "Up", 0,
                              !state->can_up);
+    int left = width - FINDER_SEARCH_WIDTH - 14;
+    if (left < 190) left = 190;
+    kui_fill_rect(surface, left + 7, 7, FINDER_SEARCH_WIDTH - 14, 25,
+                  0x00ffffffU);
+    kui_fill_rect(surface, left + 4, 10, FINDER_SEARCH_WIDTH - 8, 19,
+                  0x00ffffffU);
+    kui_outline_rect(surface, left + 4, 7, FINDER_SEARCH_WIDTH - 8, 25,
+                     search_focused ? 0x00508fcaU : 0x0097a1aaU);
+    for (int row = -4; row <= 4; row++) {
+        int half = row < 0 ? 4 + row / 2 : 4 - row / 2;
+        kui_fill_rect(surface, left + 16 - half, 17 + row, half * 2 + 1, 1,
+                      0x00717d88U);
+    }
+    kui_line(surface, left + 20, 24, left + 24, 28, 0x00717d88U);
+    kui_draw_text(surface, left + 31, 14,
+                  search[0] != '\0' ? search : "Search",
+                  search[0] != '\0' ? KUI_BLACK : 0x00717d88U,
+                  0x00ffffffU, 0);
 }
 
 static void finder_render(struct kui_client *client,
@@ -442,7 +492,8 @@ static void finder_render(struct kui_client *client,
                           int scroll_row, int context_kind,
                           int context_item, int context_x, int context_y,
                           const char *status_message,
-                          const struct kui_scrollbar_state *scrollbar)
+                          const struct kui_scrollbar_state *scrollbar,
+                          const char *search, int search_focused)
 {
     int columns = finder_columns(event->width);
     int toolbar_top = finder_toolbar_top();
@@ -452,7 +503,8 @@ static void finder_render(struct kui_client *client,
     kui_fill_rect(&client->surface, 0, 0, event->width, event->height,
                   KUI_WHITE);
     if (finder_is_aqua()) {
-        draw_aqua_toolbar(&client->surface, event->width, state);
+        draw_aqua_toolbar(&client->surface, event->width, state,
+                          search, search_focused);
     } else {
         kui_fill_rect(&client->surface, 0, toolbar_top,
                       event->width, 58, KUI_LIGHT);
@@ -657,6 +709,7 @@ static int context_menu_row(int menu_x, int menu_y, int x, int y)
 static int embedded_main(void)
 {
     struct finder_response state;
+    struct finder_response directory_state;
     struct kui_input_dialog create_dialog;
     struct kui_menu_state menu_state;
     struct kui_scrollbar_state scrollbar;
@@ -672,12 +725,16 @@ static int embedded_main(void)
     char status_message[96];
     struct kui_client client;
     struct kui_event event;
+    char search[FINDER_SEARCH_MAX + 1];
+    int search_focused = 0;
 
     memset(&state, 0, sizeof(state));
+    memset(&directory_state, 0, sizeof(directory_state));
     memset(&create_dialog, 0, sizeof(create_dialog));
     memset(&scrollbar, 0, sizeof(scrollbar));
     memset(history, 0, sizeof(history));
     status_message[0] = '\0';
+    search[0] = '\0';
     kui_menu_init(&menu_state);
     kui_client_init(&client);
 
@@ -720,8 +777,10 @@ static int embedded_main(void)
             if (response.status == 0) {
                 history_push(history, &history_count, &history_index,
                              response.path);
+                directory_state = response;
                 state = response;
                 scroll_row = 0;
+                finder_filter(&directory_state, &state, search);
                 context_kind = FINDER_CONTEXT_NONE;
                 create_kind = FINDER_CREATE_NONE;
                 kui_input_dialog_close(&create_dialog);
@@ -800,7 +859,10 @@ static int embedded_main(void)
             context_kind = FINDER_CONTEXT_NONE;
         } else if (event.type == KUI_EVENT_REFRESH) {
             load_directory(state.path, &response);
-            if (response.status == 0) state = response;
+            if (response.status == 0) {
+                directory_state = response;
+                finder_filter(&directory_state, &state, search);
+            }
             context_kind = FINDER_CONTEXT_NONE;
         } else if (event.type == KUI_EVENT_RESIZE) {
             context_kind = FINDER_CONTEXT_NONE;
@@ -910,13 +972,17 @@ static int embedded_main(void)
         } else if (event.type == KUI_EVENT_POINTER && event.button == 1 &&
                    event.y >= finder_toolbar_top() &&
                    event.y < finder_toolbar_top() + 31) {
-            if (event.x < 62 && state.can_back && history_index > 0) {
+            int search_left = event.width - FINDER_SEARCH_WIDTH - 14;
+            if (finder_is_aqua() && search_left < 190) search_left = 190;
+            if (finder_is_aqua() && event.x >= search_left) {
+                search_focused = 1;
+            } else if (event.x < 62 && state.can_back && history_index > 0) {
                 load_directory(history[history_index - 1], &response);
-                if (response.status == 0) { history_index--; state = response; }
+                if (response.status == 0) { history_index--; directory_state = response; state = response; search[0] = '\0'; }
             } else if (event.x < 136 && state.can_forward &&
                        history_index + 1 < history_count) {
                 load_directory(history[history_index + 1], &response);
-                if (response.status == 0) { history_index++; state = response; }
+                if (response.status == 0) { history_index++; directory_state = response; state = response; search[0] = '\0'; }
             } else if (event.x < 180 && state.can_up) {
                 char path[FINDER_PATH_MAX];
                 parent_path(state.path, path);
@@ -924,7 +990,9 @@ static int embedded_main(void)
                 if (response.status == 0) {
                     history_push(history, &history_count, &history_index,
                                  response.path);
+                    directory_state = response;
                     state = response;
+                    search[0] = '\0';
                 }
             }
             scroll_row = 0;
@@ -937,6 +1005,21 @@ static int embedded_main(void)
                           &history_index, &scroll_row, &shell_action,
                           action_path);
             status_message[0] = '\0';
+        } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
+                   search_focused && finder_is_aqua()) {
+            size_t length = strlen(search);
+            if (!event.key_extended && event.key_code == 14) {
+                if (length > 0) search[length - 1] = '\0';
+            } else if (!event.key_extended && event.key_code == 28) {
+                search_focused = 0;
+            } else if (event.character >= 32 && event.character < 127 &&
+                       !(event.modifiers & (KUI_MOD_CTRL | KUI_MOD_ALT)) &&
+                       length < FINDER_SEARCH_MAX) {
+                search[length] = event.character;
+                search[length + 1] = '\0';
+            }
+            finder_filter(&directory_state, &state, search);
+            scroll_row = 0;
         } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
                    event.key_extended &&
                    (event.key_code == 73 || event.key_code == 81)) {
@@ -955,7 +1038,7 @@ static int embedded_main(void)
         kui_client_set_constraints(&client, 360, 243, 700, 504);
         finder_render(&client, &event, &state, scroll_row,
                       context_kind, context_item, context_x, context_y,
-                      status_message, &scrollbar);
+                      status_message, &scrollbar, search, search_focused);
         if (!finder_is_aqua())
             kui_menu_render(&client.surface, &menu_state, finder_menus, 1);
         kui_input_dialog_render(&client.surface, &event, &create_dialog);

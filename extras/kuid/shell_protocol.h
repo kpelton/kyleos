@@ -21,7 +21,9 @@ enum kui_shell_action_type {
     KUI_SHELL_ACTION_OPEN_APP,
     KUI_SHELL_ACTION_ACTIVATE_WINDOW,
     KUI_SHELL_ACTION_CLOSE_ACTIVE,
-    KUI_SHELL_ACTION_QUIT
+    KUI_SHELL_ACTION_QUIT,
+    KUI_SHELL_ACTION_TOGGLE_PIN,
+    KUI_SHELL_ACTION_OPEN_MENU_APP
 };
 
 struct kui_shell_profile {
@@ -51,9 +53,11 @@ struct kui_shell_request {
     int y;
     int button;
     int app_count;
+    int menu_app_count;
     int window_count;
     char active_application[32];
     struct kui_shell_item apps[KUI_SHELL_MAX_APPS];
+    struct kui_shell_item menu_apps[KUI_SHELL_MAX_APPS];
     struct kui_shell_item windows[KUI_SHELL_MAX_WINDOWS];
 };
 

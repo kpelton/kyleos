@@ -5,6 +5,8 @@
 #include "extras/kuid/shell_protocol.h"
 
 static int menu_open;
+static int dock_menu_rank = -1;
+static int dock_menu_window = -1;
 
 #define DOCK_HEIGHT 74
 #define DOCK_BOTTOM_GAP 4
@@ -114,7 +116,8 @@ static void draw_fallback_icon(struct kui_surface *surface, int x, int y,
 
 static int dock_app_count(const struct kui_shell_request *request)
 {
-    return request->app_count > 12 ? 12 : request->app_count;
+    return request->app_count > KUI_SHELL_MAX_APPS ?
+           KUI_SHELL_MAX_APPS : request->app_count;
 }
 
 static int window_matches_app(const struct kui_shell_request *request,
@@ -127,7 +130,7 @@ static int window_matches_app(const struct kui_shell_request *request,
 
 static int extra_window(const struct kui_shell_request *request, int window)
 {
-    return request->windows[window].minimized != 0;
+    return request->windows[window].app_index < 0;
 }
 
 static int extra_window_count(const struct kui_shell_request *request)
@@ -163,7 +166,7 @@ static int dock_item_count(const struct kui_shell_request *request)
     int maximum = (request->screen_width - 20) / DOCK_ITEM_STEP;
 
     /* Keep large alpha icons comfortably inside the compositor pipe. */
-    if (maximum > 16) maximum = 16;
+    if (maximum > KUI_SHELL_MAX_APPS) maximum = KUI_SHELL_MAX_APPS;
 
     return count > maximum ? maximum : count;
 }
@@ -279,15 +282,42 @@ static void render(struct kui_surface *surface,
                           0x00f1a722U);
     }
     if (menu_open) {
-        int height = 12 + (request->app_count + 1) * 26;
+        if (dock_menu_rank >= 0 && dock_menu_rank < apps) {
+            int menu_x = dock_x + dock_menu_rank * DOCK_ITEM_STEP;
+            int menu_y = dock_y - 58;
+            kui_fill_rect_alpha(surface, menu_x, menu_y, 190, 52,
+                                0xe8f5f5f5U);
+            kui_outline_rect(surface, menu_x, menu_y, 190, 52,
+                             0x00656565U);
+            kui_draw_text(surface, menu_x + 10, menu_y + 10, "Open",
+                          KUI_BLACK, 0x00f5f5f5U, 0);
+            kui_draw_text(surface, menu_x + 10, menu_y + 32,
+                          "Keep/Remove from Dock", KUI_BLACK,
+                          0x00f5f5f5U, 0);
+            return;
+        }
+        if (dock_menu_window >= 0) {
+            int menu_x = dock_x + (apps + dock_menu_window) * DOCK_ITEM_STEP;
+            int menu_y = dock_y - 58;
+            kui_fill_rect_alpha(surface, menu_x, menu_y, 190, 52,
+                                0xe8f5f5f5U);
+            kui_outline_rect(surface, menu_x, menu_y, 190, 52,
+                             0x00656565U);
+            kui_draw_text(surface, menu_x + 10, menu_y + 10, "Open",
+                          KUI_BLACK, 0x00f5f5f5U, 0);
+            kui_draw_text(surface, menu_x + 10, menu_y + 32,
+                          "Keep in Dock", KUI_BLACK, 0x00f5f5f5U, 0);
+            return;
+        }
+        int height = 12 + (request->menu_app_count + 1) * 26;
 
         kui_fill_rect_alpha(surface, 4, 24, 250, height, 0xe8f5f5f5U);
         kui_outline_rect(surface, 4, 24, 250, height, 0x00656565U);
-        for (int rank = 0; rank < request->app_count; rank++)
+        for (int rank = 0; rank < request->menu_app_count; rank++)
             kui_draw_text(surface, 18, 32 + rank * 26,
-                          request->apps[rank].title, KUI_BLACK,
+                          request->menu_apps[rank].title, KUI_BLACK,
                           0x00f5f5f5U, 0);
-        kui_draw_text(surface, 18, 32 + request->app_count * 26,
+        kui_draw_text(surface, 18, 32 + request->menu_app_count * 26,
                       "Quit Aqua", KUI_BLACK, 0x00f5f5f5U, 0);
     }
 }
@@ -301,15 +331,50 @@ static void pointer(const struct kui_shell_request *request,
     int dock_x = (request->screen_width - dock_width) / 2;
 
     if (menu_open) {
-        int height = 12 + (request->app_count + 1) * 26;
+        if (dock_menu_rank >= 0 && dock_menu_rank < apps) {
+            int menu_x = dock_x + dock_menu_rank * DOCK_ITEM_STEP;
+            int menu_y = request->screen_height - DOCK_HEIGHT -
+                         DOCK_BOTTOM_GAP - 58;
+            response->consumed = 1;
+            if (kui_in_rect(request->x, request->y, menu_x, menu_y,
+                            190, 52)) {
+                int row = (request->y - menu_y) / 26;
+                if (row == 0) {
+                    response->action = KUI_SHELL_ACTION_OPEN_APP;
+                    response->index = dock_menu_rank;
+                } else {
+                    response->action = KUI_SHELL_ACTION_TOGGLE_PIN;
+                    response->index = dock_menu_rank;
+                }
+            }
+            menu_open = 0;
+            dock_menu_rank = -1;
+            return;
+        }
+        if (dock_menu_window >= 0) {
+            int menu_x = dock_x + (apps + dock_menu_window) * DOCK_ITEM_STEP;
+            int menu_y = request->screen_height - DOCK_HEIGHT -
+                         DOCK_BOTTOM_GAP - 58;
+            response->consumed = 1;
+            if (kui_in_rect(request->x, request->y, menu_x, menu_y,
+                            190, 52) && (request->y - menu_y) / 26 == 1) {
+                response->action = KUI_SHELL_ACTION_TOGGLE_PIN;
+                response->index = 100 + extra_window_by_rank(request,
+                                                              dock_menu_window);
+            }
+            menu_open = 0;
+            dock_menu_window = -1;
+            return;
+        }
+        int height = 12 + (request->menu_app_count + 1) * 26;
 
         if (kui_in_rect(request->x, request->y, 4, 24, 250, height)) {
             int rank = (request->y - 29) / 26;
 
             response->consumed = 1;
             menu_open = 0;
-            if (rank < request->app_count) {
-                response->action = KUI_SHELL_ACTION_OPEN_APP;
+            if (rank < request->menu_app_count) {
+                response->action = KUI_SHELL_ACTION_OPEN_MENU_APP;
                 response->index = rank;
             } else {
                 response->action = KUI_SHELL_ACTION_QUIT;
@@ -334,6 +399,11 @@ static void pointer(const struct kui_shell_request *request,
         int rank = (request->x - dock_x - 10) / DOCK_ITEM_STEP;
 
         if (rank >= 0 && rank < apps) {
+            if (request->button == 2) {
+                menu_open = 1;
+                dock_menu_rank = rank;
+                return;
+            }
             int window = active_window_for_app(request, rank);
 
             if (window >= 0) {
@@ -345,6 +415,12 @@ static void pointer(const struct kui_shell_request *request,
             }
         } else if (rank >= apps && rank < items) {
             int window = extra_window_by_rank(request, rank - apps);
+
+            if (request->button == 2) {
+                menu_open = 1;
+                dock_menu_window = rank - apps;
+                return;
+            }
 
             response->action = KUI_SHELL_ACTION_ACTIVATE_WINDOW;
             response->index = window;

@@ -48,8 +48,9 @@ ifneq (,$(wildcard config.mk))
 include config.mk
 endif
 CFLAGS	= -m64 $(OPT) -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2  -I $(KERNEL_ROOT)  -g 
-GUI_CFLAGS = $(filter-out -O%,$(CFLAGS)) -O2
-KSHEET_CFLAGS = $(filter-out -mno-sse -mno-sse2,$(GUI_CFLAGS)) -msse2
+USER_CFLAGS = $(filter-out -mno-mmx -mno-sse -mno-sse2,$(CFLAGS)) -msse2
+GUI_CFLAGS = $(filter-out -O%,$(USER_CFLAGS)) -O2
+KSHEET_CFLAGS = $(GUI_CFLAGS)
 ifeq ($(SERIAL_OUTPUT),0)
 CFLAGS += -DKYLEOS_DISABLE_SERIAL_OUTPUT
 endif
@@ -131,7 +132,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit desktop kuid win95-shell aqua aqua-shell finder sysmon editor cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc
+	$(MAKE) userinit desktop kuid win95-shell aqua aqua-shell finder sysmon editor cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -276,6 +277,14 @@ citybuilder: extras/citybuilder/citybuilder.c extras/citybuilder/city_sim.c extr
 tetris: extras/tetris/tetris.c extras/tetris/tetris_game.c extras/tetris/tetris_game.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/tetris/tetris.c extras/tetris/tetris_game.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/tetris
+
+flappy: extras/flappy/flappy.c $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/flappy
+
+kylekart: extras/kylekart/kylekart.c $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kylekart
 
 help: extras/help/help.c $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
@@ -539,7 +548,7 @@ test-nox: kernel32.bin image
 	qemu-system-x86_64 -m 4G -kernel kernel32.bin  -hda $(IMAGE) -display none -serial stdio -rtc base=localtime
 test-log: kernel32.bin
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda test-hd.img -serial stdio 2>log
-kvm-test: kernel32.bin
+kvm-test: kernel32.bin image
 	qemu-system-x86_64 -m 8G -kernel kernel32.bin -d int,cpu_reset -hda $(IMAGE) -serial stdio -enable-kvm 2>log
 
 test-c: kernel32.bin

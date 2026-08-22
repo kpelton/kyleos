@@ -20,6 +20,8 @@ desktop
 echo
 editor
 finder
+flappy
+kylekart
 fstest
 gpfault
 waittest
