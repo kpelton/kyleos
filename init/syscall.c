@@ -2,6 +2,7 @@
 #include <include/types.h>
 #include <include/uapi/framebuffer.h>
 #include <include/uapi/fd.h>
+#include <include/uapi/poll.h>
 #include <mm/mm.h>
 #include <output/output.h>
 #include <output/input.h>
@@ -256,6 +257,21 @@ static int fd_status_syscall(int fd, struct kyleos_fd_status *status)
         return -1;
     return user_process_fd_status(task, fd, &status->readable,
                                   &status->writable, &status->hung_up);
+}
+
+static int poll_syscall(struct kyleos_pollfd *fds, uint32_t count,
+                        int timeout_ms)
+{
+    uint64_t bytes = (uint64_t)count * sizeof(*fds);
+    uint64_t address = (uint64_t)fds;
+    struct ktask *task = get_current_process();
+
+    if (count > KYLEOS_POLL_MAX_FDS || timeout_ms < -1 ||
+        (count != 0 && fds == NULL) ||
+        address >= (uint64_t)KERN_SPACE_BOUNDRY ||
+        bytes > (uint64_t)KERN_SPACE_BOUNDRY - address)
+        return -1;
+    return user_process_poll(task, fds, count, timeout_ms);
 }
 
 static int framebuffer_present_syscall(void *pixels, uint32_t bytes)
@@ -848,7 +864,8 @@ void *syscall_tbl[] = {
     (void *)&framebuffer_size_syscall,          // 31
     (void *)&framebuffer_present_rect_syscall,  // 32
     (void *)&fd_status_syscall,                 // 33
-    (void *)&gettimeofday_syscall               // 34
+    (void *)&gettimeofday_syscall,              // 34
+    (void *)&poll_syscall                       // 35
 };
 
 const int NR_syscall = sizeof(syscall_tbl);

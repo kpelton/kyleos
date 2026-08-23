@@ -1,5 +1,6 @@
 #include <sys/errno.h>
 #include <sys/fcntl.h>
+#include <poll.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/times.h>
@@ -27,7 +28,17 @@ static int sys_gettimeofday(struct timeval *tv)
     return val;
 }
 
-static int sys_stat(char *path, struct stat *statbuf)
+static int sys_poll(struct pollfd *fds, nfds_t count, int timeout)
+{
+    register long result asm("rax") = 35;
+
+    asm volatile("int $0x80" : "+a"(result)
+                 : "D"(fds), "S"((long)count), "d"((long)timeout)
+                 : "memory");
+    return (int)result;
+}
+
+static int sys_stat(const char *path, struct stat *statbuf)
 {
     long val = 0;
     (void)path;
@@ -36,7 +47,7 @@ static int sys_stat(char *path, struct stat *statbuf)
     return val;
 }
 
-static int sys_mkdir(char *path, int mode)
+static int sys_mkdir(const char *path, int mode)
 {
     long val = 0;
     (void)path;
@@ -64,7 +75,7 @@ static int sys_getdents(int fd, struct dirent *dir,int count)
     return val;
 }
 
-static int sys_chdir(char *path)
+static int sys_chdir(const char *path)
 {
     long val = 0;
     (void)path;
@@ -324,6 +335,11 @@ int dup2(int oldfd, int newfd)
 int pipe(int pipefd[2])
 {
     return sys_pipe(pipefd);
+}
+
+int poll(struct pollfd fds[], nfds_t count, int timeout)
+{
+    return sys_poll(fds, count, timeout);
 }
 
 int mkdir(const char *_path,mode_t __mode)

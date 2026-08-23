@@ -504,6 +504,37 @@ int vfs_file_status(struct file *file, uint32_t *readable,
     return 0;
 }
 
+int vfs_file_poll(struct file *file, int16_t events, int16_t *revents)
+{
+    uint32_t readable;
+    uint32_t writable;
+    uint32_t hung_up;
+    int16_t ready = 0;
+
+    if (file == NULL || revents == NULL)
+        return -1;
+    if (file->pipe != NULL) {
+        pipe_status((struct pipe_data *)file->pipe, file->pipe_writer,
+                    &readable, &writable, &hung_up);
+        if ((events & KYLEOS_POLLIN) != 0 && readable != 0)
+            ready |= KYLEOS_POLLIN;
+        if ((events & KYLEOS_POLLOUT) != 0 && writable != 0)
+            ready |= KYLEOS_POLLOUT;
+        if (hung_up != 0)
+            ready |= KYLEOS_POLLHUP;
+    } else {
+        /* Regular files and directories never block. Device-specific input
+         * readiness will be added through a VFS poll operation when those
+         * devices move away from their current polling interfaces. */
+        if (file->i_node.i_type != I_DEV && (events & KYLEOS_POLLIN) != 0)
+            ready |= KYLEOS_POLLIN;
+        if ((events & KYLEOS_POLLOUT) != 0)
+            ready |= KYLEOS_POLLOUT;
+    }
+    *revents = ready;
+    return 0;
+}
+
 int vfs_rename(struct inode *i_node, struct inode *new_parent, char *new_name)
 {
     struct dnode *dir;

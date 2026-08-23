@@ -48,7 +48,7 @@
 <div>User generates pointer/key/timer input</div><div>Shell forwards a serial-numbered event</div>
 <div>App responds with commands and actions</div><div>Shell replays and composites the window</div>
 <div>User closes the window</div><div>Shell sends close, closes pipes, and reaps the child</div>
-</div></section>
+</div><p>The compositor passes the shell pipe and every visible application response pipe to one nonblocking <code>poll()</code> call per desktop iteration. Hangup, error, or invalid events remove disconnected windows immediately. Bounded response reads also use <code>poll()</code> with the remaining protocol deadline, and Terminal uses it to drain child output without blocking its event loop.</p></section>
 
 <section class="panel"><h2>Rendering pipeline</h2><pre>input → shell → kui_event → app event loop
                          ↓

@@ -50,6 +50,14 @@ sequenceDiagram
     Shell->>Kernel: close pipes/reap child
 ```
 
+Once per desktop iteration, the compositor passes the shell response pipe and
+every visible application's response pipe to one nonblocking `poll()` call.
+`POLLHUP`, `POLLERR`, or `POLLNVAL` removes a disconnected window immediately.
+After sending an event, bounded KUI response reads use `poll()` with the
+remaining protocol deadline instead of repeatedly checking descriptor status.
+Terminal uses the same API to drain command output without blocking its event
+loop.
+
 ## Rendering pipeline
 
 1. The shell creates a window-sized `kui_surface` command buffer.

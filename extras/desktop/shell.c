@@ -1,6 +1,7 @@
 #include "extras/desktop/shell.h"
 
 #include <fcntl.h>
+#include <poll.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -105,6 +106,9 @@ static char wallpaper_path[DESKTOP_CONFIG_PATH_MAX];
 static int cursor_x;
 static int cursor_y;
 static uint8_t mouse_buttons;
+static int shift_down;
+static int ctrl_down;
+static int alt_down;
 static int running = 1;
 static int start_menu_open;
 static int selected_icon = -1;
@@ -1615,11 +1619,15 @@ static void dispatch_pointer(int index, int button, int buttons, int wheel)
 {
     struct shell_action action;
     struct shell_window *window = &windows[index];
+    uint32_t modifiers = (shift_down ? KUI_MOD_SHIFT : 0) |
+                         (ctrl_down ? KUI_MOD_CTRL : 0) |
+                         (alt_down ? KUI_MOD_ALT : 0);
+
     memset(&action, 0, sizeof(action));
     if (send_window_event(index, KUI_EVENT_POINTER,
                           cursor_x - content_x(window),
                           cursor_y - content_y(window),
-                          button, buttons, wheel, 0, 0, 0, 0, 0,
+                          button, buttons, wheel, 0, 0, 0, modifiers, 0,
                           NULL, &action) < 0)
         close_window_index(index);
     else apply_action(&action);
@@ -1959,9 +1967,6 @@ static int handle_mouse(void)
 
 static int handle_keyboard(void)
 {
-    static int alt_down;
-    static int ctrl_down;
-    static int shift_down;
     int changed = 0;
     int pressed;
     uint8_t code;
@@ -2035,6 +2040,52 @@ static int handle_timers(void)
     return changed;
 }
 
+static int poll_gui_clients(int *shell_disconnected)
+{
+    struct pollfd descriptors[MAX_WINDOWS + 1];
+    int window_indexes[MAX_WINDOWS + 1];
+    int count = 0;
+    int changed = 0;
+    int ready;
+
+    *shell_disconnected = 0;
+    if (shell_output >= 0) {
+        descriptors[count].fd = shell_output;
+        descriptors[count].events = POLLIN;
+        descriptors[count].revents = 0;
+        window_indexes[count++] = -1;
+    }
+    for (int index = 0; index < MAX_WINDOWS; index++) {
+        if (!windows[index].visible || windows[index].output_fd < 0)
+            continue;
+        descriptors[count].fd = windows[index].output_fd;
+        descriptors[count].events = POLLIN;
+        descriptors[count].revents = 0;
+        window_indexes[count++] = index;
+    }
+    ready = poll(descriptors, (nfds_t)count, 0);
+    if (ready < 0)
+        return -1;
+    if (ready == 0)
+        return 0;
+    for (int descriptor = 0; descriptor < count; descriptor++) {
+        int events = descriptors[descriptor].revents;
+        int index = window_indexes[descriptor];
+
+        if ((events & (POLLERR | POLLHUP | POLLNVAL)) == 0)
+            continue;
+        if (index < 0) {
+            *shell_disconnected = 1;
+        } else if (windows[index].visible) {
+            shell_log("POLL disconnected pid=%d app=%s events=0x%x\n",
+                      windows[index].pid, windows[index].application, events);
+            close_window_index(index);
+            changed = 1;
+        }
+    }
+    return changed;
+}
+
 static void restore_console(void)
 {
     kui_tty_raw(0);
@@ -2080,12 +2131,13 @@ int desktop_shell_run(const char *shell_path)
     render();
     last_clock_minute = kui_ticks_ms() / 60000U;
     while (running) {
-        struct kyleos_fd_status shell_status;
         int changed = handle_mouse();
+        int shell_disconnected;
+        int poll_changed;
 
         reap_retired_windows();
-        if (kui_fd_status(shell_output, &shell_status) < 0 ||
-            shell_status.hung_up) {
+        poll_changed = poll_gui_clients(&shell_disconnected);
+        if (poll_changed < 0 || shell_disconnected) {
             fprintf(stderr, "kuid: shell %s disconnected\n", shell_name);
             stop_shell();
             if (shell_restarts++ == 0 && start_shell(shell_path) == 0) {
@@ -2094,7 +2146,7 @@ int desktop_shell_run(const char *shell_path)
                 running = 0;
                 break;
             }
-        }
+        } else changed |= poll_changed;
         changed |= handle_keyboard();
         changed |= handle_timers();
         if (last_clock_minute != kui_ticks_ms() / 60000U) {

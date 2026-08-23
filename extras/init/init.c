@@ -4,7 +4,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define CONSOLE_SHELL "/bin/aqua"
+#define CONSOLE_SHELL "/bin/nushell"
 
 static pid_t start_console(void)
 {

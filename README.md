@@ -29,7 +29,7 @@ It runs in QEMU and on compatible x86 hardware with legacy BIOS and PS/2 input.
 - Demand-zero heap and stack paging, lazy file-backed ELF paging, physical-page
   allocation, and a checked first-fit kernel heap.
 - Preemptive round-robin scheduling, user processes, `fork`, copy-on-write,
-  `exec`, `wait`, file descriptors, pipes, and process reaping.
+  `exec`, `wait`, file descriptors, pipes, `poll`, and process reaping.
 - FAT32 VFS with directories, file creation/truncation, seek, sizes, removal,
   and separate RAM filesystems at `/dev` and `/tmp`.
 - `/dev/console`, `/dev/null`, `/dev/zero`, `/dev/kmsg`, UART/serial input,
@@ -96,6 +96,8 @@ are built and installed by their respective image targets.
 - Pipes and shell redirection, including chained pipelines, repeat loops,
   `*`/`?` wildcard expansion, and `$?` reporting for the previous foreground
   command.
+- Native `poll(2)` through Newlib for up to 64 descriptors, with event-driven
+  pipe wakeups, finite or infinite timeouts, and regular-file readiness.
 - In-image filesystem, heap, and user-fault regression suites, plus a single
   integrated runner: `nushell < /tests/all.sh`.
 - User-mode page and general-protection faults terminate only the offending
@@ -131,8 +133,9 @@ metrics and style supplied by that shell.
 
 Applications receive the shell style in their normal KUI event stream, so the
 same Finder, editor, terminal, games, dialogs, and menus render consistently in
-either environment. Pipe-readiness status and bounded compositor reads prevent
-a disconnected or stalled client from blocking the display server forever.
+either environment. The compositor polls the shell and every application pipe
+as one descriptor set, while bounded poll-driven response reads prevent a
+disconnected or stalled client from blocking the display server forever.
 
 ### GUI architecture
 
@@ -426,9 +429,10 @@ nushell < /tests/all.sh
 ```
 
 The integrated runner stops at the first failure and exits nonzero. It prints
-`ALL-TESTS-COMPLETE count=9` exactly once only after checking every child exit
-status, copy integrity and cleanup, isolated fault status, and all 200 exec
-iterations. The copy phase uses `/bin/nushell`, so it has no optional fixture.
+`ALL-TESTS-COMPLETE count=10` exactly once only after checking every child exit
+status, pipe polling and timeouts, copy integrity and cleanup, isolated fault
+status, and all 200 exec iterations. The copy phase uses `/bin/nushell`, so it
+has no optional fixture.
 
 Run the host control-flow check and the complete snapshot-based QEMU suite with:
 
@@ -542,8 +546,10 @@ grep "Moses" /usr/share/text/bible.txt | grep "said"
   conventional 8.3-compatible names.
 - No hard links, symlinks, full terminal/termios support, or configurable
   shell environment.
-- Channel wait queues are implemented for blocking `waitpid` and mutex
-  contention; broader wait-queue coverage and cancellation are still pending.
+- Channel wait queues cover blocking `waitpid`, mutex contention, and
+  generation-based `poll` wakeups. `poll` currently reports pipe and regular
+  file readiness; device-specific input readiness and signal cancellation are
+  still pending.
 - Copy-on-write currently uses full TLB flushes at process switches and has no
   swap, page eviction, file-backed `mmap`, shared-memory mappings, or a
   copy-on-write page cache. ELF load segments that overlap at page granularity

@@ -28,6 +28,7 @@ static int write_all(int fd, const void *buffer, size_t bytes)
     return 0;
 }
 
+#ifndef KYLEOS_GUEST
 static int read_all(int fd, void *buffer, size_t bytes)
 {
     unsigned char *cursor = buffer;
@@ -41,6 +42,16 @@ static int read_all(int fd, void *buffer, size_t bytes)
         bytes -= (size_t)count;
     }
     return 0;
+}
+#endif
+
+static int read_protocol(int fd, void *buffer, size_t bytes)
+{
+#ifdef KYLEOS_GUEST
+    return kui_read_all_timeout(fd, buffer, (uint32_t)bytes, 500);
+#else
+    return read_all(fd, buffer, bytes);
+#endif
 }
 
 static long milliseconds(void)
@@ -57,7 +68,7 @@ static int exchange(int input, int output, struct kui_event *event,
     unsigned char *display = NULL;
 
     if (write_all(input, event, sizeof(*event)) < 0 ||
-        read_all(output, response, sizeof(*response)) < 0)
+        read_protocol(output, response, sizeof(*response)) < 0)
         return -1;
     if (response->magic != KUI_PROTOCOL_MAGIC ||
         response->version != KUI_PROTOCOL_VERSION ||
@@ -67,7 +78,7 @@ static int exchange(int input, int output, struct kui_event *event,
     if (response->display_bytes != 0) {
         display = malloc(response->display_bytes);
         if (display == NULL ||
-            read_all(output, display, response->display_bytes) < 0) {
+            read_protocol(output, display, response->display_bytes) < 0) {
             free(display);
             return -1;
         }
@@ -132,14 +143,42 @@ static void check_result(int failed, const char *name, int *failures)
     (*failures)++;
 }
 
+static int file_contains(const char *path, const char *text)
+{
+    char buffer[2048];
+    FILE *file = fopen(path, "rb");
+    size_t length;
+
+    if (file == NULL) return 0;
+    length = fread(buffer, 1, sizeof(buffer) - 1, file);
+    fclose(file);
+    buffer[length] = '\0';
+    return strstr(buffer, text) != NULL;
+}
+
+static int file_is_literal_star(const char *path)
+{
+    char buffer[4] = {0};
+    FILE *file = fopen(path, "rb");
+    size_t length;
+
+    if (file == NULL) return 0;
+    length = fread(buffer, 1, sizeof(buffer), file);
+    fclose(file);
+    return length == 2 && buffer[0] == '*' && buffer[1] == '\n';
+}
+
 int main(int argc, char **argv)
 {
     const char *terminal_path;
+    const char *redirect_path = "/tmp/os3-terminal-redirection";
+    const char *glob_path = "/tmp/os3-terminal-glob";
 #ifdef KYLEOS_GUEST
     terminal_path = "/bin/kterm";
 #else
     const char *source_path = "/tmp/os3-terminal-hello.c";
     const char *binary_path = "/tmp/os3-terminal-hello";
+    const char *input_path = "/tmp/os3-terminal-input";
     FILE *source;
 #endif
     int to_child[2];
@@ -160,9 +199,15 @@ int main(int argc, char **argv)
     terminal_path = argv[1];
     source = fopen(source_path, "wb");
     if (source == NULL) return 2;
-    fputs("int main(void) { return 0; }\n", source);
+    fputs("#include <stdio.h>\n"
+          "int main(void) { char line[64]; FILE *out; "
+          "if (fgets(line, sizeof(line), stdin) == 0) return 1; "
+          "out = fopen(\"/tmp/os3-terminal-input\", \"wb\"); "
+          "if (out == 0) return 2; fputs(line, out); fclose(out); "
+          "return 0; }\n", source);
     fclose(source);
     remove(binary_path);
+    remove(input_path);
 #endif
 
     if (pipe(to_child) < 0 || pipe(from_child) < 0) return 2;
@@ -191,6 +236,8 @@ int main(int argc, char **argv)
     kui_style_aqua(&event.style);
     check_result(exchange(to_child[1], from_child[0], &event, &response) < 0,
                  "init exchange", &failures);
+    remove(redirect_path);
+    remove(glob_path);
 
 #ifdef KYLEOS_GUEST
     check_result(send_text(to_child[1], from_child[0], &event, &response,
@@ -260,7 +307,67 @@ int main(int argc, char **argv)
                  "cc completion", &failures);
     check_result(access(binary_path, F_OK) < 0,
                  "cc output binary", &failures);
+
+    check_result(send_text(to_child[1], from_child[0], &event, &response,
+                           binary_path) < 0,
+                 "type interactive command", &failures);
+    check_result(send_key(to_child[1], from_child[0], &event, &response,
+                          28, '\n') < 0,
+                 "start interactive command", &failures);
+    check_result((response.flags & KUI_RESPONSE_TIMER) == 0 ||
+                 response.timer_ms == 0,
+                 "interactive command timer", &failures);
+    check_result(send_text(to_child[1], from_child[0], &event, &response,
+                           "interactive-ok") < 0,
+                 "type child input", &failures);
+    check_result(send_key(to_child[1], from_child[0], &event, &response,
+                          28, '\n') < 0,
+                 "submit child input", &failures);
+    check_result(poll_until_idle(to_child[1], from_child[0], &event,
+                                 &response, 100) < 0,
+                 "interactive command completion", &failures);
+    check_result(!file_contains(input_path, "interactive-ok"),
+                 "interactive child input", &failures);
 #endif
+
+    check_result(send_text(to_child[1], from_child[0], &event, &response,
+                           "echo redirect-ok > "
+                           "/tmp/os3-terminal-redirection") < 0,
+                 "type output redirection", &failures);
+    check_result(send_key(to_child[1], from_child[0], &event, &response,
+                          28, '\n') < 0,
+                 "start output redirection", &failures);
+    check_result(poll_until_idle(to_child[1], from_child[0], &event,
+                                 &response, 100) < 0,
+                 "output redirection completion", &failures);
+    check_result(!file_contains(redirect_path, "redirect-ok"),
+                 "output redirection contents", &failures);
+
+    check_result(send_text(to_child[1], from_child[0], &event, &response,
+                           "echo * > /tmp/os3-terminal-glob") < 0,
+                 "type wildcard command", &failures);
+    check_result(send_key(to_child[1], from_child[0], &event, &response,
+                          28, '\n') < 0,
+                 "start wildcard command", &failures);
+    check_result(poll_until_idle(to_child[1], from_child[0], &event,
+                                 &response, 100) < 0,
+                 "wildcard completion", &failures);
+    check_result(!file_contains(glob_path, "bin") ||
+                 file_is_literal_star(glob_path),
+                 "wildcard expansion", &failures);
+
+    check_result(send_text(to_child[1], from_child[0], &event, &response,
+                           "sleep 1 &") < 0,
+                 "type background command", &failures);
+    started = milliseconds();
+    check_result(send_key(to_child[1], from_child[0], &event, &response,
+                          28, '\n') < 0,
+                 "start background command", &failures);
+    check_result(poll_until_idle(to_child[1], from_child[0], &event,
+                                 &response, 25) < 0,
+                 "background command completion", &failures);
+    elapsed = milliseconds() - started;
+    check_result(elapsed >= 750, "background response deadline", &failures);
 
     event.type = KUI_EVENT_CLOSE;
     event.serial++;
@@ -271,7 +378,10 @@ int main(int argc, char **argv)
 #ifndef KYLEOS_GUEST
     remove(source_path);
     remove(binary_path);
+    remove(input_path);
 #endif
+    remove(redirect_path);
+    remove(glob_path);
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) failures++;
 
     if (failures != 0) {
@@ -280,10 +390,12 @@ int main(int argc, char **argv)
         return 1;
     }
 #ifdef KYLEOS_GUEST
-    printf("PASS terminal stays responsive during ls (%ldms response)\n",
+    printf("PASS terminal handles async commands and shell operators "
+           "(%ldms response)\n",
            elapsed);
 #else
-    printf("PASS terminal stays responsive during sleep and cc (%ldms response)\n",
+    printf("PASS terminal handles async commands, shell operators, and "
+           "child input (%ldms response)\n",
            elapsed);
 #endif
     return 0;

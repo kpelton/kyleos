@@ -453,7 +453,7 @@
       <table>
         <thead><tr><th>Producer</th><th>Consumer</th><th>Transport / entry</th><th>Payload / contract</th><th>Blocking</th><th>Ownership</th></tr></thead>
         <tbody>
-          <tr><td>Desktop shell</td><td>Window client</td><td>Anonymous pipe mapped to child fd 0</td><td>Exactly one <code>struct kui_event</code>; magic/version/serial validated</td><td>Desktop writes event, then waits for response</td><td>Kernel pipe copies bytes; client owns its decoded event</td></tr>
+          <tr><td>Desktop shell</td><td>Window client</td><td>Anonymous pipe mapped to child fd 0</td><td>Exactly one <code>struct kui_event</code>; magic/version/serial validated</td><td>Desktop writes event, then uses a bounded poll-driven response read</td><td>Kernel pipe copies bytes; client owns its decoded event</td></tr>
           <tr><td>Window client</td><td>Desktop shell</td><td>Anonymous pipe mapped to child fd 1</td><td><code>struct kui_response</code>, followed by <code>display_bytes</code> command stream, max 256 KiB</td><td>Client writes; desktop reads complete header and stream</td><td>Client buffer is copied through pipe; desktop replays into its own surface</td></tr>
           <tr><td>Desktop / apps</td><td>Kernel</td><td><code>int $0x80</code></td><td>RAX syscall number; arguments in normal x86-64 C ABI registers; integer/pointer result in RAX</td><td>Synchronous syscall</td><td>Kernel validates user pointers before access</td></tr>
           <tr><td>Desktop compositor</td><td>Framebuffer driver</td><td>Syscall 23 or 32</td><td>Full pixel buffer, or pointer plus <code>kyleos_framebuffer_rect</code></td><td>Copy/present completes before return</td><td>Desktop owns source pixels; kernel owns hardware mapping</td></tr>
@@ -526,7 +526,7 @@
           <tr><td>2–4, 12–18, 21–22, 28–29</td><td>Files / directories</td><td>open, close, read, write, creat, stat, fstat, getdents, chdir, mkdir, unlink, lseek, rename, rmdir</td><td>per-task FD helpers → VFS → filesystem ops</td></tr>
           <tr><td>5–8, 11</td><td>Processes</td><td>fork, exit, wait, exec, exec_args</td><td>scheduler, process model, ELF loader, VMM</td></tr>
           <tr><td>9</td><td>Memory</td><td>sbrk</td><td>process heap / VMM</td></tr>
-          <tr><td>19–20, 26</td><td>Descriptors / IPC</td><td>dup, dup2, pipe</td><td>task fd table, VFS file table, pipe buffer</td></tr>
+          <tr><td>19–20, 26, 35</td><td>Descriptors / IPC</td><td>dup, dup2, pipe, poll</td><td>task fd table, VFS readiness, scheduler I/O generation, pipe buffer</td></tr>
           <tr><td>23, 31–32</td><td>Graphics</td><td>present full, screen size, present rectangle</td><td>framebuffer driver</td></tr>
           <tr><td>24–25, 27, 30</td><td>Desktop input/time</td><td>key poll, ticks ms, tty raw, mouse poll</td><td>keyboard/mouse queues and PIT jiffies</td></tr>
         </tbody>
@@ -545,6 +545,7 @@
           <li><code>inode</code>: identity, type, size, FAT directory location.</li>
           <li><code>dnode</code>: directory traversal result.</li>
           <li><code>file</code>: refcount, position, flags, optional pipe.</li>
+          <li><code>poll</code>: pipe events wake sleepers; regular files are immediately ready.</li>
         </ul>
       </article>
       <article class="card third">
@@ -625,11 +626,12 @@
           boot-time disk probing safe.</p>
       </article>
       <article class="card">
-        <span class="tag ipc">Synchronous desktop IPC</span>
-        <h3>One slow client can delay a shell iteration</h3>
-        <p>The desktop sends an event and immediately reads that client's response. The
-          protocol is simple and deterministic, but there is no poll/select-based fan-out or
-          response deadline yet.</p>
+        <span class="tag ipc">Poll-driven desktop IPC</span>
+        <h3>Disconnect fan-out plus bounded replies</h3>
+        <p>Each desktop iteration polls the shell and all visible application response
+          pipes as one set, closing hung-up or invalid clients immediately. Event/reply
+          exchanges remain serial, but their reads sleep in <code>poll</code> and retain a
+          500 ms protocol deadline.</p>
       </article>
       <article class="card">
         <span class="tag fs">Storage serialization</span>

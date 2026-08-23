@@ -17,6 +17,7 @@ static int prev_task = -1;
 static int pid = 0;
 static struct mutex sched_mutex;
 static struct spinlock sched_spinlock;
+static volatile uint32_t sched_io_generation;
 
 
 void switch_to(uint64_t *rsp, uint64_t *addr);
@@ -83,10 +84,59 @@ void sched_wakeup(void *channel)
         if (ktasks[i].pid != -1 && ktasks[i].state == TASK_BLOCKED &&
             ktasks[i].wait_channel == channel) {
             ktasks[i].wait_channel = NULL;
+            ktasks[i].timer.state = TIMER_UNUSED;
             ktasks[i].state = TASK_READY;
         }
     if (!lock_already_held)
         release_spinlock(&sched_spinlock);
+}
+
+uint32_t sched_io_snapshot(void)
+{
+    return __sync_val_compare_and_swap(&sched_io_generation, 0, 0);
+}
+
+void sched_io_notify(void)
+{
+    __sync_add_and_fetch(&sched_io_generation, 1);
+    sched_wakeup((void *)&sched_io_generation);
+}
+
+void sched_io_wait(uint32_t generation, int timeout_ms)
+{
+    struct ktask *process = get_current_process();
+
+    if (process == NULL || timeout_ms == 0)
+        return;
+    if (__sync_val_compare_and_swap(&sched_spinlock.lock, 0, 0) != 0)
+        return;
+    acquire_spinlock(&sched_spinlock);
+    if (sched_io_snapshot() != generation) {
+        release_spinlock(&sched_spinlock);
+        return;
+    }
+
+    process->wait_channel = (void *)&sched_io_generation;
+    process->timer.state = TIMER_UNUSED;
+    if (timeout_ms > 0)
+        process->timer = new_timer((uint32_t)timeout_ms);
+    __sync_synchronize();
+    process->state = TASK_BLOCKED;
+    __sync_synchronize();
+
+    /* A readiness transition between the fd scan and publishing TASK_BLOCKED
+     * must cancel the sleep rather than becoming a lost wakeup. */
+    if (sched_io_snapshot() != generation) {
+        process->state = TASK_READY;
+        process->wait_channel = NULL;
+        process->timer.state = TIMER_UNUSED;
+        release_spinlock(&sched_spinlock);
+        return;
+    }
+    release_spinlock(&sched_spinlock);
+    schedule();
+    process->wait_channel = NULL;
+    process->timer.state = TIMER_UNUSED;
 }
 
 bool sched_sleep_on_if(void *channel, volatile int *condition)
@@ -134,6 +184,7 @@ static void sched_wakeup_one_locked(void *channel)
         if (ktasks[i].pid != -1 && ktasks[i].state == TASK_BLOCKED &&
             ktasks[i].wait_channel == channel) {
             ktasks[i].wait_channel = NULL;
+            ktasks[i].timer.state = TIMER_UNUSED;
             ktasks[i].state = TASK_READY;
             break;
         }
@@ -168,6 +219,7 @@ void sched_init()
         ktasks[i].pid = -1;
     init_mutex(&sched_mutex);
     init_spinlock(&sched_spinlock);
+    sched_io_generation = 0;
 }
 
 bool sched_is_running()

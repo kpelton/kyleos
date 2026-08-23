@@ -1,6 +1,7 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -21,6 +22,14 @@
 #define FINDER_SEARCH_WIDTH 220
 #define FINDER_SEARCH_MAX 63
 
+#define AQUA_BACK_RIGHT 60
+#define AQUA_FORWARD_RIGHT 120
+#define AQUA_COMPUTER_RIGHT 188
+#define AQUA_HOME_RIGHT 240
+#define AQUA_APPLICATIONS_RIGHT 318
+#define AQUA_REFRESH_RIGHT 380
+#define AQUA_SEARCH_LEFT 388
+
 enum finder_context_kind {
     FINDER_CONTEXT_NONE,
     FINDER_CONTEXT_ITEM,
@@ -40,6 +49,12 @@ enum finder_menu_action {
     FINDER_MENU_SORT_TYPE
 };
 
+struct finder_selection {
+    char names[FINDER_MAX_ITEMS][FINDER_NAME_MAX];
+    int count;
+    char anchor[FINDER_NAME_MAX];
+};
+
 static struct kui_menu_item finder_file_items[] = {
     { "New Folder", NULL, FINDER_MENU_NEW_FOLDER, 1 },
     { "New Text File", NULL, FINDER_MENU_NEW_TEXT_FILE, 1 },
@@ -50,6 +65,99 @@ static struct kui_menu_item finder_file_items[] = {
 static const struct kui_menu finder_menus[] = {
     { "File", finder_file_items, 4 }
 };
+
+static int finder_selection_contains(const struct finder_selection *selection,
+                                     const char *name)
+{
+    for (int i = 0; i < selection->count; i++)
+        if (strcmp(selection->names[i], name) == 0) return 1;
+    return 0;
+}
+
+static void finder_selection_clear(struct finder_selection *selection)
+{
+    selection->count = 0;
+    selection->anchor[0] = '\0';
+}
+
+static void finder_selection_add(struct finder_selection *selection,
+                                 const char *name)
+{
+    if (finder_selection_contains(selection, name) ||
+        selection->count >= FINDER_MAX_ITEMS)
+        return;
+    strcpy(selection->names[selection->count++], name);
+}
+
+static void finder_selection_remove(struct finder_selection *selection,
+                                    const char *name)
+{
+    for (int i = 0; i < selection->count; i++) {
+        if (strcmp(selection->names[i], name) != 0) continue;
+        if (i + 1 < selection->count)
+            memmove(selection->names[i], selection->names[i + 1],
+                    (selection->count - i - 1) * FINDER_NAME_MAX);
+        selection->count--;
+        return;
+    }
+}
+
+static void finder_selection_only(struct finder_selection *selection,
+                                  const char *name)
+{
+    finder_selection_clear(selection);
+    finder_selection_add(selection, name);
+    strcpy(selection->anchor, name);
+}
+
+static int finder_item_named(const struct finder_response *state,
+                             const char *name)
+{
+    for (int item = 0; item < state->item_count; item++)
+        if (strcmp(state->item_names[item], name) == 0) return item;
+    return -1;
+}
+
+static void finder_selection_range(struct finder_selection *selection,
+                                   const struct finder_response *state,
+                                   int item, int additive)
+{
+    int anchor = finder_item_named(state, selection->anchor);
+    int first;
+    int last;
+
+    if (anchor < 0) anchor = item;
+    first = anchor < item ? anchor : item;
+    last = anchor > item ? anchor : item;
+    if (!additive) finder_selection_clear(selection);
+    for (int index = first; index <= last; index++)
+        finder_selection_add(selection, state->item_names[index]);
+    strcpy(selection->anchor, state->item_names[anchor]);
+}
+
+static void finder_selection_prune(struct finder_selection *selection,
+                                   const struct finder_response *state)
+{
+    for (int i = selection->count - 1; i >= 0; i--)
+        if (finder_item_named(state, selection->names[i]) < 0)
+            finder_selection_remove(selection, selection->names[i]);
+    if (selection->anchor[0] != '\0' &&
+        finder_item_named(state, selection->anchor) < 0)
+        selection->anchor[0] = '\0';
+}
+
+static int finder_selection_copyable(
+    const struct finder_selection *selection,
+    const struct finder_response *state)
+{
+    if (selection->count == 0) return 0;
+    for (int selected = 0; selected < selection->count; selected++) {
+        int item = finder_item_named(state, selection->names[selected]);
+
+        if (item < 0) return 0;
+    }
+    return 1;
+}
 
 struct kyleos_dirent {
     uint64_t inode;
@@ -239,6 +347,100 @@ static int make_copy_path(char destination[FINDER_PATH_MAX],
     return -1;
 }
 
+static int read_copy_directory(const char *path,
+                               struct kyleos_dirent **entries_out,
+                               int *count_out)
+{
+    struct kyleos_dirent *entries;
+    int fd;
+    int count;
+
+    entries = malloc(64 * sizeof(*entries));
+    if (entries == NULL) return -1;
+    fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        free(entries);
+        return -1;
+    }
+    count = get_directory_entries(fd, entries, 64);
+    close(fd);
+    if (count < 0 || count == 64) {
+        free(entries);
+        return -1;
+    }
+    *entries_out = entries;
+    *count_out = count;
+    return 0;
+}
+
+static int remove_copy_tree(const char *path, int depth)
+{
+    struct stat path_stat;
+
+    if (depth > 16 || stat(path, &path_stat) < 0) return -1;
+    if (path_stat.st_mode != FINDER_ITEM_DIRECTORY) return unlink(path);
+    struct kyleos_dirent *entries;
+    int count;
+    int result = 0;
+
+    if (read_copy_directory(path, &entries, &count) < 0)
+        return remove_empty_directory(path);
+    for (int item = 0; item < count; item++) {
+        char child[FINDER_PATH_MAX];
+
+        if (strcmp(entries[item].name, ".") == 0 ||
+            strcmp(entries[item].name, "..") == 0)
+            continue;
+        if (child_path(child, path, entries[item].name) < 0 ||
+            remove_copy_tree(child, depth + 1) < 0)
+            result = -1;
+    }
+    free(entries);
+    if (remove_empty_directory(path) < 0) result = -1;
+    return result;
+}
+
+static int copy_tree(const char *source, const char *destination, int depth)
+{
+    struct stat source_stat;
+    struct kyleos_dirent *entries;
+    int count;
+
+    if (depth > 16 || stat(source, &source_stat) < 0) return -1;
+    if (source_stat.st_mode != FINDER_ITEM_DIRECTORY)
+        return copy_file_contents(source, destination);
+    if (mkdir(destination, 0755) < 0) return -1;
+    if (read_copy_directory(source, &entries, &count) < 0) {
+        remove_empty_directory(destination);
+        return -1;
+    }
+    for (int item = 0; item < count; item++) {
+        char source_child[FINDER_PATH_MAX];
+        char destination_child[FINDER_PATH_MAX];
+
+        if (strcmp(entries[item].name, ".") == 0 ||
+            strcmp(entries[item].name, "..") == 0)
+            continue;
+        if (child_path(source_child, source, entries[item].name) < 0 ||
+            child_path(destination_child, destination,
+                       entries[item].name) < 0 ||
+            copy_tree(source_child, destination_child, depth + 1) < 0) {
+            free(entries);
+            remove_copy_tree(destination, 0);
+            return -1;
+        }
+    }
+    free(entries);
+    return 0;
+}
+
+static int path_is_inside(const char *parent, const char *path)
+{
+    size_t length = strlen(parent);
+
+    return strncmp(parent, path, length) == 0 && path[length] == '/';
+}
+
 static void load_directory(const char *path, struct finder_response *response)
 {
     struct kyleos_dirent entries[64];
@@ -334,6 +536,25 @@ static void parent_path(const char *path, char *parent)
         *slash = '\0';
     else
         strcpy(parent, "/");
+}
+
+static int navigate_to_directory(
+    const char *path, struct finder_response *state,
+    struct finder_response *directory_state,
+    char history[FINDER_HISTORY_MAX][FINDER_PATH_MAX],
+    int *history_count, int *history_index, int *scroll_row,
+    char search[FINDER_SEARCH_MAX + 1])
+{
+    struct finder_response response;
+
+    load_directory(path, &response);
+    if (response.status < 0) return -1;
+    history_push(history, history_count, history_index, response.path);
+    *directory_state = response;
+    *state = response;
+    search[0] = '\0';
+    *scroll_row = 0;
+    return 0;
 }
 
 static int finder_columns(int width)
@@ -432,18 +653,32 @@ static void draw_document(struct kui_surface *surface, int x, int y)
                       0x0089a1bdU);
 }
 
-static void draw_aqua_toolbar_button(struct kui_surface *surface, int center_x,
-                                     int center_y, const char *label,
-                                     int direction, int disabled)
+static uint32_t aqua_toolbar_background(int y)
 {
-    uint32_t edge = disabled ? 0x00aeb5bcU : 0x006b7884U;
-    uint32_t glyph = disabled ? 0x009ca3a9U : 0x003c4854U;
+    return y & 1 ? 0x00e7ebefU : 0x00f7f9faU;
+}
 
-    for (int row = -13; row <= 13; row++) {
+static void draw_aqua_toolbar_label(struct kui_surface *surface, int center_x,
+                                    const char *label, int disabled)
+{
+    kui_draw_text(surface, center_x - kui_text_width(label) / 2, 42, label,
+                  disabled ? 0x0093999fU : KUI_BLACK,
+                  aqua_toolbar_background(42), 0);
+}
+
+static void draw_aqua_history_button(struct kui_surface *surface, int center_x,
+                                     const char *label, int direction,
+                                     int disabled)
+{
+    uint32_t edge = disabled ? 0x00b9c0c6U : 0x007b858eU;
+    uint32_t glyph = disabled ? 0x00abb1b6U : 0x00636c74U;
+    int center_y = 20;
+
+    for (int row = -11; row <= 11; row++) {
         int absolute = row < 0 ? -row : row;
-        int half = 13 - absolute / 3;
-        uint32_t face = row < -4 ? 0x00fcfdfeU :
-                        row < 5 ? 0x00dce2e7U : 0x00b8c1c9U;
+        int half = 11 - absolute / 3;
+        uint32_t face = row < -4 ? 0x00ffffffU :
+                        row < 4 ? 0x00e7eaedU : 0x00c5cbd0U;
 
         kui_fill_rect(surface, center_x - half, center_y + row,
                       half * 2 + 1, 1, edge);
@@ -451,72 +686,124 @@ static void draw_aqua_toolbar_button(struct kui_surface *surface, int center_x,
             kui_fill_rect(surface, center_x - half + 1, center_y + row,
                           half * 2 - 1, 1, face);
     }
-    if (direction < 0) {
-        for (int row = -5; row <= 5; row++) {
-            int absolute = row < 0 ? -row : row;
-            kui_fill_rect(surface, center_x - 5 + absolute / 2,
-                          center_y + row, 2, 1, glyph);
-        }
-        kui_fill_rect(surface, center_x - 3, center_y - 1, 10, 3, glyph);
-    } else if (direction > 0) {
-        for (int row = -5; row <= 5; row++) {
-            int absolute = row < 0 ? -row : row;
-            kui_fill_rect(surface, center_x + 4 - absolute / 2,
-                          center_y + row, 2, 1, glyph);
-        }
-        kui_fill_rect(surface, center_x - 6, center_y - 1, 10, 3, glyph);
-    } else {
-        for (int row = 0; row < 6; row++)
-            kui_fill_rect(surface, center_x - row, center_y - 6 + row,
-                          row * 2 + 1, 1, glyph);
-        kui_fill_rect(surface, center_x - 2, center_y, 5, 7, glyph);
+    for (int row = -5; row <= 5; row++) {
+        int absolute = row < 0 ? -row : row;
+        int x = direction < 0 ? center_x - 5 + absolute / 2 :
+                                center_x + 4 - absolute / 2;
+
+        kui_fill_rect(surface, x, center_y + row, 2, 1, glyph);
     }
-    kui_draw_text(surface, center_x - kui_text_width(label) / 2,
-                  center_y + 17, label,
-                  disabled ? 0x0093999fU : KUI_BLACK,
-                  center_y & 1 ? 0x00e7ebefU : 0x00f7f9faU, 0);
+    kui_fill_rect(surface, direction < 0 ? center_x - 3 : center_x - 6,
+                  center_y - 1, 10, 3, glyph);
+    draw_aqua_toolbar_label(surface, center_x, label, disabled);
+}
+
+static void draw_aqua_computer(struct kui_surface *surface, int center_x)
+{
+    kui_fill_rect_alpha(surface, center_x - 14, 31, 30, 3, 0x40000000U);
+    kui_fill_rect(surface, center_x - 13, 8, 27, 20, 0x003a4651U);
+    kui_outline_rect(surface, center_x - 13, 8, 27, 20, 0x001c252cU);
+    kui_fill_rect(surface, center_x - 10, 11, 21, 14, 0x006ca7d1U);
+    kui_fill_rect(surface, center_x - 9, 12, 19, 4, 0x00b9e3faU);
+    kui_fill_rect(surface, center_x - 3, 28, 8, 2, 0x0049535bU);
+    kui_fill_rect(surface, center_x - 7, 30, 16, 2, 0x00768088U);
+    draw_aqua_toolbar_label(surface, center_x, "Computer", 0);
+}
+
+static void draw_aqua_home(struct kui_surface *surface, int center_x)
+{
+    kui_fill_rect_alpha(surface, center_x - 13, 31, 28, 3, 0x40000000U);
+    for (int row = 0; row < 11; row++)
+        kui_fill_rect(surface, center_x - row - 1, 8 + row,
+                      row * 2 + 3, 1, 0x00933b27U);
+    kui_fill_rect(surface, center_x - 10, 18, 21, 13, 0x00d6ad78U);
+    kui_outline_rect(surface, center_x - 10, 18, 21, 13, 0x00775d42U);
+    kui_fill_rect(surface, center_x - 3, 23, 7, 8, 0x00784e34U);
+    kui_fill_rect(surface, center_x + 5, 20, 4, 4, 0x009ed3e5U);
+    draw_aqua_toolbar_label(surface, center_x, "Home", 0);
+}
+
+static void draw_aqua_applications(struct kui_surface *surface, int center_x)
+{
+    kui_line(surface, center_x - 12, 31, center_x, 8, 0x003f6eb5U);
+    kui_line(surface, center_x - 11, 31, center_x + 1, 8, 0x009cc9efU);
+    kui_line(surface, center_x + 12, 31, center_x, 8, 0x00836a4aU);
+    kui_line(surface, center_x + 11, 31, center_x - 1, 8, 0x00e7c987U);
+    kui_fill_rect(surface, center_x - 8, 23, 17, 3, 0x00bf2d2dU);
+    kui_fill_rect(surface, center_x - 7, 24, 15, 1, 0x00f2a2a2U);
+    kui_fill_rect(surface, center_x - 2, 6, 4, 5, 0x00ded5c4U);
+    draw_aqua_toolbar_label(surface, center_x, "Applications", 0);
+}
+
+static void draw_aqua_refresh(struct kui_surface *surface, int center_x)
+{
+    uint32_t dark = 0x002f638fU;
+    uint32_t blue = 0x004d9bd3U;
+
+    for (int row = -8; row <= 8; row++) {
+        int absolute = row < 0 ? -row : row;
+        int outer = 10 - absolute / 2;
+        int inner = absolute < 5 ? 6 - absolute / 3 : 4;
+        kui_fill_rect(surface, center_x - outer, 20 + row,
+                      outer - inner, 2, blue);
+        kui_fill_rect(surface, center_x + inner, 20 + row,
+                      outer - inner, 2, dark);
+    }
+    for (int row = 0; row < 7; row++)
+        kui_fill_rect(surface, center_x + 4 - row, 8 + row,
+                      row + 2, 1, dark);
+    for (int row = 0; row < 7; row++)
+        kui_fill_rect(surface, center_x - 10, 26 + row,
+                      row + 2, 1, blue);
+    draw_aqua_toolbar_label(surface, center_x, "Refresh", 0);
 }
 
 static void draw_aqua_toolbar(struct kui_surface *surface, int width,
                               const struct finder_response *state,
                               const char *search, int search_focused)
 {
+    int search_width = width - AQUA_SEARCH_LEFT - 12;
+
     for (int row = 0; row < FINDER_TOOLBAR_HEIGHT; row++)
         kui_fill_rect(surface, 0, row, width, 1,
-                      row & 1 ? 0x00e7ebefU : 0x00f7f9faU);
+                      aqua_toolbar_background(row));
     kui_fill_rect(surface, 0, FINDER_TOOLBAR_HEIGHT - 2, width, 1,
                   0x00ffffffU);
     kui_fill_rect(surface, 0, FINDER_TOOLBAR_HEIGHT - 1, width, 1,
                   0x00858d95U);
-    draw_aqua_toolbar_button(surface, 29, 20, "Back", -1,
-                             !state->can_back);
-    draw_aqua_toolbar_button(surface, 91, 20, "Forward", 1,
+    kui_fill_rect(surface, AQUA_FORWARD_RIGHT, 4, 1, 51, 0x00a0a7adU);
+    kui_fill_rect(surface, AQUA_FORWARD_RIGHT + 1, 4, 1, 51, KUI_WHITE);
+    draw_aqua_history_button(surface, 30, "Back", -1, !state->can_back);
+    draw_aqua_history_button(surface, 90, "Forward", 1,
                              !state->can_forward);
-    draw_aqua_toolbar_button(surface, 155, 20, "Up", 0,
-                             !state->can_up);
-    int left = width - FINDER_SEARCH_WIDTH - 14;
-    if (left < 190) left = 190;
-    kui_fill_rect(surface, left + 7, 7, FINDER_SEARCH_WIDTH - 14, 25,
-                  0x00ffffffU);
-    kui_fill_rect(surface, left + 4, 10, FINDER_SEARCH_WIDTH - 8, 19,
-                  0x00ffffffU);
-    kui_outline_rect(surface, left + 4, 7, FINDER_SEARCH_WIDTH - 8, 25,
+    draw_aqua_computer(surface, 155);
+    draw_aqua_home(surface, 214);
+    draw_aqua_applications(surface, 279);
+    draw_aqua_refresh(surface, 351);
+    kui_fill_rect(surface, AQUA_SEARCH_LEFT + 7, 7,
+                  search_width - 14, 25, KUI_WHITE);
+    kui_fill_rect(surface, AQUA_SEARCH_LEFT + 4, 10,
+                  search_width - 8, 19, KUI_WHITE);
+    kui_outline_rect(surface, AQUA_SEARCH_LEFT + 4, 7,
+                     search_width - 8, 25,
                      search_focused ? 0x00508fcaU : 0x0097a1aaU);
     for (int row = -4; row <= 4; row++) {
         int half = row < 0 ? 4 + row / 2 : 4 - row / 2;
-        kui_fill_rect(surface, left + 16 - half, 17 + row, half * 2 + 1, 1,
-                      0x00717d88U);
+        kui_fill_rect(surface, AQUA_SEARCH_LEFT + 16 - half, 17 + row,
+                      half * 2 + 1, 1, 0x00717d88U);
     }
-    kui_line(surface, left + 20, 24, left + 24, 28, 0x00717d88U);
-    kui_draw_text(surface, left + 31, 14,
+    kui_line(surface, AQUA_SEARCH_LEFT + 20, 24,
+             AQUA_SEARCH_LEFT + 24, 28, 0x00717d88U);
+    kui_draw_text(surface, AQUA_SEARCH_LEFT + 31, 14,
                   search[0] != '\0' ? search : "Search",
                   search[0] != '\0' ? KUI_BLACK : 0x00717d88U,
-                  0x00ffffffU, 0);
+                  KUI_WHITE, 0);
 }
 
 static void finder_render(struct kui_client *client,
                           const struct kui_event *event,
                           const struct finder_response *state,
+                          const struct finder_selection *selection,
                           int scroll_row, int context_kind,
                           int context_item, int context_x, int context_y,
                           const char *status_message,
@@ -542,6 +829,8 @@ static void finder_render(struct kui_client *client,
                         70, 24, "Forward", !state->can_forward);
         kui_draw_button(&client->surface, 138, toolbar_top + 5,
                         40, 24, "Up", !state->can_up);
+        kui_draw_button(&client->surface, 182, toolbar_top + 5,
+                        64, 24, "Refresh", 0);
         snprintf(location, sizeof(location), "Location: %s", state->path);
         kui_draw_text(&client->surface, 7, toolbar_top + 36, location,
                       KUI_BLACK, KUI_LIGHT, 0);
@@ -555,6 +844,8 @@ static void finder_render(struct kui_client *client,
         int y;
         int label_width;
         uint32_t label_background = KUI_WHITE;
+        uint32_t label_color = KUI_BLACK;
+        int selected;
 
         if (visible < 0) continue;
         row = visible / columns;
@@ -562,12 +853,18 @@ static void finder_render(struct kui_client *client,
         if (row >= finder_visible_rows(event->height)) break;
         x = 9 + column * FINDER_ITEM_WIDTH;
         y = content_top + row * 82;
-        if (context_kind == FINDER_CONTEXT_ITEM && item == context_item) {
-            label_background = 0x00cde8ffU;
+        selected = finder_selection_contains(selection,
+                                             state->item_names[item]) ||
+                   (context_kind == FINDER_CONTEXT_ITEM &&
+                    item == context_item);
+        if (selected) {
+            label_background = finder_is_aqua() ? 0x003b83ceU :
+                                                  KUI_TITLE_BLUE;
+            label_color = KUI_WHITE;
             kui_fill_rect(&client->surface, x + 2, y - 3, 76, 73,
                           label_background);
             kui_outline_rect(&client->surface, x + 2, y - 3, 76, 73,
-                             0x00316ac5U);
+                             finder_is_aqua() ? 0x00235d9fU : KUI_BLACK);
         }
         if (state->item_types[item] == FINDER_ITEM_DIRECTORY)
             draw_folder(&client->surface, x + 16, y);
@@ -578,7 +875,7 @@ static void finder_render(struct kui_client *client,
                                          FINDER_LABEL_WIDTH);
         kui_draw_text(&client->surface,
                       x + 40 - label_width / 2, y + 52,
-                      label, KUI_BLACK,
+                      label, label_color,
                       label_background, 0);
     }
     kui_draw_vscrollbar(
@@ -622,22 +919,13 @@ static void finder_render(struct kui_client *client,
             uint32_t color;
 
             if (context_kind == FINDER_CONTEXT_ITEM && row == 1 &&
-                context_item >= 0 &&
-                state->item_types[context_item] == FINDER_ITEM_DIRECTORY)
+                !finder_selection_copyable(selection, state))
                 disabled = 1;
             if (context_kind == FINDER_CONTEXT_BACKGROUND && row == 2 &&
                 (event->clipboard_kind != KUI_CLIPBOARD_PATH ||
                  event->clipboard[0] == '\0'))
                 disabled = 1;
             color = disabled ? 0x00909090U : KUI_BLACK;
-            if (context_kind == FINDER_CONTEXT_BACKGROUND) {
-                if (row == 0) draw_folder(&client->surface,
-                                         context_x + 3,
-                                         context_y + 5 + row * CONTEXT_MENU_ROW_HEIGHT);
-                else if (row == 1) draw_document(&client->surface,
-                                                 context_x + 3,
-                                                 context_y + 5 + row * CONTEXT_MENU_ROW_HEIGHT);
-            }
             kui_draw_text(&client->surface, context_x + 12,
                           context_y + 9 + row * CONTEXT_MENU_ROW_HEIGHT,
                           labels[row], color,
@@ -665,7 +953,8 @@ static int finder_item_at(const struct finder_response *state,
     return item >= 0 && item < state->item_count ? item : -1;
 }
 
-static void activate_item(struct finder_response *state, int item,
+static void activate_item(struct finder_response *state,
+                          struct finder_response *directory_state, int item,
                           char history[FINDER_HISTORY_MAX][FINDER_PATH_MAX],
                           int *history_count, int *history_index,
                           int *scroll_row, uint32_t *shell_action,
@@ -682,6 +971,7 @@ static void activate_item(struct finder_response *state, int item,
         if (response.status == 0) {
             history_push(history, history_count, history_index,
                          response.path);
+            *directory_state = response;
             *state = response;
             *scroll_row = 0;
         }
@@ -691,14 +981,57 @@ static void activate_item(struct finder_response *state, int item,
     }
 }
 
-static int reload_current_directory(struct finder_response *state)
+static int reload_current_directory(struct finder_response *state,
+                                    struct finder_response *directory_state,
+                                    const char *search)
 {
     struct finder_response response;
 
     load_directory(state->path, &response);
     if (response.status < 0) return -1;
-    *state = response;
+    *directory_state = response;
+    finder_filter(directory_state, state, search);
     return 0;
+}
+
+static int delete_selected_items(
+    const struct finder_response *directory_state,
+    const struct finder_selection *selection,
+    char *status_message, size_t status_capacity)
+{
+    int deleted = 0;
+    int failed = 0;
+
+    for (int selected = 0; selected < selection->count; selected++) {
+        const char *name = selection->names[selected];
+        int item = finder_item_named(directory_state, name);
+        char path[FINDER_PATH_MAX];
+        int result;
+
+        if (item < 0 ||
+            child_path(path, directory_state->path, name) < 0) {
+            failed++;
+            continue;
+        }
+        result = directory_state->item_types[item] == FINDER_ITEM_DIRECTORY ?
+                 remove_empty_directory(path) : unlink(path);
+        if (result == 0)
+            deleted++;
+        else
+            failed++;
+    }
+    if (deleted == 1 && failed == 0)
+        snprintf(status_message, status_capacity, "Deleted %s",
+                 selection->names[0]);
+    else if (deleted > 0 && failed == 0)
+        snprintf(status_message, status_capacity, "Deleted %d items",
+                 deleted);
+    else if (deleted > 0)
+        snprintf(status_message, status_capacity,
+                 "Deleted %d items; %d failed", deleted, failed);
+    else if (failed > 0)
+        strcpy(status_message, "Delete failed (folders must be empty)");
+    return deleted;
 }
 
 static int begin_create_dialog(struct kui_input_dialog *dialog,
@@ -717,6 +1050,48 @@ static int begin_create_dialog(struct kui_input_dialog *dialog,
     return 0;
 }
 
+static int copy_selection_to_clipboard(
+    const struct finder_response *state,
+    const struct finder_selection *selection,
+    char *clipboard, size_t clipboard_capacity,
+    char *status, size_t status_capacity)
+{
+    size_t used = 0;
+
+    clipboard[0] = '\0';
+    if (!finder_selection_copyable(selection, state)) {
+        strcpy(status, "Nothing selected to copy");
+        return -1;
+    }
+    for (int selected = 0; selected < selection->count; selected++) {
+        char path[FINDER_PATH_MAX];
+        size_t length;
+
+        if (child_path(path, state->path,
+                       selection->names[selected]) < 0)
+            goto too_large;
+        length = strlen(path);
+        if (used + (used != 0 ? 1 : 0) + length >= clipboard_capacity)
+            goto too_large;
+        if (used != 0) clipboard[used++] = '\n';
+        memcpy(clipboard + used, path, length);
+        used += length;
+        clipboard[used] = '\0';
+    }
+    if (selection->count == 1)
+        snprintf(status, status_capacity, "Copied %s",
+                 selection->names[0]);
+    else
+        snprintf(status, status_capacity, "Copied %d items",
+                 selection->count);
+    return 0;
+
+too_large:
+    clipboard[0] = '\0';
+    strcpy(status, "Too many selected paths to copy");
+    return -1;
+}
+
 static int paste_clipboard_file(const struct finder_response *state,
                                 const char *clipboard,
                                 char *status, size_t status_size)
@@ -728,11 +1103,12 @@ static int paste_clipboard_file(const struct finder_response *state,
         snprintf(status, status_size, "Nothing to paste");
     } else if (stat(clipboard, &source_stat) < 0) {
         snprintf(status, status_size, "Copied file no longer exists");
-    } else if (source_stat.st_mode == FINDER_ITEM_DIRECTORY) {
-        snprintf(status, status_size, "Folder copy is not supported yet");
     } else if (make_copy_path(path, state->path, clipboard) < 0) {
         snprintf(status, status_size, "Could not choose a copy name");
-    } else if (copy_file_contents(clipboard, path) < 0) {
+    } else if (source_stat.st_mode == FINDER_ITEM_DIRECTORY &&
+               path_is_inside(clipboard, path)) {
+        snprintf(status, status_size, "Cannot copy a folder into itself");
+    } else if (copy_tree(clipboard, path, 0) < 0) {
         snprintf(status, status_size, "Paste failed");
     } else {
         snprintf(status, status_size, "Pasted %s", base_name(path));
@@ -741,7 +1117,55 @@ static int paste_clipboard_file(const struct finder_response *state,
     return -1;
 }
 
-static int context_menu_row(int menu_x, int menu_y, int x, int y)
+static int paste_clipboard_files(const struct finder_response *state,
+                                 const char *clipboard,
+                                 char *status, size_t status_size)
+{
+    const char *cursor = clipboard;
+    int pasted = 0;
+    int failed = 0;
+    char last_status[96];
+
+    last_status[0] = '\0';
+    while (cursor != NULL && cursor[0] != '\0') {
+        const char *newline = strchr(cursor, '\n');
+        size_t length = newline != NULL ? (size_t)(newline - cursor) :
+                                          strlen(cursor);
+        char source[FINDER_PATH_MAX];
+
+        if (length == 0) {
+            cursor = newline != NULL ? newline + 1 : NULL;
+            continue;
+        }
+        if (length >= sizeof(source)) {
+            failed++;
+        } else {
+            memcpy(source, cursor, length);
+            source[length] = '\0';
+            if (paste_clipboard_file(state, source, last_status,
+                                     sizeof(last_status)) == 0)
+                pasted++;
+            else
+                failed++;
+        }
+        cursor = newline != NULL ? newline + 1 : NULL;
+    }
+    if (pasted == 1 && failed == 0) {
+        strcpy(status, last_status);
+    } else if (pasted > 0 && failed == 0) {
+        snprintf(status, status_size, "Pasted %d items", pasted);
+    } else if (pasted > 0) {
+        snprintf(status, status_size, "Pasted %d items; %d failed",
+                 pasted, failed);
+    } else if (last_status[0] != '\0') {
+        strcpy(status, last_status);
+    } else {
+        strcpy(status, "Nothing to paste");
+    }
+    return pasted > 0 ? 0 : -1;
+}
+
+static int context_menu_row(int menu_x, int menu_y, int x, int y, int rows)
 {
     int row;
 
@@ -749,7 +1173,7 @@ static int context_menu_row(int menu_x, int menu_y, int x, int y)
                      CONTEXT_MENU_WIDTH - 2, CONTEXT_MENU_HEIGHT - 2))
         return -1;
     row = (y - menu_y - 2) / CONTEXT_MENU_ROW_HEIGHT;
-    return row >= 0 && row < 3 ? row : -1;
+    return row >= 0 && row < rows ? row : -1;
 }
 
 static int embedded_main(void)
@@ -773,27 +1197,36 @@ static int embedded_main(void)
     struct kui_event event;
     char search[FINDER_SEARCH_MAX + 1];
     int search_focused = 0;
+    struct finder_selection selection;
+    char last_click_name[FINDER_NAME_MAX];
+    char last_click_path[FINDER_PATH_MAX];
+    uint32_t last_click_ms = 0;
 
     memset(&state, 0, sizeof(state));
     memset(&directory_state, 0, sizeof(directory_state));
     memset(&create_dialog, 0, sizeof(create_dialog));
     memset(&scrollbar, 0, sizeof(scrollbar));
+    memset(&selection, 0, sizeof(selection));
     memset(history, 0, sizeof(history));
     status_message[0] = '\0';
     search[0] = '\0';
+    last_click_name[0] = '\0';
+    last_click_path[0] = '\0';
     kui_menu_init(&menu_state);
     kui_client_init(&client);
 
     for (;;) {
         struct finder_response response;
-        char action_path[FINDER_PATH_MAX];
+        char action_path[KUI_PROTOCOL_CLIPBOARD_MAX];
         uint32_t shell_action = KUI_ACTION_NONE;
         int menu_action = 0;
         int menu_consumed = 0;
         int scrollbar_hit;
+        char previous_path[FINDER_PATH_MAX];
 
         if (kui_client_read_event(&event) < 0) break;
         if (event.type == KUI_EVENT_CLOSE) break;
+        copy_path(previous_path, state.path);
         scrollbar_hit = !create_dialog.active &&
             event.type == KUI_EVENT_POINTER && event.button == 1 &&
             kui_in_rect(event.x, event.y,
@@ -874,7 +1307,8 @@ static int embedded_main(void)
                              "Created folder %s" : "Created %s", name);
                     kui_input_dialog_close(&create_dialog);
                     create_kind = FINDER_CREATE_NONE;
-                    reload_current_directory(&state);
+                    reload_current_directory(&state, &directory_state,
+                                             search);
                     shell_action = KUI_ACTION_FILE_SAVED;
                 }
             } else if (result == KUI_INPUT_DIALOG_CANCEL) {
@@ -895,10 +1329,10 @@ static int embedded_main(void)
                     strcpy(status_message, "Could not choose a file name");
             } else if (menu_action == FINDER_MENU_PASTE &&
                        event.clipboard_kind == KUI_CLIPBOARD_PATH &&
-                       paste_clipboard_file(&state, event.clipboard,
-                                            status_message,
-                                            sizeof(status_message)) == 0) {
-                reload_current_directory(&state);
+                       paste_clipboard_files(&state, event.clipboard,
+                                             status_message,
+                                             sizeof(status_message)) == 0) {
+                reload_current_directory(&state, &directory_state, search);
                 shell_action = KUI_ACTION_FILE_SAVED;
             } else if (menu_action == FINDER_MENU_SORT_TYPE) {
                 sort_by_type(&directory_state);
@@ -931,6 +1365,14 @@ static int embedded_main(void)
                                               event.x, event.y);
                 context_kind = context_item >= 0 ? FINDER_CONTEXT_ITEM :
                                                    FINDER_CONTEXT_BACKGROUND;
+                if (context_item >= 0 &&
+                    !finder_selection_contains(
+                        &selection, state.item_names[context_item]))
+                    finder_selection_only(
+                        &selection, state.item_names[context_item]);
+                else if (context_item < 0)
+                    finder_selection_clear(&selection);
+                last_click_name[0] = '\0';
                 context_x = event.x;
                 context_y = event.y;
                 if (context_x + CONTEXT_MENU_WIDTH + 5 > event.width)
@@ -945,51 +1387,31 @@ static int embedded_main(void)
             int menu_kind = context_kind;
             int menu_item = context_item;
             int row = context_menu_row(context_x, context_y,
-                                       event.x, event.y);
+                                       event.x, event.y,
+                                       menu_kind == FINDER_CONTEXT_ITEM ?
+                                       3 : 4);
 
             context_kind = FINDER_CONTEXT_NONE;
             if (row >= 0 && menu_kind == FINDER_CONTEXT_ITEM &&
                 menu_item >= 0 && menu_item < state.item_count) {
-                char path[FINDER_PATH_MAX];
-
-                path[0] = '\0';
                 if (row == 0) {
-                    activate_item(&state, menu_item, history,
+                    activate_item(&state, &directory_state, menu_item, history,
                                   &history_count, &history_index,
                                   &scroll_row, &shell_action, action_path);
                     status_message[0] = '\0';
                 } else if (row == 1) {
-                    if (child_path(path, state.path,
-                                   state.item_names[menu_item]) < 0) {
-                        strcpy(status_message, "Path is too long");
-                    } else if (state.item_types[menu_item] ==
-                               FINDER_ITEM_DIRECTORY) {
-                        strcpy(status_message,
-                               "Folder copy is not supported yet");
-                    } else {
-                        copy_path(action_path, path);
+                    if (copy_selection_to_clipboard(
+                            &state, &selection, action_path,
+                            sizeof(action_path), status_message,
+                            sizeof(status_message)) == 0)
                         shell_action = KUI_ACTION_COPY_PATH;
-                        snprintf(status_message, sizeof(status_message),
-                                 "Copied %s", state.item_names[menu_item]);
-                    }
-                } else if (row == 2 &&
-                           child_path(path, state.path,
-                                      state.item_names[menu_item]) == 0) {
-                    int result = state.item_types[menu_item] ==
-                                 FINDER_ITEM_DIRECTORY ?
-                                 remove_empty_directory(path) : unlink(path);
-
-                    if (result == 0) {
-                        snprintf(status_message, sizeof(status_message),
-                                 "Deleted %s", state.item_names[menu_item]);
-                        reload_current_directory(&state);
+                } else if (row == 2) {
+                    if (delete_selected_items(
+                            &directory_state, &selection, status_message,
+                            sizeof(status_message)) > 0) {
+                        reload_current_directory(&state, &directory_state,
+                                                 search);
                         shell_action = KUI_ACTION_FILE_SAVED;
-                    } else if (state.item_types[menu_item] ==
-                               FINDER_ITEM_DIRECTORY) {
-                        strcpy(status_message,
-                               "Delete failed: folder must be empty");
-                    } else {
-                        strcpy(status_message, "Delete failed");
                     }
                 }
             } else if (row >= 0 &&
@@ -1009,7 +1431,7 @@ static int embedded_main(void)
                 } else if (row == 2 &&
                            event.clipboard_kind == KUI_CLIPBOARD_PATH &&
                            event.clipboard[0] != '\0') {
-                    result = paste_clipboard_file(
+                    result = paste_clipboard_files(
                         &state, event.clipboard, status_message,
                         sizeof(status_message));
                 } else if (row == 3) {
@@ -1017,10 +1439,11 @@ static int embedded_main(void)
                     finder_filter(&directory_state, &state, search);
                     scroll_row = 0;
                     strcpy(status_message, "Sorted by type");
-                    result = 0;
+                    result = 1;
                 }
                 if (result == 0) {
-                    reload_current_directory(&state);
+                    reload_current_directory(&state, &directory_state,
+                                             search);
                     shell_action = KUI_ACTION_FILE_SAVED;
                 }
             }
@@ -1028,19 +1451,61 @@ static int embedded_main(void)
             context_kind = FINDER_CONTEXT_NONE;
         } else if (event.type == KUI_EVENT_POINTER && event.button == 1 &&
                    event.y >= finder_toolbar_top() &&
-                   event.y < finder_toolbar_top() + 31) {
-            int search_left = event.width - FINDER_SEARCH_WIDTH - 14;
-            if (finder_is_aqua() && search_left < 190) search_left = 190;
-            if (finder_is_aqua() && event.x >= search_left) {
-                search_focused = 1;
-            } else if (event.x < 62 && state.can_back && history_index > 0) {
+                   event.y < finder_toolbar_top() +
+                   (finder_is_aqua() ? FINDER_TOOLBAR_HEIGHT : 31)) {
+            if (finder_is_aqua() && event.x < AQUA_BACK_RIGHT &&
+                state.can_back && history_index > 0) {
                 load_directory(history[history_index - 1], &response);
                 if (response.status == 0) { history_index--; directory_state = response; state = response; search[0] = '\0'; }
-            } else if (event.x < 136 && state.can_forward &&
+            } else if (finder_is_aqua() &&
+                       event.x < AQUA_FORWARD_RIGHT &&
+                       state.can_forward &&
                        history_index + 1 < history_count) {
                 load_directory(history[history_index + 1], &response);
                 if (response.status == 0) { history_index++; directory_state = response; state = response; search[0] = '\0'; }
-            } else if (event.x < 180 && state.can_up) {
+            } else if (finder_is_aqua() && event.x >= AQUA_SEARCH_LEFT) {
+                search_focused = 1;
+            } else if (finder_is_aqua() &&
+                       event.x >= AQUA_FORWARD_RIGHT &&
+                       event.x < AQUA_COMPUTER_RIGHT) {
+                navigate_to_directory("/", &state, &directory_state,
+                                      history, &history_count,
+                                      &history_index, &scroll_row, search);
+            } else if (finder_is_aqua() &&
+                       event.x >= AQUA_COMPUTER_RIGHT &&
+                       event.x < AQUA_HOME_RIGHT) {
+                if (navigate_to_directory("/home", &state,
+                                          &directory_state, history,
+                                          &history_count, &history_index,
+                                          &scroll_row, search) < 0)
+                    navigate_to_directory("/", &state, &directory_state,
+                                          history, &history_count,
+                                          &history_index, &scroll_row,
+                                          search);
+            } else if (finder_is_aqua() &&
+                       event.x >= AQUA_HOME_RIGHT &&
+                       event.x < AQUA_APPLICATIONS_RIGHT) {
+                navigate_to_directory("/bin", &state, &directory_state,
+                                      history, &history_count,
+                                      &history_index, &scroll_row, search);
+            } else if (finder_is_aqua() &&
+                       event.x >= AQUA_APPLICATIONS_RIGHT &&
+                       event.x < AQUA_REFRESH_RIGHT) {
+                load_directory(state.path, &response);
+                if (response.status == 0) {
+                    directory_state = response;
+                    finder_filter(&directory_state, &state, search);
+                }
+            } else if (!finder_is_aqua() && event.x < 62 &&
+                       state.can_back && history_index > 0) {
+                load_directory(history[history_index - 1], &response);
+                if (response.status == 0) { history_index--; directory_state = response; state = response; search[0] = '\0'; }
+            } else if (!finder_is_aqua() && event.x < 136 &&
+                       state.can_forward &&
+                       history_index + 1 < history_count) {
+                load_directory(history[history_index + 1], &response);
+                if (response.status == 0) { history_index++; directory_state = response; state = response; search[0] = '\0'; }
+            } else if (!finder_is_aqua() && event.x < 180 && state.can_up) {
                 char path[FINDER_PATH_MAX];
                 parent_path(state.path, path);
                 load_directory(path, &response);
@@ -1051,6 +1516,13 @@ static int embedded_main(void)
                     state = response;
                     search[0] = '\0';
                 }
+            } else if (!finder_is_aqua() && event.x >= 182 &&
+                       event.x < 246) {
+                load_directory(state.path, &response);
+                if (response.status == 0) {
+                    directory_state = response;
+                    finder_filter(&directory_state, &state, search);
+                }
             }
             scroll_row = 0;
             context_kind = FINDER_CONTEXT_NONE;
@@ -1058,10 +1530,55 @@ static int embedded_main(void)
         } else if (event.type == KUI_EVENT_POINTER && event.button == 1) {
             int item = finder_item_at(&state, event.width, event.height,
                                       scroll_row, event.x, event.y);
-            activate_item(&state, item, history, &history_count,
-                          &history_index, &scroll_row, &shell_action,
-                          action_path);
+            int ctrl = (event.modifiers & KUI_MOD_CTRL) != 0;
+            int shift = (event.modifiers & KUI_MOD_SHIFT) != 0;
+
+            if (item < 0) {
+                if (!ctrl && !shift) finder_selection_clear(&selection);
+                last_click_name[0] = '\0';
+            } else if (shift) {
+                finder_selection_range(&selection, &state, item, ctrl);
+                last_click_name[0] = '\0';
+            } else if (ctrl) {
+                if (finder_selection_contains(
+                        &selection, state.item_names[item]))
+                    finder_selection_remove(&selection,
+                                            state.item_names[item]);
+                else
+                    finder_selection_add(&selection,
+                                         state.item_names[item]);
+                strcpy(selection.anchor, state.item_names[item]);
+                last_click_name[0] = '\0';
+            } else {
+                uint32_t now = kui_ticks_ms();
+                int double_click =
+                    strcmp(last_click_name, state.item_names[item]) == 0 &&
+                    strcmp(last_click_path, state.path) == 0 &&
+                    (uint32_t)(now - last_click_ms) <= 450U;
+
+                finder_selection_only(&selection, state.item_names[item]);
+                if (double_click) {
+                    activate_item(&state, &directory_state, item, history,
+                                  &history_count, &history_index,
+                                  &scroll_row, &shell_action, action_path);
+                    last_click_name[0] = '\0';
+                } else {
+                    strcpy(last_click_name, state.item_names[item]);
+                    copy_path(last_click_path, state.path);
+                    last_click_ms = now;
+                }
+            }
             status_message[0] = '\0';
+        } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
+                   (event.modifiers & KUI_MOD_CTRL) &&
+                   !event.key_extended && event.key_code == 30) {
+            finder_selection_clear(&selection);
+            for (int item = 0; item < state.item_count; item++)
+                finder_selection_add(&selection, state.item_names[item]);
+            if (state.item_count > 0)
+                strcpy(selection.anchor, state.item_names[0]);
+            search_focused = 0;
+            last_click_name[0] = '\0';
         } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
                    search_focused && finder_is_aqua()) {
             size_t length = strlen(search);
@@ -1087,13 +1604,19 @@ static int embedded_main(void)
         state.can_back = history_index > 0;
         state.can_forward = history_index + 1 < history_count;
         state.can_up = state.path[0] != '\0' && strcmp(state.path, "/") != 0;
+        if (strcmp(previous_path, state.path) != 0) {
+            finder_selection_clear(&selection);
+            last_click_name[0] = '\0';
+        } else {
+            finder_selection_prune(&selection, &state);
+        }
         if (scroll_row < 0) scroll_row = 0;
         if (scroll_row > finder_max_scroll(&state, event.width, event.height))
             scroll_row = finder_max_scroll(&state, event.width, event.height);
         kui_client_begin(&client, &event,
                          state.title[0] != '\0' ? state.title : "Finder");
-        kui_client_set_constraints(&client, 360, 243, 700, 504);
-        finder_render(&client, &event, &state, scroll_row,
+        kui_client_set_constraints(&client, 480, 243, 700, 504);
+        finder_render(&client, &event, &state, &selection, scroll_row,
                       context_kind, context_item, context_x, context_y,
                       status_message, &scrollbar, search, search_focused);
         if (!finder_is_aqua())

@@ -1,6 +1,7 @@
 #include "kui.h"
 
 #include <fcntl.h>
+#include <poll.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -150,15 +151,6 @@ int kui_read_all(int fd, void *buffer, uint32_t bytes)
     return 0;
 }
 
-int kui_fd_status(int fd, struct kyleos_fd_status *status)
-{
-    register long rax asm("rax") = 33;
-
-    asm volatile("int $0x80" : "+a"(rax) : "D"((long)fd), "S"(status)
-                 : "memory");
-    return (int)rax;
-}
-
 int kui_read_all_timeout(int fd, void *buffer, uint32_t bytes,
                          uint32_t timeout_ms)
 {
@@ -166,22 +158,23 @@ int kui_read_all_timeout(int fd, void *buffer, uint32_t bytes,
     uint32_t start = kui_ticks_ms();
 
     while (total < bytes) {
-        struct kyleos_fd_status status;
-        uint32_t remaining;
-        uint32_t chunk;
+        struct pollfd descriptor;
+        uint32_t elapsed = kui_ticks_ms() - start;
+        uint32_t remaining = elapsed < timeout_ms ?
+                             timeout_ms - elapsed : 0;
+        int ready;
         int count;
 
-        if (kui_fd_status(fd, &status) < 0)
+        descriptor.fd = fd;
+        descriptor.events = POLLIN;
+        descriptor.revents = 0;
+        ready = poll(&descriptor, 1, (int)remaining);
+        if (ready <= 0 ||
+            (descriptor.revents & (POLLERR | POLLNVAL)) != 0)
             return -1;
-        if (status.readable == 0) {
-            if (status.hung_up || kui_ticks_ms() - start >= timeout_ms)
-                return -1;
-            kui_sleep_ms(1);
-            continue;
-        }
-        remaining = bytes - total;
-        chunk = status.readable < remaining ? status.readable : remaining;
-        count = read(fd, (char *)buffer + total, chunk);
+        if ((descriptor.revents & POLLIN) == 0)
+            return -1;
+        count = read(fd, (char *)buffer + total, bytes - total);
         if (count <= 0)
             return -1;
         total += (uint32_t)count;

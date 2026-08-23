@@ -46,6 +46,7 @@ nushell
 oomtest
 paint
 pipetest
+polltest
 parallel-writer-a
 parallel-writer-b
 rdwr

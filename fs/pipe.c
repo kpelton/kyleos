@@ -26,6 +26,8 @@ int pipe_read(struct pipe_data *pipe, void *buf, int count)
             release_spinlock(&pipe->lock);
             if (wake_writers)
                 sched_wakeup(&pipe->write_wait);
+            if (copied > 0)
+                sched_io_notify();
             return copied;
         }
         pipe->read_wait = 1;
@@ -60,6 +62,8 @@ int pipe_write(struct pipe_data *pipe, const void *buf, int count)
         release_spinlock(&pipe->lock);
         if (copied > before)
             sched_wakeup(&pipe->read_wait);
+        if (copied > before)
+            sched_io_notify();
         if (copied < count)
             sched_sleep_on_if(&pipe->write_wait, &pipe->write_wait);
     }
@@ -95,6 +99,7 @@ void pipe_close(struct pipe_data *pipe, bool writer)
         sched_wakeup(&pipe->read_wait);
     if (wake_writers)
         sched_wakeup(&pipe->write_wait);
+    sched_io_notify();
     if (free_pipe)
         kfree(pipe);
 }

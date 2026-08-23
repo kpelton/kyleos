@@ -1,16 +1,16 @@
-#include <fcntl.h>
+#include <poll.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-#ifdef KYLEOS_HOST
-#include <poll.h>
-#endif
-
 #include "extras/kui/kui.h"
 #include "extras/kui/kui_client.h"
 #include "extras/terminal/terminal_ipc.h"
+
+#ifndef TERMINAL_SHELL_PATH
+#define TERMINAL_SHELL_PATH "/bin/nushell"
+#endif
 
 struct terminal_state {
     char path[TERMINAL_PATH_MAX];
@@ -19,6 +19,7 @@ struct terminal_state {
     char command[TERMINAL_COMMAND_MAX];
     int command_length;
     int child_pid;
+    int input_fd;
     int output_fd;
     int scroll_from_bottom;
     struct kui_scrollbar_state scrollbar;
@@ -87,22 +88,47 @@ static int launch_action(const char *command)
     return TERMINAL_ACTION_NONE;
 }
 
+static int command_needs_shell(const char *command)
+{
+    static const char *builtins[] = { "exit", "if", "repeat", "sleep" };
+    const char *start = command;
+    size_t length;
+
+    if (strpbrk(command, "*?<>|&") != NULL || strstr(command, "$?") != NULL)
+        return 1;
+    while (*start == ' ' || *start == '\t') start++;
+    length = strcspn(start, " \t\n");
+    for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++)
+        if (strlen(builtins[i]) == length &&
+            strncmp(start, builtins[i], length) == 0)
+            return 1;
+    return 0;
+}
+
 static int execute(struct terminal_state *state)
 {
     char input[TERMINAL_COMMAND_MAX];
+    char shell_input[TERMINAL_COMMAND_MAX + 1];
     char display[TERMINAL_COMMAND_MAX + 4];
     char program[160];
     char *argv[16];
     char *cursor;
     int argc = 0;
+    int shell_input_length;
+    int command_pipe[2];
     int output_pipe[2];
     int child;
     int action;
+    int use_shell;
 
     if (state->child_pid > 0) return TERMINAL_ACTION_NONE;
 
     memcpy(input, state->command, state->command_length);
     input[state->command_length] = '\0';
+    memcpy(shell_input, input, state->command_length);
+    shell_input[state->command_length] = '\n';
+    shell_input[state->command_length + 1] = '\0';
+    shell_input_length = state->command_length + 1;
     snprintf(display, sizeof(display), "$ %s\n", input);
     append_text(state, display, -1);
     state->command_length = 0;
@@ -136,39 +162,68 @@ static int execute(struct terminal_state *state)
     }
     action = launch_action(argv[0]);
     if (action != TERMINAL_ACTION_NONE) return action;
-    if (strchr(argv[0], '/') != NULL) {
-        strncpy(program, argv[0], sizeof(program) - 1);
-        program[sizeof(program) - 1] = '\0';
-    } else {
-        snprintf(program, sizeof(program), "/bin/%s", argv[0]);
+    use_shell = command_needs_shell(shell_input);
+    if (!use_shell) {
+        if (strchr(argv[0], '/') != NULL) {
+            strncpy(program, argv[0], sizeof(program) - 1);
+            program[sizeof(program) - 1] = '\0';
+        } else {
+            snprintf(program, sizeof(program), "/bin/%s", argv[0]);
+        }
+    }
+    if (pipe(command_pipe) < 0) {
+        append_text(state, "terminal: cannot create command pipe\n", -1);
+        return TERMINAL_ACTION_NONE;
     }
     if (pipe(output_pipe) < 0) {
+        close(command_pipe[0]);
+        close(command_pipe[1]);
         append_text(state, "terminal: cannot create output pipe\n", -1);
         return TERMINAL_ACTION_NONE;
     }
     child = fork();
     if (child == 0) {
-        int nullfd = open("/dev/null", O_RDONLY);
         char *environment[] = { "PATH=/bin:/usr/bin", NULL };
 
+        close(command_pipe[1]);
         close(output_pipe[0]);
-        if (nullfd >= 0) { dup2(nullfd, 0); close(nullfd); }
+        dup2(command_pipe[0], 0);
+        close(command_pipe[0]);
         dup2(output_pipe[1], 1);
         dup2(output_pipe[1], 2);
         close(output_pipe[1]);
-        execve(program, argv, environment);
-        if (strchr(argv[0], '/') == NULL) {
-            snprintf(program, sizeof(program), "/usr/bin/%s", argv[0]);
+        if (use_shell) {
+            char *shell_argv[] = { "nushell", NULL };
+
+            execve(TERMINAL_SHELL_PATH, shell_argv, environment);
+            fprintf(stderr, "terminal: cannot start %s\n",
+                    TERMINAL_SHELL_PATH);
+        } else {
             execve(program, argv, environment);
+            if (strchr(argv[0], '/') == NULL) {
+                snprintf(program, sizeof(program), "/usr/bin/%s", argv[0]);
+                execve(program, argv, environment);
+            }
+            fprintf(stderr, "%s: command not found\n", argv[0]);
         }
-        fprintf(stderr, "%s: command not found\n", argv[0]);
         _exit(127);
     }
+    close(command_pipe[0]);
     close(output_pipe[1]);
     if (child < 0) {
+        close(command_pipe[1]);
         close(output_pipe[0]);
         append_text(state, "terminal: fork failed\n", -1);
         return TERMINAL_ACTION_NONE;
+    }
+    if (use_shell) {
+        if (write(command_pipe[1], shell_input, shell_input_length) !=
+            shell_input_length)
+            append_text(state, "terminal: cannot send command\n", -1);
+        close(command_pipe[1]);
+        state->input_fd = -1;
+    } else {
+        state->input_fd = command_pipe[1];
     }
     state->child_pid = child;
     state->output_fd = output_pipe[0];
@@ -178,27 +233,20 @@ static int execute(struct terminal_state *state)
 static void drain_child_output(struct terminal_state *state)
 {
     char buffer[512];
-    struct kyleos_fd_status status;
 
     if (state->output_fd < 0) return;
     for (;;) {
-        int count;
-
-#ifdef KYLEOS_HOST
         struct pollfd descriptor;
+        int count;
+        int ready;
 
         descriptor.fd = state->output_fd;
         descriptor.events = POLLIN;
         descriptor.revents = 0;
-        if (poll(&descriptor, 1, 0) < 0) break;
-        status.readable = (descriptor.revents & POLLIN) ? sizeof(buffer) : 0;
-#else
-        if (kui_fd_status(state->output_fd, &status) < 0) break;
-#endif
-        if (status.readable == 0) break;
-        count = read(state->output_fd, buffer,
-                     status.readable < sizeof(buffer) ?
-                     (int)status.readable : (int)sizeof(buffer));
+        ready = poll(&descriptor, 1, 0);
+        if (ready <= 0 || (descriptor.revents & POLLIN) == 0)
+            break;
+        count = read(state->output_fd, buffer, sizeof(buffer));
         if (count <= 0) return;
         append_text(state, buffer, count);
     }
@@ -215,13 +263,37 @@ static void poll_child(struct terminal_state *state)
     if (result == 0) return;
     drain_child_output(state);
     if (state->output_fd >= 0) close(state->output_fd);
+    if (state->input_fd >= 0) close(state->input_fd);
     state->output_fd = -1;
+    state->input_fd = -1;
     state->child_pid = 0;
+    state->command_length = 0;
+    state->command[0] = '\0';
     if (result < 0)
         append_text(state, "terminal: wait failed\n", -1);
     if (state->terminal_length > 0 &&
         state->terminal[state->terminal_length - 1] != '\n')
         append_text(state, "\n", 1);
+}
+
+static void submit_child_input(struct terminal_state *state)
+{
+    char line[TERMINAL_COMMAND_MAX + 1];
+    int length = state->command_length;
+
+    if (state->input_fd < 0) return;
+    memcpy(line, state->command, length);
+    line[length++] = '\n';
+    if (write(state->input_fd, line, length) != length) {
+        append_text(state, "terminal: cannot send input\n", -1);
+        close(state->input_fd);
+        state->input_fd = -1;
+    } else {
+        append_text(state, state->command, state->command_length);
+        append_text(state, "\n", 1);
+    }
+    state->command_length = 0;
+    state->command[0] = '\0';
 }
 
 static int terminal_rows(const char *text, int length, int columns)
@@ -246,6 +318,9 @@ static int terminal_view_text(const struct terminal_state *state,
     if (state->child_pid <= 0) {
         visible[length++] = '$';
         visible[length++] = ' ';
+        memcpy(visible + length, state->command, state->command_length);
+        length += state->command_length;
+    } else if (state->input_fd >= 0) {
         memcpy(visible + length, state->command, state->command_length);
         length += state->command_length;
     }
@@ -302,7 +377,8 @@ static void terminal_render(struct kui_client *client,
                                0x0000ff80U, KUI_BLACK, 0);
         if (++column >= columns) { row++; column = 0; }
     }
-    if (state->child_pid <= 0 && row >= first_row && row < first_row + rows)
+    if ((state->child_pid <= 0 || state->input_fd >= 0) &&
+        row >= first_row && row < first_row + rows)
         kui_fill_rect(&client->surface, 7 + column * 8,
                       4 + (row - first_row) * 16, 2, 16, 0x0000ff80U);
     kui_draw_vscrollbar(&client->surface,
@@ -330,6 +406,7 @@ int main(void)
     char copy_buffer[KUI_PROTOCOL_CLIPBOARD_MAX];
 
     memset(&state, 0, sizeof(state));
+    state.input_fd = -1;
     state.output_fd = -1;
     strcpy(state.path, "/");
     append_text(&state,
@@ -359,6 +436,7 @@ int main(void)
         }
         if (event.type == KUI_EVENT_INIT) {
             memset(&state, 0, sizeof(state));
+            state.input_fd = -1;
             state.output_fd = -1;
             strcpy(state.path, "/");
             append_text(&state,
@@ -413,14 +491,26 @@ int main(void)
             state.terminal_length = 0;
             state.terminal[0] = '\0';
         } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
-                   state.child_pid <= 0) {
+                   (event.modifiers & KUI_MOD_CTRL) &&
+                   !event.key_extended && event.key_code == 32 &&
+                   state.child_pid > 0 && state.input_fd >= 0) {
+            close(state.input_fd);
+            state.input_fd = -1;
+            state.command_length = 0;
+            state.command[0] = '\0';
+        } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
+                   (state.child_pid <= 0 || state.input_fd >= 0)) {
             char key = event.character;
             if (!event.key_extended && event.key_code == 14) key = '\b';
             if (!event.key_extended && event.key_code == 28) key = '\n';
             if (key == '\b' && state.command_length > 0)
                 state.command[--state.command_length] = '\0';
-            else if (key == '\n')
-                action = execute(&state);
+            else if (key == '\n') {
+                if (state.child_pid > 0)
+                    submit_child_input(&state);
+                else
+                    action = execute(&state);
+            }
             else if (key >= 32 && key < 127 &&
                      state.command_length < TERMINAL_COMMAND_MAX - 1) {
                 state.command[state.command_length++] = key;
@@ -461,6 +551,7 @@ int main(void)
         }
         if (kui_client_send(&client) < 0) break;
     }
+    if (state.input_fd >= 0) close(state.input_fd);
     if (state.output_fd >= 0) close(state.output_fd);
     kui_client_free(&client);
     return 0;

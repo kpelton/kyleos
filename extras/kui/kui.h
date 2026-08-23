@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#include "include/uapi/fd.h"
 #include "extras/kui/kui_protocol.h"
 
 #define KUI_SCREEN_WIDTH 1280
@@ -62,7 +61,6 @@ int kui_read_all(int fd, void *buffer, uint32_t bytes);
 int kui_read_all_timeout(int fd, void *buffer, uint32_t bytes,
                          uint32_t timeout_ms);
 int kui_write_all(int fd, const void *buffer, uint32_t bytes);
-int kui_fd_status(int fd, struct kyleos_fd_status *status);
 
 int kui_present(const struct kui_surface *surface);
 int kui_present_rect(const struct kui_surface *surface,

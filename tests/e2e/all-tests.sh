@@ -79,8 +79,8 @@ while (( SECONDS < deadline )); do
     if grep -Fq "ALL-TESTS-FAILED" "$log"; then
         fail "the in-image runner reported a failure"
     fi
-    if grep -Fq "ALL-TESTS-COMPLETE count=9" "$log"; then
-        marker_count=$(grep -Fc "ALL-TESTS-COMPLETE count=9" "$log")
+    if grep -Fq "ALL-TESTS-COMPLETE count=10" "$log"; then
+        marker_count=$(grep -Fc "ALL-TESTS-COMPLETE count=10" "$log")
         [[ $marker_count -eq 1 ]] || fail "completion marker appeared $marker_count times"
         echo "QEMU test suite passed; serial log: $log"
         exit 0

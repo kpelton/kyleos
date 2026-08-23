@@ -28,6 +28,7 @@ static const struct program_test program_tests[] = {
     { "kmsg", TEST_PATH("/bin/kmsgtest"), 0 },
     { "wait", TEST_PATH("/bin/waittest"), 0 },
     { "pipe", TEST_PATH("/bin/pipetest"), 0 },
+    { "poll", TEST_PATH("/bin/polltest"), 0 },
     { "demand", TEST_PATH("/bin/demandtest"), 0 },
     { "gp", TEST_PATH("/bin/gpfault"), 139 },
     { "oom", TEST_PATH("/bin/oomtest"), 139 },
@@ -199,7 +200,7 @@ int main(int argc, char **argv)
         return run_named_test(argv[1]);
     if (argc != 1) {
         fprintf(stderr,
-                "Usage: alltest [fs|copy|kmsg|wait|pipe|demand|gp|oom|exec]\n");
+                "Usage: alltest [fs|copy|kmsg|wait|pipe|poll|demand|gp|oom|exec]\n");
         return 2;
     }
 

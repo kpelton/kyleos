@@ -3,6 +3,7 @@
 #include <mm/paging.h>
 #include <mm/pmem.h>
 #include <mm/mm.h>
+#include <timer/pit.h>
 #define START_USER_FD 3
 
 int user_process_open_fd(struct ktask *t, struct inode *iptr, uint32_t flags)
@@ -75,6 +76,68 @@ int user_process_fd_status(struct ktask *t, int fd, uint32_t *readable,
         t->open_fds[fd] == NULL)
         return -1;
     return vfs_file_status(t->open_fds[fd], readable, writable, hung_up);
+}
+
+static int user_process_poll_scan(struct ktask *task,
+                                  struct kyleos_pollfd *fds,
+                                  uint32_t count)
+{
+    int ready = 0;
+
+    for (uint32_t index = 0; index < count; index++) {
+        int fd = fds[index].fd;
+        int16_t events = fds[index].events & KYLEOS_POLL_REQUEST_MASK;
+
+        fds[index].revents = 0;
+        if (fd < 0)
+            continue;
+        if (fd >= MAX_TASK_OPEN_FILES || task->open_fds[fd] == NULL) {
+            fds[index].revents = KYLEOS_POLLNVAL;
+        } else if (vfs_file_poll(task->open_fds[fd], events,
+                                &fds[index].revents) < 0) {
+            fds[index].revents = KYLEOS_POLLERR;
+        }
+        fds[index].revents &= KYLEOS_POLL_RESULT_MASK;
+        if (fds[index].revents != 0)
+            ready++;
+    }
+    return ready;
+}
+
+int user_process_poll(struct ktask *task, struct kyleos_pollfd *fds,
+                      uint32_t count, int timeout_ms)
+{
+    uint32_t start;
+    uint32_t timeout_ticks = 0;
+    uint32_t tick_ms = (uint32_t)(1000 / TICK_HZ);
+
+    if (task == NULL || (fds == NULL && count != 0) ||
+        count > KYLEOS_POLL_MAX_FDS || timeout_ms < -1)
+        return -1;
+    if (tick_ms == 0) tick_ms = 1;
+    start = read_jiffies();
+    if (timeout_ms > 0)
+        timeout_ticks = ((uint32_t)timeout_ms + tick_ms - 1) / tick_ms;
+
+    for (;;) {
+        uint32_t generation = sched_io_snapshot();
+        int ready = user_process_poll_scan(task, fds, count);
+        int wait_ms = -1;
+
+        if (ready != 0 || timeout_ms == 0)
+            return ready;
+        if (timeout_ms > 0) {
+            uint32_t elapsed = read_jiffies() - start;
+            uint32_t remaining_ticks;
+
+            if (elapsed >= timeout_ticks)
+                return 0;
+            remaining_ticks = timeout_ticks - elapsed;
+            wait_ms = (int)(remaining_ticks * tick_ms);
+            if (wait_ms <= 0) wait_ms = 1;
+        }
+        sched_io_wait(generation, wait_ms);
+    }
 }
 
 int user_process_pipe(struct ktask *t, int pipefd[2])
