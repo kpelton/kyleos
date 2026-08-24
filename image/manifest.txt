@@ -24,6 +24,7 @@ notes
 writer
 finder
 flappy
+fps
 kylekart
 fstest
 gpfault

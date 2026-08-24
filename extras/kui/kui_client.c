@@ -88,14 +88,21 @@ void kui_client_set_no_display(struct kui_client *client)
     kui_command_buffer_reset(&client->display);
 }
 
-int kui_client_send(struct kui_client *client)
+int kui_client_send_fd(struct kui_client *client, int output_fd)
 {
     if (client->display.failed) return -1;
     client->response.display_bytes = client->display.length;
-    if (kui_write_all(1, &client->response, sizeof(client->response)) < 0)
+    if (kui_write_all(output_fd, &client->response,
+                      sizeof(client->response)) < 0)
         return -1;
     if (client->display.length != 0 &&
-        kui_write_all(1, client->display.data, client->display.length) < 0)
+        kui_write_all(output_fd, client->display.data,
+                      client->display.length) < 0)
         return -1;
     return 0;
+}
+
+int kui_client_send(struct kui_client *client)
+{
+    return kui_client_send_fd(client, 1);
 }

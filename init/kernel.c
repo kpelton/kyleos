@@ -3,6 +3,7 @@
 #include <output/mouse.h>
 #include <init/tables.h>
 #include <block/ata.h>
+#include <drivers/pci.h>
 #include <irq/irq.h>
 #include <mm/paging.h>
 #include <mm/mm.h>
@@ -84,6 +85,7 @@ static void kinit(uint64_t mb_info)
     klog("Phys mem init done\n");
     paging_enable_protected();
     mm_init();
+    pci_init();
     framebuffer_init(mb_info);
     klog("Allocating stack\n");
     uint64_t kernel_stack = KERN_PHYS_TO_VIRT(pmem_alloc_block(STACK_PAGES));

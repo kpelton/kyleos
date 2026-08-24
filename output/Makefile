@@ -21,6 +21,9 @@ input.o:  input.c input.h
 mouse.o: mouse.c mouse.h
 	$(CC) $(CFLAGS) -o $@ -c mouse.c
 
+framebuffer.o: framebuffer.c framebuffer.h ../drivers/pci.h
+	$(CC) $(CFLAGS) -o $@ -c framebuffer.c
+
 
 clean:
 	rm -rfv *.o

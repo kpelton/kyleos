@@ -19,9 +19,11 @@ stage_dir=${USERLAND_STAGE:-"$root/build/userland"}
 seed_dir="$root/image/rootfs"
 
 doom_binary=${DOOM_BINARY:-"$root/build/extras/doom/doom"}
+doom_aqua_binary=${DOOM_AQUA_BINARY:-"$root/build/extras/doom-aqua/doom-aqua"}
 doom_wad=${DOOM_WAD:-"$root/assets/doom.wad"}
 
 quake_binary=${QUAKE_BINARY:-"$root/build/extras/quake/quake"}
+quake_aqua_binary=${QUAKE_AQUA_BINARY:-"$root/build/extras/quake-aqua/quake-aqua"}
 quake_data_dir=${QUAKE_DATA_DIR:-"$root/assets/quake/id1"}
 
 duke3d_binary=${DUKE3D_BINARY:-"$root/build/extras/duke3d/duke3d"}
@@ -294,12 +296,20 @@ fi
 # Doom
 # ----------------------------------------------------------------------
 
-if [[ -f $doom_binary ]]; then
+if [[ -f $doom_binary || -f $doom_aqua_binary ]]; then
     mkdir -p \
         "$mount_dir/usr/bin" \
-        "$mount_dir/usr/share/doom"
+        "$mount_dir/usr/share/doom" \
+        "$mount_dir/usr/share/applications"
 
-    cp "$doom_binary" "$mount_dir/usr/bin/doom"
+    if [[ -f $doom_binary ]]; then
+        cp "$doom_binary" "$mount_dir/usr/bin/doom"
+    fi
+    if [[ -f $doom_aqua_binary ]]; then
+        cp "$doom_aqua_binary" "$mount_dir/usr/bin/doom-aqua"
+        cp "$root/extras/doom-aqua/doom-aqua.app" \
+            "$mount_dir/usr/share/applications/doom-aqua.app"
+    fi
 
     if [[ -f $doom_wad ]]; then
         cp \
@@ -334,12 +344,19 @@ fi
 # Quake
 # ----------------------------------------------------------------------
 
-if [[ -f $quake_binary ]]; then
+if [[ -f $quake_binary || -f $quake_aqua_binary ]]; then
     mkdir -p \
         "$mount_dir/usr/bin" \
         "$mount_dir/usr/share/quake/id1"
 
-    cp "$quake_binary" "$mount_dir/usr/bin/quake"
+    if [[ -f $quake_binary ]]; then
+        cp "$quake_binary" "$mount_dir/usr/bin/quake"
+    fi
+    if [[ -f $quake_aqua_binary ]]; then
+        cp "$quake_aqua_binary" "$mount_dir/usr/bin/quake-aqua"
+        cp "$root/extras/quake-aqua/quake-aqua.app" \
+            "$mount_dir/usr/share/applications/quake-aqua.app"
+    fi
 
     quake_paks=0
     for pak in \

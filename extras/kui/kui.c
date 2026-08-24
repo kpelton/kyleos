@@ -178,6 +178,11 @@ int kui_read_all_timeout(int fd, void *buffer, uint32_t bytes,
         if (count <= 0)
             return -1;
         total += (uint32_t)count;
+        /* Treat timeout_ms as an inactivity timeout.  Display command
+         * streams can be much larger than the kernel pipe buffer, so a
+         * healthy writer may need several scheduler turns to deliver one
+         * response.  Continuing progress must not expire the transfer. */
+        start = kui_ticks_ms();
     }
     return 0;
 }
@@ -401,6 +406,48 @@ static void kui_record_bitmap_region_row(struct kui_surface *surface,
     memcpy(command + 1, pixels, pixel_bytes);
 }
 
+static void kui_record_indexed_bitmap(struct kui_surface *surface,
+                                      const uint8_t *pixels,
+                                      const uint32_t *palette,
+                                      int source_width, int source_height,
+                                      int x, int y, int width, int height)
+{
+    struct kui_display_command *command;
+    uint32_t pixel_bytes;
+    uint32_t palette_bytes = 256U * sizeof(uint32_t);
+    uint32_t bytes;
+
+    if (surface == NULL || surface->commands == NULL || pixels == NULL ||
+        palette == NULL || source_width <= 0 || source_height <= 0 ||
+        width <= 0 || height <= 0 || source_width > 4096 ||
+        source_height > 2160) {
+        if (surface != NULL && surface->commands != NULL)
+            surface->commands->failed = 1;
+        return;
+    }
+    if ((uint32_t)source_width > (0xffffU - sizeof(*command) -
+        palette_bytes) / (uint32_t)source_height) {
+        surface->commands->failed = 1;
+        return;
+    }
+    pixel_bytes = (uint32_t)source_width * (uint32_t)source_height;
+    bytes = sizeof(*command) + palette_bytes + pixel_bytes;
+    command = kui_command_append(surface->commands, bytes);
+    if (command == NULL) return;
+    command->type = KUI_DISPLAY_INDEXED_BITMAP;
+    command->size = (uint16_t)bytes;
+    command->x0 = x;
+    command->y0 = y;
+    command->x1 = width;
+    command->y1 = height;
+    command->foreground = (uint32_t)source_width;
+    command->background = (uint32_t)source_height;
+    command->flags = 0;
+    memcpy(command + 1, palette, palette_bytes);
+    memcpy((unsigned char *)(command + 1) + palette_bytes,
+           pixels, pixel_bytes);
+}
+
 int kui_display_replay(struct kui_surface *surface,
                        const void *commands, uint32_t bytes)
 {
@@ -515,6 +562,55 @@ int kui_display_replay(struct kui_surface *surface,
                     else
                         destination[destination_x] =
                             source[source_x] & 0x00ffffffU;
+                }
+            }
+        } else if (command->type == KUI_DISPLAY_INDEXED_BITMAP) {
+            uint32_t source_width = command->foreground;
+            uint32_t source_height = command->background;
+            uint32_t palette_bytes = 256U * sizeof(uint32_t);
+            uint32_t expected_size;
+            const uint32_t *palette =
+                (const uint32_t *)(command + 1);
+            const uint8_t *source =
+                (const uint8_t *)(command + 1) + palette_bytes;
+            int top;
+            int bottom;
+            int left;
+            int right;
+
+            if (source_width == 0 || source_width > 4096 ||
+                source_height == 0 || source_height > 2160 ||
+                source_width > (0xffffU - sizeof(*command) -
+                    palette_bytes) / source_height ||
+                command->x0 < -8192 || command->x0 > 8192 ||
+                command->y0 < -8192 || command->y0 > 8192 ||
+                command->x1 <= 0 || command->x1 > 8192 ||
+                command->y1 <= 0 || command->y1 > 8192 ||
+                command->flags != 0)
+                return -1;
+            expected_size = sizeof(*command) + palette_bytes +
+                            source_width * source_height;
+            if (command->size != expected_size) return -1;
+            left = command->x0 < 0 ? 0 : command->x0;
+            top = command->y0 < 0 ? 0 : command->y0;
+            right = command->x0 + command->x1;
+            bottom = command->y0 + command->y1;
+            if (right > surface->width) right = surface->width;
+            if (bottom > surface->height) bottom = surface->height;
+            for (int destination_y = top; destination_y < bottom;
+                 destination_y++) {
+                uint32_t *destination = surface->pixels +
+                    destination_y * surface->stride;
+                int source_y = (destination_y - command->y0) *
+                               (int)source_height / command->y1;
+
+                for (int destination_x = left;
+                     destination_x < right; destination_x++) {
+                    int source_x = (destination_x - command->x0) *
+                                   (int)source_width / command->x1;
+                    destination[destination_x] = palette[
+                        source[source_y * source_width + source_x]] &
+                        0x00ffffffU;
                 }
             }
         } else if (command->type == KUI_DISPLAY_BITMAP_REGION_ROW) {
@@ -1282,6 +1378,44 @@ void kui_draw_bitmap_scaled(struct kui_surface *surface,
         kui_record_bitmap_row(surface, pixels + row * source_width,
                               source_width, source_height, row,
                               x, y, width, height);
+}
+
+void kui_draw_indexed_bitmap_scaled(struct kui_surface *surface,
+                                    const uint8_t *pixels,
+                                    const uint32_t *palette,
+                                    int source_width, int source_height,
+                                    int x, int y, int width, int height)
+{
+    int top;
+    int bottom;
+    int left;
+    int right;
+
+    if (surface == NULL || pixels == NULL || palette == NULL ||
+        source_width <= 0 || source_height <= 0 || width <= 0 || height <= 0)
+        return;
+    if (surface->commands != NULL) {
+        kui_record_indexed_bitmap(surface, pixels, palette,
+                                  source_width, source_height,
+                                  x, y, width, height);
+        return;
+    }
+    left = x < 0 ? 0 : x;
+    top = y < 0 ? 0 : y;
+    right = x + width > surface->width ? surface->width : x + width;
+    bottom = y + height > surface->height ? surface->height : y + height;
+    for (int destination_y = top; destination_y < bottom; destination_y++) {
+        int source_y = (destination_y - y) * source_height / height;
+        uint32_t *destination = surface->pixels +
+            destination_y * surface->stride;
+
+        for (int destination_x = left; destination_x < right;
+             destination_x++) {
+            int source_x = (destination_x - x) * source_width / width;
+            destination[destination_x] = palette[
+                pixels[source_y * source_width + source_x]] & 0x00ffffffU;
+        }
+    }
 }
 
 void kui_draw_bitmap_region_scaled(struct kui_surface *surface,

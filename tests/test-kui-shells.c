@@ -245,20 +245,30 @@ static int run_shell(const char *path, int aqua)
     request.ticks_ms = 3720000;
     strcpy(request.active_application, "Finder");
     request.app_count = aqua ? 9 : 2;
-    request.menu_app_count = request.app_count;
+    request.menu_app_count = aqua ? 26 : request.app_count;
     request.window_count = 1;
-    strcpy(request.apps[0].title, "Finder");
-    strcpy(request.apps[1].title, "Paint");
     strcpy(request.windows[0].title, "Documents");
-    strcpy(request.apps[0].icon_path,
-           "image/rootfs/usr/share/gui/editor.kimg");
-    strcpy(request.apps[1].icon_path,
-           "image/rootfs/usr/share/gui/editor.kimg");
-    for (int app = 2; app < request.app_count; app++) {
-        snprintf(request.apps[app].title,
-                 sizeof(request.apps[app].title), "App %d", app);
-        strcpy(request.apps[app].icon_path,
+    for (int app = 0; app < request.menu_app_count; app++) {
+        request.app_indices[app] = (uint8_t)app;
+        if (app == 0)
+            strcpy(request.menu_apps[app].title, "Finder");
+        else if (app == 1)
+            strcpy(request.menu_apps[app].title, "Paint");
+        else
+            snprintf(request.menu_apps[app].title,
+                     sizeof(request.menu_apps[app].title), "Menu App %d", app);
+        strcpy(request.menu_apps[app].icon_path,
                "image/rootfs/usr/share/gui/editor.kimg");
+    }
+    if (aqua) {
+        strcpy(request.menu_apps[request.menu_app_count - 2].title,
+               "Quake");
+        strcpy(request.menu_apps[request.menu_app_count - 2].icon_path,
+               "image/rootfs/usr/share/gui/quake-aqua.kimg");
+        strcpy(request.menu_apps[request.menu_app_count - 1].title,
+               "Doom");
+        strcpy(request.menu_apps[request.menu_app_count - 1].icon_path,
+               "image/rootfs/usr/share/gui/doom-aqua.kimg");
     }
     strcpy(request.windows[0].icon_path,
            "image/rootfs/usr/share/gui/editor.kimg");
@@ -275,16 +285,17 @@ static int run_shell(const char *path, int aqua)
         failures += pixels[2 * 800 + 400] == pixels[3 * 800 + 400];
         failures += pixels[dock_y * 800 + 400] == 0;
         failures += pixels[(dock_y + 30) * 800 + 400] == 0;
+        request.x = dock_x + 10 + 29;
+        request.y = dock_y + 30;
         for (int redraw = 0; redraw < 24; redraw++) {
             request.serial++;
+            request.ticks_ms += 16;
             failures += exchange(to_shell[1], from_shell[0], &request,
                                  &response, &surface) < 0;
             failures += response.display_bytes == 0;
         }
         memset(pixels, 0, 800U * 600U * sizeof(*pixels));
         request.serial++;
-        request.x = dock_x + 10 + 29;
-        request.y = dock_y + 30;
         failures += exchange(to_shell[1], from_shell[0], &request,
                              &response, &surface) < 0;
         for (int y = dock_y - 18; y < dock_y; y++)
@@ -308,11 +319,24 @@ static int run_shell(const char *path, int aqua)
         request.serial++;
         request.type = KUI_SHELL_POINTER;
         request.x = 20;
+        request.y = 62;
+        failures += exchange(to_shell[1], from_shell[0], &request,
+                             &response, NULL) < 0;
+        failures += !response.consumed ||
+                    response.action != KUI_SHELL_ACTION_NONE;
+        request.serial++;
+        request.type = KUI_SHELL_RENDER;
+        failures += exchange(to_shell[1], from_shell[0], &request,
+                             &response, &surface) < 0;
+        failures += response.display_bytes == 0;
+        request.serial++;
+        request.type = KUI_SHELL_POINTER;
+        request.x = 280;
         request.y = 36;
         failures += exchange(to_shell[1], from_shell[0], &request,
                              &response, NULL) < 0;
-        failures += response.action != KUI_SHELL_ACTION_OPEN_APP ||
-                    response.index != 0;
+        failures += response.action != KUI_SHELL_ACTION_OPEN_MENU_APP ||
+                    response.index != request.menu_app_count - 2;
     } else {
         int height = 12 + (request.app_count + 2) * 26;
 
@@ -342,6 +366,9 @@ static int run_shell(const char *path, int aqua)
     waitpid(child, &status, 0);
     failures += !WIFEXITED(status) || WEXITSTATUS(status) != 0;
     free(pixels);
+    if (failures != 0)
+        fprintf(stderr, "%s shell: %d failed check(s)\n",
+                aqua ? "Aqua" : "Win95", failures);
     return failures != 0;
 }
 

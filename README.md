@@ -69,8 +69,8 @@ See the [GUI architecture guide](docs/gui-architecture.html),
 
 Finder, Notes, Writer, Text Editor, C IDE, Terminal, KSheet spreadsheet,
 Paint, Control Center, Help, Calculator, System Monitor, Minesweeper,
-Solitaire, Tetris, City Builder, Parallel Writers, and the Aqua/Win95 shell
-demos.
+Solitaire, Tetris, KyleFPS, KyleKart, Flappy Bird, City Builder, Parallel
+Writers, and the Aqua/Win95 shell demos.
 
 ### Optional extras
 
@@ -113,9 +113,11 @@ are built and installed by their respective image targets.
   `tail`, `mv`, `ed`, `kedit`, and more.
 - Incrementally rendered ASCII Breakout at `/bin/breakout` (`a`/`d` move,
   `q` quits), with input/render timing independent from ball movement.
-- DoomGeneric as an optional extra, installed at `/usr/bin/doom`.
-- Original Quake's C software renderer as an optional silent, keyboard-only
-  extra, installed at `/usr/bin/quake`.
+- DoomGeneric as optional fullscreen (`/usr/bin/doom`) and separate Aqua
+  windowed (`/usr/bin/doom-aqua`) extras.
+- Original Quake's C software renderer as optional silent fullscreen
+  (`/usr/bin/quake`) and separate keyboard-and-mouse Aqua windowed
+  (`/usr/bin/quake-aqua`) extras.
 - Chocolate Duke3D's Build software renderer as an optional silent,
   keyboard-only extra, installed at `/usr/bin/duke3d`.
 - Lua 5.4.4 as an optional Newlib-built extra, installed at `/usr/bin/lua`.
@@ -298,19 +300,26 @@ building Doom does not dirty the submodule.
 ```bash
 make doom
 DOOM_WAD=/path/to/doom.wad make doom-image
+make doom-aqua
+DOOM_WAD=/path/to/doom.wad make doom-aqua-image
 make test
 ```
 
-If `DOOM_WAD` is omitted, `doom-image` looks for `assets/doom.wad`.  The image
-builder installs the selected file as `/usr/share/doom/doom.wad`; Doom will
-start without it but will stop with an `IWAD file ... not found` message.
+If `DOOM_WAD` is omitted, the Make targets use `~/Downloads/DOOM.WAD`. The
+image builder installs the selected file as `/usr/share/doom/doom.wad`; Doom
+will start without it but will stop with an `IWAD file ... not found` message.
+The `doom-aqua` target builds an independent 320x200 KUI client that scales
+inside a normal Aqua window. It does not replace the original fullscreen
+`doom` binary or backend.
 
 ## Quake extra
 
 The original GPL Quake engine is pinned as the `extras/quake` submodule. The
 KyleOS port uses the portable C software renderer at 320x200, scaled to a
-640x400 presentation surface on the 1280x720 framebuffer. Sound, mouse input, and external networking are disabled
-for the first port; single-player and loopback games use the keyboard.
+640x400 presentation surface on the 1280x720 framebuffer. The original
+fullscreen binary remains keyboard-only. The separate Aqua build runs in a
+normal resizable window and accepts KUI keyboard, mouse-look, and mouse-button
+events. Sound and external networking remain disabled.
 
 Place legally obtained Quake data in an `id1` directory containing at least
 `pak0.pak`, then build and recreate the image:
@@ -318,8 +327,16 @@ Place legally obtained Quake data in an `id1` directory containing at least
 ```bash
 make quake
 QUAKE_DATA_DIR=/path/to/id1 make quake-image
+make quake-aqua
+QUAKE_DATA_DIR=/path/to/id1 make quake-aqua-image
+make test-quake-aqua
 make test
 ```
+
+The Aqua backend transports the native 320x200 indexed framebuffer and its
+256-color palette as one 65,056-byte KUI command, instead of expanding each
+frame to a 256 KB RGBA stream. Runtime output is written to
+`/tmp/quake-aqua.log`.
 
 For a one-command setup using the freely distributable Quake 1.06 shareware
 episode, install an LHA extractor (`sudo apt install lhasa` on Debian/Ubuntu)

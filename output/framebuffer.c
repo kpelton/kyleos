@@ -5,6 +5,7 @@
 #include <output/vga.h>
 #include <include/multiboot.h>
 #include <mm/mtrr.h>
+#include <drivers/pci.h>
 
 /* QEMU's std VGA exposes the Bochs VBE extension on these ports. */
 #define BGA_INDEX_PORT  0x1ce
@@ -16,10 +17,6 @@
 #define BGA_ENABLE      4
 #define BGA_ENABLE_ON   0x01
 #define BGA_ENABLE_LFB  0x40
-
-#define PCI_CONFIG_ADDR 0xcf8
-#define PCI_CONFIG_DATA 0xcfc
-#define PCI_CLASS_VGA   0x0300
 
 static uint8_t *framebuffer;
 static uint32_t fb_width;
@@ -39,31 +36,41 @@ static void bga_write(uint16_t index, uint16_t value)
     outw(BGA_DATA_PORT, value);
 }
 
-static uint32_t pci_read32(uint8_t bus, uint8_t slot, uint8_t function,
-                           uint8_t offset)
+static const struct pci_device *framebuffer_pci_owner(uint64_t phys)
 {
-    uint32_t address = 0x80000000U | ((uint32_t)bus << 16) |
-                       ((uint32_t)slot << 11) | ((uint32_t)function << 8) |
-                       (offset & 0xfc);
-    outl(PCI_CONFIG_ADDR, address);
-    return inl(PCI_CONFIG_DATA);
+    uint32_t display_index = 0;
+    const struct pci_device *display;
+
+    while ((display = pci_find_class(PCI_CLASS_DISPLAY,
+                                      PCI_SUBCLASS_VGA,
+                                      display_index++)) != NULL) {
+        for (uint8_t bar = 0; bar < 6; bar++) {
+            if (!pci_bar_is_memory(display, bar))
+                continue;
+            if (pci_bar_memory_base(display, bar) == phys)
+                return display;
+            if (pci_bar_is_64(display, bar))
+                bar++;
+        }
+    }
+    return NULL;
 }
 
-static uint32_t find_vga_framebuffer(void)
+static uint64_t find_bga_framebuffer(const struct pci_device **owner)
 {
-    for (uint8_t slot = 0; slot < 32; slot++) {
-        uint32_t id = pci_read32(0, slot, 0, 0);
-        uint32_t class_code;
-        uint32_t bar0;
+    uint32_t display_index = 0;
+    const struct pci_device *display;
 
-        if ((id & 0xffff) == 0xffff)
+    while ((display = pci_find_class(PCI_CLASS_DISPLAY,
+                                      PCI_SUBCLASS_VGA,
+                                      display_index++)) != NULL) {
+        uint64_t base = pci_bar_memory_base(display, 0);
+
+        if (base == 0)
             continue;
-        class_code = pci_read32(0, slot, 0, 8) >> 16;
-        if (class_code != PCI_CLASS_VGA)
-            continue;
-        bar0 = pci_read32(0, slot, 0, 0x10);
-        if ((bar0 & 1) == 0 && (bar0 & 0xfffffff0) != 0)
-            return bar0 & 0xfffffff0;
+        if (owner != NULL)
+            *owner = display;
+        return base;
     }
     return 0;
 }
@@ -110,27 +117,35 @@ void framebuffer_init(uint64_t mb_info)
 
     if (mb->flags & MULTIBOOT_INFO_FRAMEBUFFER_INFO) {
         uint64_t phys = mb->framebuffer_addr;
+        const struct pci_device *display = framebuffer_pci_owner(phys);
 
         fb_width  = mb->framebuffer_width;
         fb_height = mb->framebuffer_height;
         fb_pitch  = mb->framebuffer_pitch;
         fb_size   = fb_pitch * fb_height;
 
-        kprintf("GRUB framebuffer\n");
-        kprintf("addr=%x\n", phys);
-        kprintf("%dx%d bpp=%d pitch=%d\n",
-                fb_width,
-                fb_height,
-                mb->framebuffer_bpp,
-                fb_pitch);
+        klog("GRUB framebuffer\n");
+        klog("addr=%x\n", phys);
+        klog("%dx%d bpp=%d pitch=%d\n",
+             fb_width,
+             fb_height,
+             mb->framebuffer_bpp,
+             fb_pitch);
+
+        if (display != NULL)
+            klog("PCI display %d:%d.%d %x:%x owns framebuffer BAR\n",
+                 display->bus, display->slot, display->function,
+                 display->vendor_id, display->device_id);
+        else
+            klog("PCI: no display BAR matched framebuffer address\n");
 
         if (mb->framebuffer_bpp != 32) {
-            kprintf("unsupported framebuffer bpp\n");
+            klog("unsupported framebuffer bpp\n");
             return;
         }
         /* Write combining is important for the large streaming stores below. */
         if (!mtrr_set_write_combining(phys, fb_size))
-            kprintf("Framebuffer: unable to enable MTRR WC\n");
+            klog("Framebuffer: unable to enable MTRR WC\n");
 
         uint32_t pages =
             (fb_size + PAGE_SIZE - 1) / PAGE_SIZE;
@@ -145,16 +160,20 @@ void framebuffer_init(uint64_t mb_info)
         return;
     }
 
-    uint32_t phys_base;
+    uint64_t phys_base;
     uint32_t pages;
     uint16_t bga_id = bga_read(BGA_ID);
+    const struct pci_device *display = NULL;
 
     /* A compatible Bochs/QEMU adapter reports a B0C* identifier. */
     if ((bga_id & 0xfff0) != 0xb0c0)
         return;
-    phys_base = find_vga_framebuffer();
+    phys_base = find_bga_framebuffer(&display);
     if (phys_base == 0)
         return;
+
+    klog("BGA: using PCI display %d:%d.%d BAR0 at %x\n",
+         display->bus, display->slot, display->function, phys_base);
 
     bga_write(BGA_ENABLE, 0);
     bga_write(BGA_XRES, 1280);
@@ -167,13 +186,13 @@ void framebuffer_init(uint64_t mb_info)
     fb_pitch = fb_width * 4;
     fb_size = fb_pitch * fb_height;
     if (!mtrr_set_write_combining(phys_base, fb_size))
-        kprintf("Framebuffer: unable to enable MTRR WC\n");
+        klog("Framebuffer: unable to enable MTRR WC\n");
     pages = (fb_size + PAGE_SIZE - 1) / PAGE_SIZE;
     paging_map_physmap_range(phys_base, pages);
     framebuffer = (uint8_t *)KERN_PHYS_TO_PVIRT(phys_base);
     framebuffer_clear(0x00000000);
     vga_framebuffer_ready();
-    kprintf("Framebuffer %dx%dx32 at %x\n", fb_width, fb_height, phys_base);
+    klog("Framebuffer %dx%dx32 at %x\n", fb_width, fb_height, phys_base);
 }
 
 bool framebuffer_is_ready(void)

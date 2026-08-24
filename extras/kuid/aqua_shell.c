@@ -22,7 +22,9 @@ static int menu_is_game(const char *title)
 {
     return strstr(title, "Tetris") != NULL || strstr(title, "Mines") != NULL ||
            strstr(title, "Solitaire") != NULL || strstr(title, "Flappy") != NULL ||
-           strstr(title, "KyleKart") != NULL || strstr(title, "Duke") != NULL;
+           strstr(title, "KyleKart") != NULL || strstr(title, "KyleFPS") != NULL ||
+           strstr(title, "Duke") != NULL || strstr(title, "Doom") != NULL ||
+           strstr(title, "Quake") != NULL;
 }
 
 static int menu_category_count(const struct kui_shell_request *request, int game)
@@ -31,6 +33,21 @@ static int menu_category_count(const struct kui_shell_request *request, int game
     for (int i = 0; i < request->menu_app_count; i++)
         if (menu_is_game(request->menu_apps[i].title) == game) count++;
     return count;
+}
+
+static const struct kui_shell_app *dock_app(
+    const struct kui_shell_request *request, int rank)
+{
+    unsigned int app;
+
+    if (rank < 0 || rank >= request->app_count ||
+        rank >= KUI_SHELL_MAX_APPS)
+        return NULL;
+    app = request->app_indices[rank];
+    if (app >= (unsigned int)request->menu_app_count ||
+        app >= KUI_SHELL_MAX_APPS)
+        return NULL;
+    return &request->menu_apps[app];
 }
 
 struct cached_icon {
@@ -141,9 +158,12 @@ static int dock_app_count(const struct kui_shell_request *request)
 static int window_matches_app(const struct kui_shell_request *request,
                               int window, int app)
 {
+    const struct kui_shell_app *entry = dock_app(request, app);
+
     return request->windows[window].title[0] != '\0' &&
+           entry != NULL &&
            strcmp(request->windows[window].title,
-                  request->apps[app].title) == 0;
+                  entry->title) == 0;
 }
 
 static int extra_window(const struct kui_shell_request *request, int window)
@@ -264,13 +284,14 @@ static void render(struct kui_surface *surface,
     draw_menu_bar(surface, request, clock);
     draw_glass_dock(surface, dock_x, dock_y, dock_width);
     for (int rank = 0; rank < apps && rank < items; rank++) {
+        const struct kui_shell_app *entry = dock_app(request, rank);
         int x = dock_x + 10 + rank * DOCK_ITEM_STEP;
         int size = magnified_size(rank, hovered, DOCK_ICON_SIZE);
         int icon_x = x + 2 + (DOCK_ICON_SIZE - size) / 2;
         int icon_y = dock_y + 3 + DOCK_ICON_SIZE - size;
         int running_window = active_window_for_app(request, rank);
-        const struct kui_image *icon = cached_image(&app_icons[rank],
-            request->apps[rank].icon_path);
+        const struct kui_image *icon = entry != NULL ?
+            cached_image(&app_icons[rank], entry->icon_path) : NULL;
 
         if (icon != NULL)
             kui_blit_image_scaled(surface, icon, icon_x, icon_y, size, size);

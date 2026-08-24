@@ -128,6 +128,11 @@ void kui_draw_bitmap_scaled(struct kui_surface *surface,
                             const uint32_t *pixels,
                             int source_width, int source_height,
                             int x, int y, int width, int height);
+void kui_draw_indexed_bitmap_scaled(struct kui_surface *surface,
+                                    const uint8_t *pixels,
+                                    const uint32_t *palette,
+                                    int source_width, int source_height,
+                                    int x, int y, int width, int height);
 void kui_draw_bitmap_region_scaled(struct kui_surface *surface,
                                    const uint32_t *pixels,
                                    int source_width, int source_height,

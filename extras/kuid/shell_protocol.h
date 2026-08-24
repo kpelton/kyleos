@@ -6,9 +6,10 @@
 #include "extras/kui/kui_style.h"
 
 #define KUI_SHELL_MAGIC 0x314c4853U
-#define KUI_SHELL_VERSION 4U
-#define KUI_SHELL_MAX_APPS 24
+#define KUI_SHELL_VERSION 6U
+#define KUI_SHELL_MAX_APPS 32
 #define KUI_SHELL_MAX_WINDOWS 10
+#define KUI_SHELL_TITLE_MAX 32
 #define KUI_SHELL_ICON_PATH_MAX 40
 
 enum kui_shell_request_type {
@@ -33,8 +34,13 @@ struct kui_shell_profile {
     struct kui_style style;
 };
 
+struct kui_shell_app {
+    char title[KUI_SHELL_TITLE_MAX];
+    char icon_path[KUI_SHELL_ICON_PATH_MAX];
+};
+
 struct kui_shell_item {
-    char title[64];
+    char title[KUI_SHELL_TITLE_MAX];
     char icon_path[KUI_SHELL_ICON_PATH_MAX];
     uint32_t minimized;
     uint32_t active;
@@ -56,8 +62,8 @@ struct kui_shell_request {
     int menu_app_count;
     int window_count;
     char active_application[32];
-    struct kui_shell_item apps[KUI_SHELL_MAX_APPS];
-    struct kui_shell_item menu_apps[KUI_SHELL_MAX_APPS];
+    uint8_t app_indices[KUI_SHELL_MAX_APPS];
+    struct kui_shell_app menu_apps[KUI_SHELL_MAX_APPS];
     struct kui_shell_item windows[KUI_SHELL_MAX_WINDOWS];
 };
 

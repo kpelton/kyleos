@@ -24,5 +24,6 @@ void kui_client_set_damage(struct kui_client *client,
                            int x, int y, int width, int height);
 void kui_client_set_no_display(struct kui_client *client);
 int kui_client_send(struct kui_client *client);
+int kui_client_send_fd(struct kui_client *client, int output_fd);
 
 #endif

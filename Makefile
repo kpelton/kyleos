@@ -31,8 +31,10 @@ PROGS_SRC ?= $(KERNEL_ROOT)/userspace/programs
 NEWLIB_BUILD ?= $(KERNEL_ROOT)/toolchain/newlib-build
 SYSROOT ?= $(KERNEL_ROOT)/build/sysroot
 DOOM_BINARY ?= $(KERNEL_ROOT)/build/extras/doom/doom
-DOOM_WAD ?= /home/kyle/Downloads/DOOM.WAD
+DOOM_AQUA_BINARY ?= $(KERNEL_ROOT)/build/extras/doom-aqua/doom-aqua
+DOOM_WAD ?= $(HOME)/Downloads/DOOM.WAD
 QUAKE_BINARY ?= $(KERNEL_ROOT)/build/extras/quake/quake
+QUAKE_AQUA_BINARY ?= $(KERNEL_ROOT)/build/extras/quake-aqua/quake-aqua
 QUAKE_DATA_DIR ?= $(KERNEL_ROOT)/assets/quake/id1
 DUKE3D_BINARY ?= $(KERNEL_ROOT)/build/extras/duke3d/duke3d
 DUKE3D_GRP ?= $(KERNEL_ROOT)/assets/duke3d/duke3d.grp
@@ -64,9 +66,10 @@ export CC
 export AS
 export ASFLAGS
 SUBDIRS = $(shell ls -d */)
-KERNEL_OBJECT_DIRS = asm block fs init irq locks mm output sched timer utils
+KERNEL_OBJECT_DIRS = asm block drivers fs init irq locks mm output sched timer utils
 OBJ_FILES = asm/asm.o asm/asm_calls.o \
 	block/ata.o \
+	drivers/pci.o \
 	fs/fat.o fs/ramfs.o fs/vfs.o fs/pipe.o \
 	init/kernel.o init/tables.o init/dshell.o init/loader.o init/syscall.o \
 	irq/irq.o \
@@ -83,6 +86,8 @@ output/font.h: output/font.psf.gz scripts/psf-to-header.sh
 
 output/vga.o: output/font.h
 
+fs/pipe.o: fs/pipe.h
+
 all: kernel.img user
 
 install: user
@@ -96,6 +101,9 @@ asm: asm/asm.o asm/asm_calls.o
 
 block: block/ata.o 
 	$(MAKE) -C block
+
+drivers: drivers/pci.o
+	$(MAKE) -C drivers
 
 fs: fs/fat.o fs/vfs.o fs/ramfs.o fs/pipe.o
 	$(MAKE) -C fs
@@ -124,7 +132,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit kui gui-assets desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-desktop-config test-controlcenter-ui test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-suite doom doom-image quake quake-image duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
+.PHONY: toolchain userland userinit kui gui-assets desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-desktop-config test-controlcenter-ui test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-suite doom doom-image doom-aqua doom-aqua-image quake quake-image quake-aqua quake-aqua-image refresh-kui-extras duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
@@ -135,7 +143,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest demandtest oomtest breakout cc
+	$(MAKE) userinit desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -301,6 +309,10 @@ kylekart: extras/kylekart/kylekart.c $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kylekart
 
+fps: extras/fps/fps.c extras/fps/fps_game.c extras/fps/fps_game.h $(KUI_LIBRARY)
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/fps/fps.c extras/fps/fps_game.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/fps
+
 help: extras/help/help.c $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/help
@@ -397,6 +409,12 @@ test-tetris:
 		-o /tmp/os3-test-tetris
 	/tmp/os3-test-tetris
 
+test-fps:
+	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-fps.c extras/fps/fps_game.c -lm \
+		-o /tmp/os3-test-fps
+	/tmp/os3-test-fps
+
 test-ksheet:
 	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
 		tests/test-ksheet.c extras/ksheet/ksheet_model.c \
@@ -428,6 +446,47 @@ test-tetris-ui: gui-assets
 		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
 		-o /tmp/os3-test-tetris-ui
 	/tmp/os3-test-tetris-ui /tmp/os3-tetris-host
+
+test-fps-ui:
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		extras/fps/fps.c extras/fps/fps_game.c \
+		extras/kui/kui.c extras/kui/kui_client.c \
+		extras/kui/kui_style.c extras/kui/kui_style_win95.c \
+		extras/kui/kui_style_aqua.c -lm -o /tmp/os3-fps-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-fps-ui.c extras/kui/kui.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-test-fps-ui
+	/tmp/os3-test-fps-ui /tmp/os3-fps-host
+
+test-doom-aqua:
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-doom-aqua.c extras/doom-aqua/doom_aqua_ui.c \
+		extras/kui/kui.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-test-doom-aqua
+	/tmp/os3-test-doom-aqua
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		-I extras/doom/doomgeneric \
+		-DKYLEOS_HOST \
+		-DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 \
+		extras/doom-aqua/doomgeneric_aqua.c \
+		extras/doom-aqua/doom_aqua_ui.c tests/doom-aqua-stub.c \
+		extras/kui/kui.c extras/kui/kui_client.c extras/kui/kui_style.c \
+		extras/kui/kui_style_win95.c extras/kui/kui_style_aqua.c \
+		-o /tmp/os3-doom-aqua-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-doom-aqua-protocol.c extras/kui/kui.c \
+		extras/kui/kui_style.c extras/kui/kui_style_win95.c \
+		extras/kui/kui_style_aqua.c -o /tmp/os3-test-doom-aqua-protocol
+	/tmp/os3-test-doom-aqua-protocol /tmp/os3-doom-aqua-host
+
+test-quake-aqua:
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-quake-aqua.c extras/kui/kui.c \
+		extras/kui/kui_style.c extras/kui/kui_style_win95.c \
+		extras/kui/kui_style_aqua.c -o /tmp/os3-test-quake-aqua
+	/tmp/os3-test-quake-aqua
 
 test-kui-styles:
 	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
@@ -553,12 +612,39 @@ doom-image:
 	$(MAKE) doom
 	$(MAKE) image-reset
 
+doom-aqua: $(KUI_LIBRARY)
+	SYSROOT=$(SYSROOT) KUI_LIBRARY=$(KUI_LIBRARY) scripts/build-doom-aqua.sh
+
+doom-aqua-image:
+	$(MAKE) doom-aqua
+	$(MAKE) image-reset
+
 quake:
 	SYSROOT=$(SYSROOT) scripts/build-quake.sh
 
 quake-image:
 	$(MAKE) quake
 	$(MAKE) image-reset
+
+quake-aqua: $(KUI_LIBRARY)
+	SYSROOT=$(SYSROOT) KUI_LIBRARY=$(KUI_LIBRARY) scripts/build-quake-aqua.sh
+
+quake-aqua-image:
+	$(MAKE) quake-aqua
+	$(MAKE) image-reset
+
+# Windowed extras link libkui statically but are not part of the normal
+# userland target. Never package an existing client built against an older
+# KUI protocol after userland has refreshed the library.
+refresh-kui-extras:
+	@if [ -x $(DOOM_AQUA_BINARY) ] && [ $(KUI_LIBRARY) -nt $(DOOM_AQUA_BINARY) ]; then \
+		echo "Rebuilding stale Doom Aqua client"; \
+		$(MAKE) doom-aqua; \
+	fi
+	@if [ -x $(QUAKE_AQUA_BINARY) ] && [ $(KUI_LIBRARY) -nt $(QUAKE_AQUA_BINARY) ]; then \
+		echo "Rebuilding stale Quake Aqua client"; \
+		$(MAKE) quake-aqua; \
+	fi
 
 duke3d:
 	SYSROOT=$(SYSROOT) scripts/build-duke3d.sh
@@ -576,10 +662,12 @@ $(LUA_BINARY): $(LUA_INPUTS)
 	cp $(LUA_SOURCE)/lua $(LUA_BINARY)
 
 image: userland lua
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) QUAKE_BINARY=$(QUAKE_BINARY) QUAKE_DATA_DIR=$(QUAKE_DATA_DIR) DUKE3D_BINARY=$(DUKE3D_BINARY) DUKE3D_GRP=$(DUKE3D_GRP) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh
+	$(MAKE) refresh-kui-extras
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_AQUA_BINARY=$(DOOM_AQUA_BINARY) DOOM_WAD=$(DOOM_WAD) QUAKE_BINARY=$(QUAKE_BINARY) QUAKE_AQUA_BINARY=$(QUAKE_AQUA_BINARY) QUAKE_DATA_DIR=$(QUAKE_DATA_DIR) DUKE3D_BINARY=$(DUKE3D_BINARY) DUKE3D_GRP=$(DUKE3D_GRP) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh
 
 image-reset: userland lua
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_WAD=$(DOOM_WAD) QUAKE_BINARY=$(QUAKE_BINARY) QUAKE_DATA_DIR=$(QUAKE_DATA_DIR) DUKE3D_BINARY=$(DUKE3D_BINARY) DUKE3D_GRP=$(DUKE3D_GRP) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh --reset
+	$(MAKE) refresh-kui-extras
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_AQUA_BINARY=$(DOOM_AQUA_BINARY) DOOM_WAD=$(DOOM_WAD) QUAKE_BINARY=$(QUAKE_BINARY) QUAKE_AQUA_BINARY=$(QUAKE_AQUA_BINARY) QUAKE_DATA_DIR=$(QUAKE_DATA_DIR) DUKE3D_BINARY=$(DUKE3D_BINARY) DUKE3D_GRP=$(DUKE3D_GRP) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh --reset
 
 image-mount:
 	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) scripts/image-mount.sh
@@ -642,6 +730,6 @@ iso-test: iso
 		-cdrom bootable.iso \
 		-serial stdio
 
-test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-ksheet test-ksheet-ui test-kui-styles test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-kui-shells
+test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-kui-shells
 	$(MAKE) image-reset IMAGE=$(TEST_IMAGE) IMAGE_MOUNT=$(TEST_IMAGE_MOUNT)
 	QEMU=$(QEMU) QEMU_OPTS='$(QEMU_OPTS)' TEST_KERNEL=$(KERNEL_ROOT)/kernel32.bin TEST_IMAGE=$(TEST_IMAGE) TEST_TIMEOUT=$(TEST_TIMEOUT) bash tests/e2e/all-tests.sh

@@ -15,10 +15,13 @@
 #include "extras/kui/kui_protocol.h"
 #include "extras/kuid/shell_protocol.h"
 
-#define MAX_APPS 24
+#define MAX_APPS 32
 #define MAX_WINDOWS 10
 #define MANIFEST_PATH_MAX 160
 #define AQUA_DOCK_CONFIG "/etc/aqua-dock.conf"
+#define CLIENT_RESPONSE_TIMEOUT_MS 500U
+#define CLIENT_STREAM_TIMEOUT_MS 5000U
+#define CLIENT_STREAM_DISPLAY_BYTES (60U * 1024U)
 #define TASKBAR_HEIGHT (kui_style_current()->panel_bottom)
 #define WINDOW_BORDER (kui_style_current()->window_border)
 #define WINDOW_TITLE_HEIGHT (kui_style_current()->title_height)
@@ -563,6 +566,7 @@ static int send_window_event(int index, uint32_t type, int x, int y,
     unsigned char *display = NULL;
     int width = content_width(window);
     int height = content_height(window);
+    uint32_t response_timeout = CLIENT_RESPONSE_TIMEOUT_MS;
 
     if (!window->visible || window->pid <= 0) return -1;
     memset(&event, 0, sizeof(event));
@@ -594,14 +598,31 @@ static int send_window_event(int index, uint32_t type, int x, int y,
         return -1;
     }
     if (type == KUI_EVENT_CLOSE) return 0;
+    /* Once a client has produced a large display stream, allow later frames
+     * a larger inactivity budget.  This keeps the normal hang timeout short
+     * without killing games during an occasional expensive render tick. */
+    if (window->display_capacity >= CLIENT_STREAM_DISPLAY_BYTES)
+        response_timeout = CLIENT_STREAM_TIMEOUT_MS;
+    /* A client can deliberately request a long startup timer while it loads
+     * assets.  Its first timer handler may also need that startup budget
+     * before it can produce a response (Doom initializes its first game tic
+     * here).  A requested timer can extend the current budget further. */
+    if (type == KUI_EVENT_TIMER && window->timer_ms > response_timeout) {
+        response_timeout = window->timer_ms;
+        if (response_timeout <= 9500U)
+            response_timeout += 500U;
+        else
+            response_timeout = 10000U;
+    }
     if (kui_read_all_timeout(window->output_fd, &response,
-                             sizeof(response), 500) < 0 ||
+                             sizeof(response), response_timeout) < 0 ||
         response.magic != KUI_PROTOCOL_MAGIC ||
         response.version != KUI_PROTOCOL_VERSION ||
         response.serial != event.serial ||
         response.display_bytes > KUI_PROTOCOL_MAX_DISPLAY) {
-        shell_log("PROTO read-failed pid=%d event=%u serial=%u\n",
-                  window->pid, type, event.serial);
+        shell_log("PROTO read-failed pid=%d event=%u serial=%u timeout=%u timer=%u\n",
+                  window->pid, type, event.serial, response_timeout,
+                  window->timer_ms);
         return -1;
     }
     if (response.display_bytes != 0) {
@@ -615,6 +636,9 @@ static int send_window_event(int index, uint32_t type, int x, int y,
         display = window->display_commands;
         if (kui_read_all_timeout(window->output_fd, display,
                                  response.display_bytes, 500) < 0) {
+            shell_log("PROTO display-read-failed pid=%d event=%u serial=%u bytes=%u\n",
+                      window->pid, type, event.serial,
+                      response.display_bytes);
             return -1;
         }
     }
@@ -1364,13 +1388,7 @@ static int shell_exchange(uint32_t type, int x, int y, int button,
         int app = aqua_shell() ? dock_app_by_rank(rank) :
                   start_app_by_rank(rank);
 
-        if (app >= 0)
-            copy_text(request.apps[rank].title,
-                      sizeof(request.apps[rank].title), apps[app].name);
-        if (app >= 0)
-            copy_text(request.apps[rank].icon_path,
-                      sizeof(request.apps[rank].icon_path),
-                      apps[app].icon_path);
+        if (app >= 0) request.app_indices[rank] = (uint8_t)app;
     }
     request.menu_app_count = app_count > KUI_SHELL_MAX_APPS ?
                              KUI_SHELL_MAX_APPS : app_count;
@@ -1981,18 +1999,27 @@ static int handle_keyboard(void)
         char character = 0;
         int top;
         struct shell_action action;
-        if (!extended && code == 56) { alt_down = pressed; continue; }
-        if (!extended && code == 29) { ctrl_down = pressed; continue; }
-        if (!extended && (code == 42 || code == 54)) {
-            shift_down = pressed; continue;
-        }
+        if (!extended && code == 56) alt_down = pressed;
+        if (!extended && code == 29) ctrl_down = pressed;
+        if (!extended && (code == 42 || code == 54)) shift_down = pressed;
         if (pressed && alt_down && !extended && code == 16) {
             running = 0; changed = 1; continue;
         }
         if (pressed && !extended && code == 1) {
-            if (start_menu_open) start_menu_open = 0;
-            else close_window_index(top_window());
-            changed = 1; continue;
+            if (start_menu_open) {
+                start_menu_open = 0;
+                changed = 1;
+                continue;
+            }
+            top = top_window();
+            if (top < 0 ||
+                (strcmp(windows[top].application, "Doom") != 0 &&
+                 strcmp(windows[top].application, "Quake") != 0)) {
+                close_window_index(top);
+                changed = 1;
+                continue;
+            }
+            /* Games own Escape for their in-game menus. */
         }
         top = top_window();
         if (top < 0) continue;

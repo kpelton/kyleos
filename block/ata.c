@@ -2,6 +2,7 @@
 #include <output/output.h>
 #include <mm/mm.h>
 #include <block/ata.h>
+#include <drivers/pci.h>
 #include <fs/fat.h>
 #include <locks/mutex.h>
 #include <sched/sched.h>
@@ -16,22 +17,13 @@
 #define DRIVE_HEAD_REG 6
 #define COMMAND_REG 7
 #define STATUS_REG 7
-//pink
-#define PINK_PRIMARY 0x6eb0
-//silver
-#define SILVER_PRIMARY 0x30c8
-//qemu
-#define QEMU_PRIMARY 0x1f0
-uint16_t ATA_PORTS[] = {
-    0x9060,
-    0x9068,
-    0x9070,
-    0x9078,
-    0x1f0,
-    0x170,
-};
-//Global to control hdd
-static int PRIMARY = 0;
+#define PCI_IDE_PRIMARY_NATIVE 0x01
+#define PCI_IDE_SECONDARY_NATIVE 0x04
+#define ATA_PRIMARY_COMPAT_PORT 0x1f0
+#define ATA_SECONDARY_COMPAT_PORT 0x170
+
+/* Command block selected from the PCI IDE programming interface and BARs. */
+static uint16_t PRIMARY;
 
 #define CMD_IDENTIFY 0xec
 #define CMD_READ_SECTORS 0x20
@@ -60,6 +52,8 @@ static struct ata_cache_entry ata_read_cache[ATA_READ_CACHE_ENTRIES];
 struct mbr_info fs1;
 static struct mutex ata_mutex;
 static bool ata_init_port();
+static uint16_t ata_channel_port(const struct pci_device *controller,
+                                 uint8_t channel);
 uint8_t read_status(void);
 
 static void ata_cache_reset(void)
@@ -277,17 +271,56 @@ int read_sec(uint32_t sec, void *buffer)
 }
 void ata_init(void) {
     bool passed = false;
+    uint32_t controller_index = 0;
+    const struct pci_device *controller;
 
     init_mutex(&ata_mutex);
-    for(uint64_t i = 0; i < sizeof(ATA_PORTS) / sizeof(ATA_PORTS[0]); i++) {
-        PRIMARY = ATA_PORTS[i];
-        if(ata_init_port() == true) {
-            passed = true;
-            break;
+
+    while ((controller = pci_find_class(PCI_CLASS_MASS_STORAGE,
+                                         PCI_SUBCLASS_IDE,
+                                         controller_index++)) != NULL) {
+        pci_enable_io(controller);
+        kprintf("ATA: PCI IDE controller %d:%d.%d prog 0x%x\n",
+                controller->bus, controller->slot, controller->function,
+                controller->prog_if);
+
+        for (uint8_t channel = 0; channel < 2; channel++) {
+            PRIMARY = ata_channel_port(controller, channel);
+            if (PRIMARY == 0)
+                continue;
+            if (ata_init_port()) {
+                passed = true;
+                break;
+            }
         }
+        if (passed)
+            break;
     }
+
     if (passed == false)
-        panic("PANIC:ATA init failed.. could not find MBR");
+        panic("PANIC: no MBR on a supported PCI IDE controller");
+}
+
+static uint16_t ata_channel_port(const struct pci_device *controller,
+                                 uint8_t channel)
+{
+    uint8_t native_mask = channel == 0 ? PCI_IDE_PRIMARY_NATIVE :
+                                         PCI_IDE_SECONDARY_NATIVE;
+    uint8_t bar_index = channel == 0 ? 0 : 2;
+
+    if ((controller->prog_if & native_mask) != 0) {
+        uint16_t bar_port = pci_bar_io_base(controller, bar_index);
+
+        if (bar_port == 0) {
+            kprintf("ATA: native channel %d has no I/O BAR\n", channel);
+            return 0;
+        }
+        return bar_port;
+    }
+
+    /* PCI IDE compatibility mode defines these command block addresses. */
+    return channel == 0 ? ATA_PRIMARY_COMPAT_PORT :
+                          ATA_SECONDARY_COMPAT_PORT;
 }
 
 static bool ata_init_port()
@@ -299,14 +332,13 @@ static bool ata_init_port()
     bool passed = false;
     uint8_t mbr[ATA_SECTOR_SIZE];
     ata_cache_reset();
-    kprintf("ATA init\n");
+    kprintf("ATA: trying command port 0x%x\n", PRIMARY);
     if (read_sec(0, mbr) < 0)
         return false;
     part_start = mbr[0x1c6] | mbr[0x1c7] << 8 | mbr[0x1c8] << 16 | mbr[0x1c9] << 24;
     part_size = mbr[0x1ca] | mbr[0x1cb] << 8 | mbr[0x1cc] << 16 | mbr[0x1cd] << 24;
     valid_mbr = mbr[0x1fe] | mbr[0x1ff] << 8;
     part_type = mbr[0x1c2];
-    kprintf("Trying port 0x%x\n",PRIMARY);
     kprintf("mbr:0x%x\n",valid_mbr);
     // Look for valid MBR 0x55aa
     if (valid_mbr == 0xaa55)

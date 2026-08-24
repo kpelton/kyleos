@@ -8,6 +8,21 @@
 
 static int menu_open;
 
+static const struct kui_shell_app *start_app(
+    const struct kui_shell_request *request, int rank)
+{
+    unsigned int app;
+
+    if (rank < 0 || rank >= request->app_count ||
+        rank >= KUI_SHELL_MAX_APPS)
+        return NULL;
+    app = request->app_indices[rank];
+    if (app >= (unsigned int)request->menu_app_count ||
+        app >= KUI_SHELL_MAX_APPS)
+        return NULL;
+    return &request->menu_apps[app];
+}
+
 static int window_button_width(const struct kui_shell_request *request)
 {
     int width = request->window_count != 0 ?
@@ -58,10 +73,13 @@ static void render(struct kui_surface *surface,
 
         kui_fill_rect(surface, 3, top, 250, height, 0x00f5f5f5U);
         kui_outline_rect(surface, 3, top, 250, height, KUI_TITLE_BLUE);
-        for (int rank = 0; rank < request->app_count; rank++)
+        for (int rank = 0; rank < request->app_count; rank++) {
+            const struct kui_shell_app *entry = start_app(request, rank);
+
             kui_draw_text(surface, 17, top + 8 + rank * 26,
-                          request->apps[rank].title, KUI_BLACK,
+                          entry != NULL ? entry->title : "", KUI_BLACK,
                           0x00f5f5f5U, 0);
+        }
         kui_draw_text(surface, 17, top + 8 + request->app_count * 26,
                       "Close Window", KUI_BLACK, 0x00f5f5f5U, 0);
         kui_draw_text(surface, 17, top + 8 +
