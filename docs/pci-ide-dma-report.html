@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KyleOS PCI IDE DMA Engineering Report</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: #0b1020;
+      --panel: #121a2d;
+      --panel-strong: #17223a;
+      --text: #e8edf7;
+      --muted: #a7b3c9;
+      --line: #2a3857;
+      --blue: #72b7ff;
+      --green: #68d391;
+      --amber: #f5c66a;
+      --red: #ff8585;
+      --code: #09101d;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top right, #183057 0, transparent 34rem),
+        var(--background);
+      color: var(--text);
+      font: 16px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 80px; }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { max-width: 820px; margin: 10px 0 16px; font-size: clamp(2.2rem, 6vw, 4.4rem); }
+    h2 { margin: 0 0 20px; font-size: 1.75rem; }
+    h3 { margin: 0 0 8px; font-size: 1.08rem; }
+    p { margin: 0 0 16px; }
+    a { color: var(--blue); }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    code { color: #bde0ff; }
+    pre {
+      margin: 16px 0 0;
+      padding: 18px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--code);
+      color: #cce7ff;
+    }
+    .eyebrow {
+      color: var(--blue);
+      font-size: .8rem;
+      font-weight: 750;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .lede { max-width: 820px; color: var(--muted); font-size: 1.18rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+    .pill {
+      padding: 6px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(18, 26, 45, .8);
+      color: var(--muted);
+      font-size: .88rem;
+    }
+    section {
+      margin-top: 34px;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(18, 26, 45, .88);
+      box-shadow: 0 18px 55px rgba(0, 0, 0, .18);
+    }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .card { padding: 18px; border-radius: 13px; background: var(--panel-strong); }
+    .card p, .muted { color: var(--muted); }
+    .success { color: var(--green); }
+    .warning { color: var(--amber); }
+    .failure { color: var(--red); }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      align-items: stretch;
+    }
+    .flow div {
+      position: relative;
+      padding: 16px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--code);
+      text-align: center;
+      font-size: .9rem;
+    }
+    .flow div:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      z-index: 2;
+      right: -17px;
+      top: calc(50% - 13px);
+      color: var(--blue);
+      font-size: 1.1rem;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--blue); font-size: .82rem; letter-spacing: .06em; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    ol, ul { margin: 10px 0 0; padding-left: 22px; }
+    li + li { margin-top: 8px; }
+    .timeline { list-style: none; padding: 0; }
+    .timeline li { padding: 0 0 20px 24px; border-left: 2px solid var(--line); }
+    .timeline li:last-child { padding-bottom: 0; }
+    .timeline li::before {
+      content: "";
+      display: block;
+      width: 10px;
+      height: 10px;
+      margin: 0 0 -15px -30px;
+      border: 3px solid var(--panel);
+      border-radius: 50%;
+      background: var(--blue);
+    }
+    .timeline strong { display: block; margin-bottom: 3px; }
+    footer { padding: 30px 4px 0; color: var(--muted); font-size: .9rem; }
+    @media (max-width: 780px) {
+      main { padding-top: 34px; }
+      section { padding: 21px; }
+      .grid { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .flow div:not(:last-child)::after { content: "↓"; right: auto; top: auto; bottom: -20px; left: calc(50% - 5px); }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">KyleOS engineering report · 24 August 2026</div>
+    <h1>PCI IDE bus-master DMA: what we built and what it taught us</h1>
+    <p class="lede">
+      KyleOS now discovers its IDE controller through PCI, enables PCI bus mastering,
+      transfers disk sectors through a physical DMA bounce buffer, handles ATA IRQs,
+      and safely falls back to PIO. The final debugging pass also exposed an important
+      interaction between demand paging, interrupt gates, scheduling, and GUI deadlines.
+    </p>
+    <div class="meta">
+      <span class="pill">Status: implemented, not yet committed</span>
+      <span class="pill">Controller tested: QEMU PIIX3 IDE</span>
+      <span class="pill">Mode tested: compatibility IRQ 14</span>
+      <span class="pill">DMA chunk: up to 64 sectors / 32 KiB</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Outcome</h2>
+    <div class="grid">
+      <article class="card">
+        <h3 class="success">Hardware discovery replaced assumptions</h3>
+        <p>The ATA path selects PCI IDE channel resources and obtains the BMIDE base from BAR4. Compatibility ports remain as the standard PCI IDE compatibility-mode definition, not as the only controller discovery mechanism.</p>
+      </article>
+      <article class="card">
+        <h3 class="success">PIO is no longer the normal runtime path</h3>
+        <p>After the filesystem is initialized, runtime reads and writes use READ DMA and WRITE DMA commands when the controller advertises bus-master support.</p>
+      </article>
+      <article class="card">
+        <h3 class="success">Disk waits no longer require long PIO loops</h3>
+        <p>The disk controller copies data while the CPU is free. Fast completions are detected from BMIDE status; genuinely slow commands sleep and wake through IRQ 14 or 15.</p>
+      </article>
+      <article class="card">
+        <h3 class="success">Aqua is stable again</h3>
+        <p>The <code>kuid: shell frame render failed</code> regression was reproduced, isolated to DMA behavior, fixed, and soaked beyond its previous consistent failure point.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Runtime data path</h2>
+    <div class="flow" aria-label="DMA data flow">
+      <div>FAT or demand pager requests sectors</div>
+      <div>ATA mutex serializes the channel</div>
+      <div>PRDT points at the 32 KiB bounce buffer</div>
+      <div>BMIDE moves sectors without PIO copying</div>
+      <div>Data is copied to the caller and cached</div>
+    </div>
+    <pre>PCI scan → IDE class 01:01 → BAR/channel setup → PCI command.bus-master = 1
+         → program LBA task file → program PRDT → issue READ/WRITE DMA
+         → brief BMIDE completion poll → IRQ sleep if still active → recovery/fallback</pre>
+  </section>
+
+  <section>
+    <h2>What was added</h2>
+    <table>
+      <thead>
+        <tr><th>Area</th><th>Addition</th><th>Reason</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>drivers/pci.c/.h</code></td>
+          <td><code>pci_enable_bus_master()</code> sets PCI Command bit 2 and verifies the write.</td>
+          <td>A PCI device must be explicitly allowed to initiate memory transactions.</td>
+        </tr>
+        <tr>
+          <td><code>block/ata.c/.h</code></td>
+          <td>Active-channel model containing task-file, control, BMIDE base, IRQ, index, and mode.</td>
+          <td>Keeps controller resources together and prepares the driver for multiple channel layouts.</td>
+        </tr>
+        <tr>
+          <td><code>block/ata.c</code></td>
+          <td>READ DMA (<code>0xC8</code>), WRITE DMA (<code>0xCA</code>), BMIDE register handling, and one-entry PRDT.</td>
+          <td>Moves sector payloads via bus mastering instead of repeated <code>inw</code>/<code>outw</code>.</td>
+        </tr>
+        <tr>
+          <td><code>block/ata.c</code></td>
+          <td>32 KiB bounce buffer aligned to 64 KiB and a 16-byte-aligned PRDT below 4 GiB.</td>
+          <td>Legacy IDE PRDs use 32-bit physical addresses and may not cross a 64 KiB boundary.</td>
+        </tr>
+        <tr>
+          <td><code>asm/asm_calls.s</code>, <code>init/tables.c</code></td>
+          <td>Primary and secondary ATA interrupt wrappers at vectors 70 and 71.</td>
+          <td>The slave PIC is remapped to vector 64, making IRQ 14/15 map to 70/71.</td>
+        </tr>
+        <tr>
+          <td><code>sched/sched.c/.h</code></td>
+          <td>Conditional sleep with timeout plus one-waiter wakeup support.</td>
+          <td>Prevents lost wakeups and lets a hung device return control after two seconds.</td>
+        </tr>
+        <tr>
+          <td><code>irq/irq.h</code></td>
+          <td>Exports PIC mask control used during DMA enable and failure recovery.</td>
+          <td>The ATA line is unmasked only while DMA is supported and usable.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Safety and recovery policy</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>Boot remains conservative</h3>
+        <p>MBR probing and initial FAT setup occur through PIO. DMA is enabled only after the disk and filesystem have been identified successfully.</p>
+      </article>
+      <article class="card">
+        <h3>Reads can safely retry</h3>
+        <p>If a DMA read fails, the driver stops BMIDE, clears status, masks its IRQ, disables DMA, records the reason in <code>klog</code>, and retries with PIO.</p>
+      </article>
+      <article class="card">
+        <h3>Writes fail closed</h3>
+        <p>A failed multi-sector DMA write is not automatically repeated because the device may already have committed a partial transfer. DMA is disabled and failure is returned to the caller.</p>
+      </article>
+      <article class="card">
+        <h3>Slow or missing hardware cannot hang forever</h3>
+        <p>After a short status-poll window, a request sleeps for its IRQ with a two-second timeout. Timeout recovery stops the engine and clears device/controller state.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>The Aqua failure: diagnosis and fix</h2>
+    <ul class="timeline">
+      <li>
+        <strong>Symptom</strong>
+        Aqua exited to the serial shell with <code>kuid: shell frame render failed</code> even when Doom was never started.
+      </li>
+      <li>
+        <strong>Localization</strong>
+        The message came from a failed render exchange between <code>kuid</code> and <code>aqua-shell</code>. The exchange has a 1.5-second inactivity deadline.
+      </li>
+      <li>
+        <strong>Control experiment</strong>
+        The same disk image and launch sequence stayed alive under the pre-DMA kernel. That ruled out the Aqua protocol, assets, and image contents as the primary cause.
+      </li>
+      <li>
+        <strong>First hypothesis</strong>
+        Small DMA operations were immediately sleeping, making each disk request pay for a scheduler round trip. A fast IRQ window helped normal system calls but did not solve the failure.
+      </li>
+      <li>
+        <strong>Key discovery</strong>
+        Demand-page disk reads run inside the page-fault exception path. That interrupt gate enters with CPU interrupts masked, so the ATA IRQ cannot execute during a simple IRQ-only fast wait.
+      </li>
+      <li>
+        <strong>Final fix</strong>
+        The driver briefly polls BMIDE's interrupt/completion status directly. It can therefore finish fast DMA during a page fault without enabling nested interrupts or performing a full task handoff. Slow commands still use the IRQ-driven sleep path.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What we learned</h2>
+    <ol>
+      <li><strong>DMA alone does not guarantee low latency.</strong> Per-command scheduling overhead can dominate a tiny hardware transfer, especially on a filesystem with one-sector clusters.</li>
+      <li><strong>Exception context matters.</strong> Code that works during an ordinary syscall may behave differently in a page-fault handler because the interrupt-enable flag is different.</li>
+      <li><strong>Hybrid completion is useful.</strong> Brief polling handles microsecond completions efficiently; IRQ sleep handles real latency without freezing the rest of the OS.</li>
+      <li><strong>A GUI error can originate far below the GUI.</strong> Aqua's protocol failure was the visible deadline miss, while storage and scheduling interaction was the actual cause.</li>
+      <li><strong>Baseline comparisons are essential.</strong> Repeating the test with the pre-DMA kernel separated a new driver regression from existing shell, wait-ABI, or application behavior.</li>
+      <li><strong>Read and write recovery should differ.</strong> Reads are repeatable; an interrupted write may be partially committed and must not be blindly replayed.</li>
+      <li><strong>Protocol deadlines are valuable diagnostics.</strong> Increasing Aqua's timeout could hide the symptom, but correcting I/O completion restored the expected timing.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Verification evidence</h2>
+    <table>
+      <thead><tr><th>Check</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Kernel build and link</td><td class="success">Passed; <code>kernel32.bin</code> rebuilt</td></tr>
+        <tr><td>DMA discovery under QEMU PIIX3</td><td class="success"><code>ATA: PCI bus-master DMA enabled at 0xc040 IRQ 14</code></td></tr>
+        <tr><td>Aqua clean-launch soak</td><td class="success">Stayed alive beyond the previous consistent failure point and through a later render refresh</td></tr>
+        <tr><td>Filesystem regression suite</td><td class="success">45 checks, 0 failures</td></tr>
+        <tr><td>Copy stress</td><td class="success">4 iterations passed with file comparison and cleanup</td></tr>
+        <tr><td>Demand paging / heap / stack / COW</td><td class="success">Passed</td></tr>
+        <tr><td>KUI shell protocol</td><td class="success">Passed</td></tr>
+        <tr><td>Doom Aqua UI and protocol</td><td class="success">Passed</td></tr>
+        <tr><td>Quake Aqua indexed frame</td><td class="success">Passed</td></tr>
+        <tr><td>Terminal asynchronous commands</td><td class="success">Passed</td></tr>
+        <tr><td>Source whitespace validation</td><td class="success"><code>git diff --check</code> passed</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Current boundaries and sensible next steps</h2>
+    <div class="grid">
+      <article class="card">
+        <h3 class="warning">Compatibility mode only for DMA</h3>
+        <p>Native-mode task-file BARs are recognized, but native PCI interrupt routing is not yet represented by the legacy PIC setup. Those controllers currently use PIO.</p>
+      </article>
+      <article class="card">
+        <h3 class="warning">Single active channel and one PRD</h3>
+        <p>The implementation selects the channel containing the boot disk and uses one bounce buffer. Multiple disks, concurrent channels, and scatter/gather requests remain future work.</p>
+      </article>
+      <article class="card">
+        <h3>Measure on physical hardware</h3>
+        <p>Record transfer latency, fast-poll hit rate, timeout count, and fallback count through <code>klog</code>. Use those measurements to tune the 4096-iteration completion window.</p>
+      </article>
+      <article class="card">
+        <h3>Advance the interrupt model</h3>
+        <p>PCI interrupt-line routing, IOAPIC support, and eventually MSI-capable storage drivers would remove the remaining dependency on legacy IRQ 14/15 assumptions.</p>
+      </article>
+    </div>
+  </section>
+
+  <footer>
+    Generated as a source-tree engineering record. The DMA changes and this report are uncommitted at the time of writing.
+  </footer>
+</main>
+</body>
+</html>

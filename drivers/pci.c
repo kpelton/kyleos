@@ -22,6 +22,7 @@
 #define PCI_HEADER_LAYOUT_MASK 0x7f
 #define PCI_HEADER_GENERAL_DEVICE 0x00
 #define PCI_COMMAND_IO_SPACE 0x0001
+#define PCI_COMMAND_BUS_MASTER 0x0004
 #define PCI_BAR_MEMORY_TYPE_MASK 0x06
 #define PCI_BAR_MEMORY_TYPE_64 0x04
 #define PCI_MAX_DEVICES 256
@@ -270,4 +271,20 @@ void pci_enable_io(const struct pci_device *device)
     if ((command & PCI_COMMAND_IO_SPACE) == 0)
         pci_config_write16(device, PCI_COMMAND,
                            command | PCI_COMMAND_IO_SPACE);
+}
+
+bool pci_enable_bus_master(const struct pci_device *device)
+{
+    uint16_t command;
+
+    if (device == NULL)
+        return false;
+
+    command = pci_config_read16(device, PCI_COMMAND);
+    if ((command & PCI_COMMAND_BUS_MASTER) == 0)
+        pci_config_write16(device, PCI_COMMAND,
+                           command | PCI_COMMAND_BUS_MASTER);
+
+    return (pci_config_read16(device, PCI_COMMAND) &
+            PCI_COMMAND_BUS_MASTER) != 0;
 }

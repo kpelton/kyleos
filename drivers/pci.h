@@ -51,5 +51,6 @@ bool pci_bar_is_64(const struct pci_device *device, uint8_t bar_index);
 uint64_t pci_bar_memory_base(const struct pci_device *device,
                              uint8_t bar_index);
 void pci_enable_io(const struct pci_device *device);
+bool pci_enable_bus_master(const struct pci_device *device);
 
 #endif

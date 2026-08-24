@@ -24,6 +24,8 @@ void sched_stats();
 void ksleepm(uint32_t ms);
 void sched_sleep_on(void *channel);
 bool sched_sleep_on_if(void *channel, volatile int *condition);
+void sched_sleep_on_if_timeout(void *channel, volatile int *condition,
+                               uint32_t timeout_ms);
 void sched_wakeup(void *channel);
 void sched_wakeup_one(void *channel);
 uint32_t sched_io_snapshot(void);

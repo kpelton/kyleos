@@ -32,10 +32,17 @@ It runs in QEMU and on compatible x86 hardware with legacy BIOS and PS/2 input.
   `exec`, `wait`, file descriptors, pipes, `poll`, and process reaping.
 - FAT32 VFS with directories, file creation/truncation, seek, sizes, removal,
   and separate RAM filesystems at `/dev` and `/tmp`.
+- PCI device discovery for IDE and display hardware. Runtime disk I/O uses
+  PCI IDE bus-master DMA on supported compatibility-mode controllers, with
+  IRQ completion, bounded timeouts, and automatic PIO fallback for reads.
 - `/dev/console`, `/dev/null`, `/dev/zero`, `/dev/kmsg`, UART/serial input,
   keyboard input, PS/2 mouse input, and raw-console mode.
 - User-mode page and general-protection faults terminate the offending process;
   kernel faults retain register-dump diagnostics.
+
+The [PCI IDE DMA engineering report](docs/pci-ide-dma-report.html) documents
+the controller setup, PRDT and bounce-buffer design, recovery policy, Aqua
+latency investigation, verification results, and current hardware boundaries.
 
 ## Desktop and GUI
 
@@ -89,6 +96,10 @@ are built and installed by their respective image targets.
 - A userspace `/sbin/init` running as PID 1, with orphan adoption, child
   reaping, and automatic console-shell restart.
 - FAT32 root filesystem plus separate RAM filesystems at `/dev` and `/tmp`.
+- PCI IDE bus-master DMA for runtime reads and writes, using a 32 KiB,
+  64-KiB-boundary-safe bounce buffer and physical PRDT. Fast transfers complete
+  from BMIDE status; slower transfers sleep for IRQ 14/15 with a two-second
+  timeout. Failed reads fall back to PIO, while uncertain writes fail closed.
 - `/dev/console`, `/dev/null`, `/dev/zero`, and a writable 64 KiB kernel-log
   ring at `/dev/kmsg` with monotonic timestamps.
 - Directories, file and empty-directory removal, 8.3-safe rename,
@@ -561,6 +572,10 @@ grep "Moses" /usr/share/text/bible.txt | grep "said"
   configuration, manage dependencies, or provide shutdown/reboot targets.
 - The FAT implementation is intentionally small; rename targets must use
   conventional 8.3-compatible names.
+- IDE DMA currently supports the selected boot disk on a compatibility-mode
+  PCI IDE channel. Native-mode PCI interrupt routing, multiple active channels,
+  scatter/gather requests, and storage above the legacy 28-bit LBA range are
+  not implemented; unsupported controllers continue through PIO.
 - No hard links, symlinks, full terminal/termios support, or configurable
   shell environment.
 - Channel wait queues cover blocking `waitpid`, mutex contention, and

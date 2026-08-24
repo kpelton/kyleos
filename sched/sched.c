@@ -178,6 +178,45 @@ bool sched_sleep_on_if(void *channel, volatile int *condition)
     return true;
 }
 
+void sched_sleep_on_if_timeout(void *channel, volatile int *condition,
+                               uint32_t timeout_ms)
+{
+    struct ktask *process;
+
+    if (!sched_is_running() || channel == NULL || timeout_ms == 0)
+        return;
+    process = get_current_process();
+    if (__sync_val_compare_and_swap(&sched_spinlock.lock, 0, 0) != 0)
+        return;
+
+    acquire_spinlock(&sched_spinlock);
+    if (condition != NULL && *condition == 0) {
+        release_spinlock(&sched_spinlock);
+        return;
+    }
+
+    process->wait_channel = channel;
+    process->timer = new_timer(timeout_ms);
+    __sync_synchronize();
+    process->state = TASK_BLOCKED;
+    __sync_synchronize();
+
+    /* Match sched_sleep_on_if's lost-wakeup protection while also arming a
+     * timer that returns the task to READY if the device IRQ never arrives. */
+    if (condition != NULL && *condition == 0) {
+        process->state = TASK_READY;
+        process->wait_channel = NULL;
+        process->timer.state = TIMER_UNUSED;
+        release_spinlock(&sched_spinlock);
+        return;
+    }
+
+    release_spinlock(&sched_spinlock);
+    schedule();
+    process->wait_channel = NULL;
+    process->timer.state = TIMER_UNUSED;
+}
+
 static void sched_wakeup_one_locked(void *channel)
 {
     for (int i = 0; i < SCHED_MAX_TASKS; i++)

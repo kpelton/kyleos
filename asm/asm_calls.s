@@ -8,6 +8,8 @@
 [extern timer_irq]
 [extern rtc_irq]
 [extern mouse_irq]
+[extern ata_primary_irq]
+[extern ata_secondary_irq]
 [extern NR_syscall]
 [extern syscall_tbl]
 [extern sched_save_context]
@@ -30,9 +32,12 @@ KBD_HANDLER equ 1
 SERIAL_HANDLER equ 2
 RTC_HANDLER equ 3
 MOUSE_HANDLER equ 4
+ATA_PRIMARY_HANDLER equ 5
+ATA_SECONDARY_HANDLER equ 6
 
 ;C lang handlers 
 IRQ_HANDLERS dq timer_irq, kbd_irq, serial_irq, rtc_irq, mouse_irq
+             dq ata_primary_irq, ata_secondary_irq
 
 get_flags_reg:
     sub rsp,8
@@ -339,6 +344,22 @@ rtc_handler:
 mouse_handler:
     push rax
     mov rax, MOUSE_HANDLER
+    call irq_handler
+    pop rax
+    iretq
+
+[global ata_primary_handler]
+ata_primary_handler:
+    push rax
+    mov rax, ATA_PRIMARY_HANDLER
+    call irq_handler
+    pop rax
+    iretq
+
+[global ata_secondary_handler]
+ata_secondary_handler:
+    push rax
+    mov rax, ATA_SECONDARY_HANDLER
     call irq_handler
     pop rax
     iretq
