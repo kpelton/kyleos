@@ -30,6 +30,11 @@ static int getpid_syscall(void)
     return task == NULL ? -1 : task->pid;
 }
 
+static int isatty_syscall(int fd)
+{
+    return user_process_isatty(get_current_process(), fd);
+}
+
 static int kill_syscall(int pid, int signal)
 {
     return signal_send(pid, signal);
@@ -301,6 +306,13 @@ static int pipe(int pipefd[2])
     if (pipefd == NULL || pipefd >= (int *)KERN_SPACE_BOUNDRY)
         return -1;
     return user_process_pipe(pid, pipefd);
+}
+
+static int openpty_syscall(int ptyfd[2])
+{
+    if (!user_range_valid(ptyfd, sizeof(int) * 2))
+        return -1;
+    return user_process_openpty(get_current_process(), ptyfd);
 }
 
 static int fd_status_syscall(int fd, struct kyleos_fd_status *status)
@@ -926,7 +938,9 @@ void *syscall_tbl[] = {
     (void *)&sigaction_syscall,                 // 38
     (void *)&sigprocmask_syscall,               // 39
     (void *)&sigpending_syscall,                // 40
-    (void *)&sigreturn_syscall                  // 41
+    (void *)&sigreturn_syscall,                 // 41
+    (void *)&isatty_syscall,                    // 42
+    (void *)&openpty_syscall                    // 43
 };
 
 const int NR_syscall = sizeof(syscall_tbl) / sizeof(syscall_tbl[0]);

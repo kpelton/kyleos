@@ -19,7 +19,7 @@ cc -std=c11 -Wall -Wextra -Werror \
     "$repo_root/extras/alltest/alltest.c" \
     -o "$runner"
 
-for program in fstest kmsgtest waittest pipetest polltest signaltest demandtest; do
+for program in fstest kmsgtest waittest pipetest polltest signaltest ttytest ptytest demandtest; do
     ln -s /bin/true "$test_root/bin/$program"
 done
 ln -s /bin/cp "$test_root/bin/cp"
@@ -32,7 +32,7 @@ printf '#!/bin/sh\nexit 139\n' > "$test_root/bin/oomtest"
 chmod +x "$test_root/bin/gpfault" "$test_root/bin/oomtest"
 
 "$runner" > "$pass_log"
-[[ $(grep -c '^ALL-TESTS-COMPLETE count=11$' "$pass_log") -eq 1 ]]
+[[ $(grep -c '^ALL-TESTS-COMPLETE count=13$' "$pass_log") -eq 1 ]]
 ! grep -q '^ALL-TESTS-FAILED' "$pass_log"
 
 ln -sfn /bin/false "$test_root/bin/waittest"

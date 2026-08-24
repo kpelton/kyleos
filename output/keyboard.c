@@ -2,12 +2,16 @@
 #include <include/types.h>
 #include <irq/irq.h>
 #include <output/input.h>
+#include <output/tty.h>
 #include <locks/spinlock.h>
 
 #define BACKSPACE 0x0E
 #define ENTER 0x1C
 #define LEFT_SHIFT 0x2A
 #define RIGHT_SHIFT 0x36
+#define ALT 0x38
+#define F1 0x3B
+#define F4 0x3E
 #define KEY_LEFT 0x4B
 #define KEY_RIGHT 0x4D
 #define KEY_UP 0x48
@@ -19,6 +23,7 @@ static struct spinlock kbd_spinlock;
 static bool extended_prefix;
 static bool left_shift;
 static bool right_shift;
+static bool alt;
 
 static char shifted_char(char ch)
 {
@@ -59,6 +64,7 @@ static void keyboard_callback()
     uint8_t scancode = inb(0x60);
     char letter;
     bool pressed;
+    bool extended;
 
     if (scancode == 0xe0) {
         extended_prefix = true;
@@ -66,13 +72,25 @@ static void keyboard_callback()
     }
     pressed = (scancode & 0x80) == 0;
     scancode &= 0x7f;
-    input_add_key(scancode, extended_prefix, pressed);
-    if (!extended_prefix && (scancode == LEFT_SHIFT || scancode == RIGHT_SHIFT)) {
+    extended = extended_prefix;
+    extended_prefix = false;
+    if (scancode == ALT) {
+        alt = pressed;
+        input_add_key(scancode, extended, pressed);
+        return;
+    }
+    if (!extended && alt && scancode >= F1 && scancode <= F4) {
+        if (pressed)
+            tty_switch_console(scancode - F1);
+        return;
+    }
+    input_add_key(scancode, extended, pressed);
+    if (!extended && (scancode == LEFT_SHIFT || scancode == RIGHT_SHIFT)) {
         if (scancode == LEFT_SHIFT) left_shift = pressed;
         else right_shift = pressed;
         return;
     }
-    if (pressed && extended_prefix && input_is_raw()) {
+    if (pressed && extended && input_is_raw()) {
         if (scancode == KEY_LEFT || scancode == KEY_RIGHT || scancode == KEY_UP ||
             scancode == KEY_DOWN || scancode == KEY_DELETE) {
             input_add_char(27);
@@ -83,10 +101,8 @@ static void keyboard_callback()
             if (scancode == KEY_DOWN) input_add_char('B');
             if (scancode == KEY_DELETE) { input_add_char('3'); input_add_char('~'); }
         }
-        extended_prefix = false;
         return;
     }
-    extended_prefix = false;
     if (!pressed || scancode > SC_MAX){
         return;
     } else if (scancode == BACKSPACE) {

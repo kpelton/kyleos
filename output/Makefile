@@ -1,4 +1,4 @@
-all: output.o vga.o uart.o keyboard.o input.o mouse.o
+all: output.o vga.o uart.o keyboard.o input.o tty.o mouse.o
 
 output.o:  output.c output.h
 	$(CC) $(CFLAGS) -o $@ -c output.c
@@ -17,6 +17,9 @@ keyboard.o:  keyboard.c keyboard.h
 
 input.o:  input.c input.h
 	$(CC) $(CFLAGS) -o $@ -c input.c
+
+tty.o: tty.c tty.h vga.h uart.h
+	$(CC) $(CFLAGS) -o $@ -c tty.c
 
 mouse.o: mouse.c mouse.h
 	$(CC) $(CFLAGS) -o $@ -c mouse.c

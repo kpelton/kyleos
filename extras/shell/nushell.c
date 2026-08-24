@@ -42,8 +42,72 @@ struct shell_job {
 
 static struct shell_job jobs[MAX_JOBS];
 static int next_job_id = 1;
+static volatile sig_atomic_t foreground_pids[MAX_PIPE_COMMANDS];
+static volatile sig_atomic_t foreground_pid_count;
+static volatile sig_atomic_t foreground_interrupted;
 
 static int decode_wait_status(int status);
+
+static void set_foreground_processes(const pid_t *pids, int count)
+{
+    foreground_pid_count = 0;
+    if (count > MAX_PIPE_COMMANDS)
+        count = MAX_PIPE_COMMANDS;
+    for (int index = 0; index < count; index++)
+        foreground_pids[index] = (sig_atomic_t)pids[index];
+    foreground_pid_count = count;
+    if (foreground_interrupted) {
+        for (int index = 0; index < count; index++)
+            if (foreground_pids[index] > 0)
+                (void)kill((pid_t)foreground_pids[index], SIGINT);
+        foreground_interrupted = 0;
+    }
+}
+
+static void clear_foreground_processes(void)
+{
+    foreground_pid_count = 0;
+    for (int index = 0; index < MAX_PIPE_COMMANDS; index++)
+        foreground_pids[index] = 0;
+    foreground_interrupted = 0;
+}
+
+static void handle_interrupt(int signal_number)
+{
+    int count = foreground_pid_count;
+
+    foreground_interrupted = 1;
+    for (int index = 0; index < count; index++)
+        if (foreground_pids[index] > 0)
+            (void)kill((pid_t)foreground_pids[index], signal_number);
+}
+
+static pid_t wait_for_foreground(pid_t pid, int *status, int options)
+{
+    pid_t result;
+
+    do {
+        foreground_interrupted = 0;
+        result = waitpid(pid, status, options);
+    } while (result < 0 && foreground_interrupted);
+    return result;
+}
+
+static int block_interrupt(sigset_t *old_mask)
+{
+    sigset_t interrupt_mask;
+
+    if (sigemptyset(&interrupt_mask) < 0 ||
+        sigaddset(&interrupt_mask, SIGINT) < 0)
+        return -1;
+    return sigprocmask(SIG_BLOCK, &interrupt_mask, old_mask);
+}
+
+static void restore_signal_mask(const sigset_t *old_mask, int blocked)
+{
+    if (blocked)
+        (void)sigprocmask(SIG_SETMASK, old_mask, NULL);
+}
 
 static const char *job_state_name(enum job_state state)
 {
@@ -184,13 +248,14 @@ static int wait_for_job(struct shell_job *job)
     int result_status = 0;
     int stopped = 0;
 
+    set_foreground_processes(job->pids, job->pid_count);
     for (int i = 0; i < job->pid_count; i++) {
         int status;
         pid_t result;
 
         if (job->pids[i] <= 0)
             continue;
-        result = waitpid(job->pids[i], &status, WUNTRACED);
+        result = wait_for_foreground(job->pids[i], &status, WUNTRACED);
         if (result < 0)
             continue;
         if (WIFSTOPPED(status)) {
@@ -203,6 +268,7 @@ static int wait_for_job(struct shell_job *job)
             result_status = decode_wait_status(status);
         }
     }
+    clear_foreground_processes();
     if (stopped) {
         printf("[%d] Stopped    %s\n", job->id, job->command);
         return result_status;
@@ -526,9 +592,12 @@ int execute_command(char **args, int background, char *in_file,
             return 2;
         }
         val = 0;
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < count; i++) {
             val = execute_command(&args[2], 0, in_file, out_file,
                                   command_text);
+            if (val == 128 + SIGINT)
+                break;
+        }
         return val;
     }
 
@@ -542,7 +611,13 @@ int execute_command(char **args, int background, char *in_file,
             return 2;
         }
         if (!background) {
+            if (foreground_interrupted) {
+                foreground_interrupted = 0;
+                return 128 + SIGINT;
+            }
             sleep(seconds);
+            if (foreground_interrupted)
+                return 128 + SIGINT;
             return 0;
         }
         sleep_pid = fork();
@@ -551,6 +626,7 @@ int execute_command(char **args, int background, char *in_file,
             return 1;
         }
         if (sleep_pid == 0) {
+            (void)signal(SIGINT, SIG_DFL);
             sleep(seconds);
             exit(0);
         }
@@ -561,14 +637,19 @@ int execute_command(char **args, int background, char *in_file,
         return 0;
     }
 
+    sigset_t old_mask;
+    int interrupt_blocked = !background && block_interrupt(&old_mask) == 0;
     pid_t pid = fork();
 
     if (pid == -1) {
+        restore_signal_mask(&old_mask, interrupt_blocked);
         perror("fork");
         return 1;
     }
 
     if (pid == 0) {
+        (void)signal(SIGINT, SIG_DFL);
+        restore_signal_mask(&old_mask, interrupt_blocked);
 
         if (out_file) {
             fd = open(out_file, O_WRONLY | O_TRUNC, 0666);
@@ -600,14 +681,22 @@ int execute_command(char **args, int background, char *in_file,
         // Parent process
         if (!background) {
             int status;
-            if (waitpid(pid, &status, WUNTRACED) < 0)
+            pid_t foreground[1] = {pid};
+
+            set_foreground_processes(foreground, 1);
+            restore_signal_mask(&old_mask, interrupt_blocked);
+            if (wait_for_foreground(pid, &status, WUNTRACED) < 0) {
+                clear_foreground_processes();
                 return 1;
+            }
+            clear_foreground_processes();
             if (WIFSTOPPED(status)) {
                 pid_t pids[1] = {pid};
                 (void)add_job(pids, 1, JOB_STOPPED, command_text);
             }
             return decode_wait_status(status);
         }
+        restore_signal_mask(&old_mask, interrupt_blocked);
         {
             pid_t pids[1] = {pid};
             (void)add_job(pids, 1, JOB_RUNNING, command_text);
@@ -624,6 +713,8 @@ static int execute_pipeline(char *commands[][MAX_ARGS], int command_count,
     int pids[MAX_PIPE_COMMANDS] = {0};
     int status;
     int pipeline_status = 1;
+    sigset_t old_mask;
+    int interrupt_blocked = !background && block_interrupt(&old_mask) == 0;
 
     for (int i = 0; i < command_count; i++) {
         int next_pipe[2] = {-1, -1};
@@ -633,6 +724,8 @@ static int execute_pipeline(char *commands[][MAX_ARGS], int command_count,
         }
         pids[i] = fork();
         if (pids[i] == 0) {
+            (void)signal(SIGINT, SIG_DFL);
+            restore_signal_mask(&old_mask, interrupt_blocked);
             if (previous_read >= 0) dup2(previous_read, 0);
             if (next_pipe[1] >= 0) dup2(next_pipe[1], 1);
             if (previous_read >= 0) close(previous_read);
@@ -660,11 +753,15 @@ static int execute_pipeline(char *commands[][MAX_ARGS], int command_count,
     }
     if (previous_read >= 0) close(previous_read);
     if (background) {
+        restore_signal_mask(&old_mask, interrupt_blocked);
         (void)add_job(pids, command_count, JOB_RUNNING, command_text);
         return 0;
     }
+    set_foreground_processes(pids, command_count);
+    restore_signal_mask(&old_mask, interrupt_blocked);
     for (int i = 0; i < command_count; i++) {
-        if (pids[i] > 0 && waitpid(pids[i], &status, WUNTRACED) > 0) {
+        if (pids[i] > 0 &&
+            wait_for_foreground(pids[i], &status, WUNTRACED) > 0) {
             if (WIFSTOPPED(status)) {
                 for (int process = 0; process < command_count; process++)
                     if (pids[process] > 0 && process != i)
@@ -677,6 +774,7 @@ static int execute_pipeline(char *commands[][MAX_ARGS], int command_count,
             }
         }
     }
+    clear_foreground_processes();
     for (int i = 0; i < command_count; i++)
         if (pids[i] > 0) {
             (void)add_job(pids, command_count, JOB_STOPPED, command_text);
@@ -692,11 +790,19 @@ int main() {
                       input_status.st_mode == I_DEV;
 
     setbuf(stdout,0);
+    if (signal(SIGINT, handle_interrupt) == SIG_ERR) {
+        perror("signal");
+        return 1;
+    }
     while (1) {
         reap_jobs(interactive);
         if (interactive)
             printf("$ ");
         if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL) {
+            if (foreground_interrupted) {
+                clearerr(stdin);
+                continue;
+            }
             break;
         }
 

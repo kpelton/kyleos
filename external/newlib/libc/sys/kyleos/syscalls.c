@@ -1,6 +1,7 @@
 #include <sys/errno.h>
 #include <sys/fcntl.h>
 #include <poll.h>
+#include <pty.h>
 #include <signal.h>
 #include <reent.h>
 #include <sys/stat.h>
@@ -20,6 +21,8 @@ struct dirent;
 #define KYLEOS_SYS_SIGPROCMASK 39
 #define KYLEOS_SYS_SIGPENDING 40
 #define KYLEOS_SYS_SIGRETURN 41
+#define KYLEOS_SYS_ISATTY 42
+#define KYLEOS_SYS_OPENPTY 43
 
 struct kyleos_sigaction {
     uintptr_t handler;
@@ -232,6 +235,11 @@ static int sys_pipe(int pipefd[2])
     return (int)val;
 }
 
+static int sys_openpty(int ptyfd[2])
+{
+    return (int)sys_signal_call3(KYLEOS_SYS_OPENPTY, (long)ptyfd, 0, 0);
+}
+
 static int sys_unlink(char *path)
 {
     long val = 0;
@@ -288,14 +296,34 @@ int getpid()
 };
 int isatty(int file)
 {
-    for (;;)
-        ;
-    return 0;
+    long result = sys_signal_call3(KYLEOS_SYS_ISATTY, file, 0, 0);
+
+    if (result < 0) {
+        errno = EBADF;
+        return 0;
+    }
+    if (result == 0)
+        errno = ENOTTY;
+    return result != 0;
 };
 int kill(int pid, int sig)
 {
     return (int)sys_signal_call3(KYLEOS_SYS_KILL, pid, sig, 0);
 };
+
+int _raise_r(struct _reent *reent, int signal_number)
+{
+    int result = kill(getpid(), signal_number);
+
+    if (result < 0 && reent != NULL)
+        _REENT_ERRNO(reent) = EINVAL;
+    return result;
+}
+
+int raise(int signal_number)
+{
+    return _raise_r(_REENT, signal_number);
+}
 
 int sigaction(int signal_number, const struct sigaction *action,
               struct sigaction *old_action)
@@ -446,6 +474,29 @@ int dup2(int oldfd, int newfd)
 int pipe(int pipefd[2])
 {
     return sys_pipe(pipefd);
+}
+
+int openpty(int *master, int *slave, char *name,
+            const struct termios *termios_pointer,
+            const struct winsize *window_size)
+{
+    int descriptors[2];
+
+    (void)termios_pointer;
+    (void)window_size;
+    if (master == NULL || slave == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (sys_openpty(descriptors) < 0) {
+        errno = EMFILE;
+        return -1;
+    }
+    *master = descriptors[0];
+    *slave = descriptors[1];
+    if (name != NULL)
+        name[0] = '\0';
+    return 0;
 }
 
 int poll(struct pollfd fds[], nfds_t count, int timeout)

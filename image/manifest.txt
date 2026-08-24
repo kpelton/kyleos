@@ -51,6 +51,8 @@ pipetest
 polltest
 ps
 signaltest
+ttytest
+ptytest
 parallel-writer-a
 parallel-writer-b
 rdwr

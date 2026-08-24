@@ -100,6 +100,35 @@ static int send_key(int input, int output, struct kui_event *event,
     return exchange(input, output, event, response);
 }
 
+#ifndef KYLEOS_GUEST
+static int send_extended_key(int input, int output, struct kui_event *event,
+                             struct kui_response *response, int code)
+{
+    event->type = KUI_EVENT_KEY;
+    event->serial++;
+    event->key_code = code;
+    event->key_extended = 1;
+    event->key_pressed = 1;
+    event->modifiers = 0;
+    event->character = 0;
+    return exchange(input, output, event, response);
+}
+
+static int send_control_key(int input, int output, struct kui_event *event,
+                            struct kui_response *response, int code,
+                            char character)
+{
+    event->type = KUI_EVENT_KEY;
+    event->serial++;
+    event->key_code = code;
+    event->key_extended = 0;
+    event->key_pressed = 1;
+    event->modifiers = KUI_MOD_CTRL;
+    event->character = character;
+    return exchange(input, output, event, response);
+}
+#endif
+
 static int send_text(int input, int output, struct kui_event *event,
                      struct kui_response *response, const char *text)
 {
@@ -179,6 +208,7 @@ int main(int argc, char **argv)
     const char *source_path = "/tmp/os3-terminal-hello.c";
     const char *binary_path = "/tmp/os3-terminal-hello";
     const char *input_path = "/tmp/os3-terminal-input";
+    const char *cursor_path = "/tmp/os3-terminal-cursor";
     FILE *source;
 #endif
     int to_child[2];
@@ -200,7 +230,8 @@ int main(int argc, char **argv)
     source = fopen(source_path, "wb");
     if (source == NULL) return 2;
     fputs("#include <stdio.h>\n"
-          "int main(void) { char line[64]; FILE *out; "
+          "int main(int argc, char **argv) { char line[64]; FILE *out; "
+          "(void)argv; if (argc > 1) for (;;) {} "
           "if (fgets(line, sizeof(line), stdin) == 0) return 1; "
           "out = fopen(\"/tmp/os3-terminal-input\", \"wb\"); "
           "if (out == 0) return 2; fputs(line, out); fclose(out); "
@@ -208,6 +239,7 @@ int main(int argc, char **argv)
     fclose(source);
     remove(binary_path);
     remove(input_path);
+    remove(cursor_path);
 #endif
 
     if (pipe(to_child) < 0 || pipe(from_child) < 0) return 2;
@@ -308,6 +340,25 @@ int main(int argc, char **argv)
     check_result(access(binary_path, F_OK) < 0,
                  "cc output binary", &failures);
 
+    {
+        char interrupt_command[256];
+
+        snprintf(interrupt_command, sizeof(interrupt_command), "%s wait",
+                 binary_path);
+        check_result(send_text(to_child[1], from_child[0], &event, &response,
+                               interrupt_command) < 0,
+                     "type interruptible command", &failures);
+    }
+    check_result(send_key(to_child[1], from_child[0], &event, &response,
+                          28, '\n') < 0,
+                 "start interruptible command", &failures);
+    check_result(send_control_key(to_child[1], from_child[0], &event,
+                                  &response, 46, 'c') < 0,
+                 "send control-c", &failures);
+    check_result(poll_until_idle(to_child[1], from_child[0], &event,
+                                 &response, 100) < 0,
+                 "control-c command completion", &failures);
+
     check_result(send_text(to_child[1], from_child[0], &event, &response,
                            binary_path) < 0,
                  "type interactive command", &failures);
@@ -317,6 +368,9 @@ int main(int argc, char **argv)
     check_result((response.flags & KUI_RESPONSE_TIMER) == 0 ||
                  response.timer_ms == 0,
                  "interactive command timer", &failures);
+    check_result(send_extended_key(to_child[1], from_child[0], &event,
+                                   &response, 72) < 0,
+                 "send child up arrow", &failures);
     check_result(send_text(to_child[1], from_child[0], &event, &response,
                            "interactive-ok") < 0,
                  "type child input", &failures);
@@ -326,8 +380,32 @@ int main(int argc, char **argv)
     check_result(poll_until_idle(to_child[1], from_child[0], &event,
                                  &response, 100) < 0,
                  "interactive command completion", &failures);
-    check_result(!file_contains(input_path, "interactive-ok"),
-                 "interactive child input", &failures);
+    check_result(!file_contains(input_path, "\033[Ainteractive-ok"),
+                 "interactive child arrow input", &failures);
+
+    check_result(send_text(to_child[1], from_child[0], &event, &response,
+                           "echo ac") < 0,
+                 "type editable command", &failures);
+    check_result(send_extended_key(to_child[1], from_child[0], &event,
+                                   &response, 75) < 0,
+                 "move command cursor left", &failures);
+    check_result(send_text(to_child[1], from_child[0], &event, &response,
+                           "b") < 0,
+                 "insert at command cursor", &failures);
+    check_result(send_extended_key(to_child[1], from_child[0], &event,
+                                   &response, 79) < 0,
+                 "move command cursor to end", &failures);
+    check_result(send_text(to_child[1], from_child[0], &event, &response,
+                           " > /tmp/os3-terminal-cursor") < 0,
+                 "finish editable command", &failures);
+    check_result(send_key(to_child[1], from_child[0], &event, &response,
+                          28, '\n') < 0,
+                 "start editable command", &failures);
+    check_result(poll_until_idle(to_child[1], from_child[0], &event,
+                                 &response, 100) < 0,
+                 "editable command completion", &failures);
+    check_result(!file_contains(cursor_path, "abc"),
+                 "left arrow command insertion", &failures);
 #endif
 
     check_result(send_text(to_child[1], from_child[0], &event, &response,
@@ -342,6 +420,21 @@ int main(int argc, char **argv)
                  "output redirection completion", &failures);
     check_result(!file_contains(redirect_path, "redirect-ok"),
                  "output redirection contents", &failures);
+
+#ifndef KYLEOS_GUEST
+    remove(redirect_path);
+    check_result(send_extended_key(to_child[1], from_child[0], &event,
+                                   &response, 72) < 0,
+                 "recall command with up arrow", &failures);
+    check_result(send_key(to_child[1], from_child[0], &event, &response,
+                          28, '\n') < 0,
+                 "start recalled command", &failures);
+    check_result(poll_until_idle(to_child[1], from_child[0], &event,
+                                 &response, 100) < 0,
+                 "recalled command completion", &failures);
+    check_result(!file_contains(redirect_path, "redirect-ok"),
+                 "up arrow command history", &failures);
+#endif
 
     check_result(send_text(to_child[1], from_child[0], &event, &response,
                            "echo * > /tmp/os3-terminal-glob") < 0,
@@ -379,6 +472,7 @@ int main(int argc, char **argv)
     remove(source_path);
     remove(binary_path);
     remove(input_path);
+    remove(cursor_path);
 #endif
     remove(redirect_path);
     remove(glob_path);

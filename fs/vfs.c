@@ -1,5 +1,6 @@
 #include <fs/vfs.h>
 #include <fs/pipe.h>
+#include <fs/pty.h>
 #include <output/output.h>
 #include <mm/mm.h>
 struct vfs_device vfs_devices[VFS_MAX_DEVICES];
@@ -30,6 +31,7 @@ void vfs_init()
         ftable.open_files[i].dev = NULL;
             ftable.open_files[i].flags = 0;
             ftable.open_files[i].pipe = NULL;
+            ftable.open_files[i].pty = NULL;
     }
 
     release_spinlock(&ftable.lock);
@@ -196,6 +198,8 @@ static struct file *vfs_get_open_file(struct inode *i_node)
             ftable.open_files[i].refcount++;
             ftable.open_files[i].pipe = NULL;
             ftable.open_files[i].pipe_writer = false;
+            ftable.open_files[i].pty = NULL;
+            ftable.open_files[i].pty_master = false;
             return &(ftable.open_files[i]);
         }
     }
@@ -233,6 +237,8 @@ struct file *vfs_clone_file(struct file *source)
             copy->refcount = 1;
             if (copy->pipe != NULL)
                 pipe_add_ref((struct pipe_data *)copy->pipe, copy->pipe_writer);
+            if (copy->pty != NULL)
+                pty_add_ref((struct pty_data *)copy->pty, copy->pty_master);
             break;
         }
     }
@@ -249,10 +255,13 @@ void vfs_close_file(struct file *ofile)
         {
             if (ofile->pipe != NULL)
                 pipe_close((struct pipe_data *)ofile->pipe, ofile->pipe_writer);
+            if (ofile->pty != NULL)
+                pty_close((struct pty_data *)ofile->pty, ofile->pty_master);
             ofile->dev = NULL;
             ofile->flags = 0;
             ofile->pos = 0;
             ofile->pipe = NULL;
+            ofile->pty = NULL;
         }
     }
 }
@@ -400,6 +409,9 @@ struct inode * fs_is_mount_point(struct inode *ptr) {
 
 int vfs_read_file(struct file *rfile, void *buf, int count)
 {
+    if (rfile->pty != NULL)
+        return pty_read((struct pty_data *)rfile->pty,
+                        rfile->pty_master, buf, count);
     if (rfile->pipe != NULL) {
         if (rfile->pipe_writer)
             return -1;
@@ -433,8 +445,28 @@ int vfs_stat_file(struct file *rfile, struct stat *st)
         st->st_size = 0;
         return 0;
     }
+    if (rfile->pty != NULL) {
+        st->st_dev = 0;
+        st->st_ino = 0;
+        st->st_mode = I_DEV;
+        st->st_size = 0;
+        return 0;
+    }
     idev = rfile->dev->devicenum;
     return vfs_devices[idev].ops->stat_file(rfile, st);
+}
+
+bool vfs_file_is_tty(struct file *file)
+{
+    if (file == NULL || file->pipe != NULL)
+        return false;
+    if (file->pty != NULL)
+        return true;
+    if (file->dev == NULL)
+        return false;
+    if (file->dev->fstype == RAM_FS)
+        return ramfs_file_is_tty(file);
+    return false;
 }
 
 /* Keep seeking in the VFS so every filesystem shares the same file-position
@@ -446,7 +478,7 @@ int vfs_seek_file(struct file *rfile, long offset, int whence)
 
     if (rfile == NULL)
         return -1;
-    if (rfile->pipe != NULL)
+    if (rfile->pipe != NULL || rfile->pty != NULL)
         return -1;
     switch (whence) {
     case 0: base = 0; break;                 /* SEEK_SET */
@@ -464,6 +496,9 @@ int vfs_seek_file(struct file *rfile, long offset, int whence)
 
 int vfs_write_file(struct file *rfile, void *buf, int count)
 {
+    if (rfile->pty != NULL)
+        return pty_write((struct pty_data *)rfile->pty,
+                         rfile->pty_master, buf, count);
     if (rfile->pipe != NULL) {
         if (!rfile->pipe_writer)
             return -1;
@@ -495,6 +530,11 @@ int vfs_file_status(struct file *file, uint32_t *readable,
                     readable, writable, hung_up);
         return 0;
     }
+    if (file->pty != NULL) {
+        pty_status((struct pty_data *)file->pty, file->pty_master,
+                   readable, writable, hung_up);
+        return 0;
+    }
     available = file->i_node.file_size > file->pos ?
                 file->i_node.file_size - file->pos : 0;
     *readable = available > 0xffffffffULL ? 0xffffffffU :
@@ -516,6 +556,15 @@ int vfs_file_poll(struct file *file, int16_t events, int16_t *revents)
     if (file->pipe != NULL) {
         pipe_status((struct pipe_data *)file->pipe, file->pipe_writer,
                     &readable, &writable, &hung_up);
+        if ((events & KYLEOS_POLLIN) != 0 && readable != 0)
+            ready |= KYLEOS_POLLIN;
+        if ((events & KYLEOS_POLLOUT) != 0 && writable != 0)
+            ready |= KYLEOS_POLLOUT;
+        if (hung_up != 0)
+            ready |= KYLEOS_POLLHUP;
+    } else if (file->pty != NULL) {
+        pty_status((struct pty_data *)file->pty, file->pty_master,
+                   &readable, &writable, &hung_up);
         if ((events & KYLEOS_POLLIN) != 0 && readable != 0)
             ready |= KYLEOS_POLLIN;
         if ((events & KYLEOS_POLLOUT) != 0 && writable != 0)
@@ -567,7 +616,7 @@ int vfs_truncate_file(struct file *rfile)
 {
     int idev;
 
-    if (rfile == NULL || rfile->pipe != NULL)
+    if (rfile == NULL || rfile->pipe != NULL || rfile->pty != NULL)
         return -1;
     if ((rfile->flags & MAX_FILE_FLAGS) != O_WRONLY &&
         (rfile->flags & MAX_FILE_FLAGS) != O_RDWR)
@@ -622,6 +671,53 @@ int vfs_create_pipe(struct file **reader, struct file **writer)
     release_spinlock(&ftable.lock);
     *reader = read_file;
     *writer = write_file;
+    return 0;
+}
+
+int vfs_create_pty(struct file **master, struct file **slave)
+{
+    struct pty_data *pty;
+    struct file *master_file = NULL;
+    struct file *slave_file = NULL;
+
+    if (master == NULL || slave == NULL)
+        return -1;
+    pty = kmalloc(sizeof(*pty));
+    if (pty == NULL)
+        return -1;
+    memzero8((uint8_t *)pty, sizeof(*pty));
+    pty->master_refs = 1;
+    pty->slave_refs = 1;
+    init_spinlock(&pty->lock);
+
+    acquire_spinlock(&ftable.lock);
+    for (int i = 0; i < VFS_MAX_OPEN; i++) {
+        if (ftable.open_files[i].refcount == 0) {
+            if (master_file == NULL)
+                master_file = &ftable.open_files[i];
+            else {
+                slave_file = &ftable.open_files[i];
+                break;
+            }
+        }
+    }
+    if (master_file == NULL || slave_file == NULL) {
+        release_spinlock(&ftable.lock);
+        kfree(pty);
+        return -1;
+    }
+    memzero8((uint8_t *)master_file, sizeof(*master_file));
+    memzero8((uint8_t *)slave_file, sizeof(*slave_file));
+    master_file->refcount = 1;
+    master_file->flags = O_RDWR;
+    master_file->pty = pty;
+    master_file->pty_master = true;
+    slave_file->refcount = 1;
+    slave_file->flags = O_RDWR;
+    slave_file->pty = pty;
+    release_spinlock(&ftable.lock);
+    *master = master_file;
+    *slave = slave_file;
     return 0;
 }
 

@@ -70,13 +70,13 @@ KERNEL_OBJECT_DIRS = asm block drivers fs init irq locks mm output sched timer u
 OBJ_FILES = asm/asm.o asm/asm_calls.o \
 	block/ata.o \
 	drivers/pci.o \
-	fs/fat.o fs/ramfs.o fs/vfs.o fs/pipe.o \
+	fs/fat.o fs/ramfs.o fs/vfs.o fs/pipe.o fs/pty.o \
 	init/kernel.o init/tables.o init/dshell.o init/loader.o init/syscall.o \
 	irq/irq.o \
 	locks/spinlock.o locks/mutex.o \
 	mm/paging.o mm/mm.o mm/pmem.o mm/vmm.o mm/mtrr.o \
 	output/keyboard.o output/uart.o output/vga.o output/framebuffer.o \
-	output/output.o output/input.o output/mouse.o \
+	output/output.o output/input.o output/tty.o output/mouse.o \
 	sched/sched.o sched/ps.o sched/exec.o sched/signal.o \
 	timer/timer.o timer/rtc.o timer/pit.o \
 	utils/llist.o
@@ -87,6 +87,7 @@ output/font.h: output/font.psf.gz scripts/psf-to-header.sh
 output/vga.o: output/font.h
 
 fs/pipe.o: fs/pipe.h
+fs/pty.o: fs/pty.h
 
 all: kernel.img user
 
@@ -105,7 +106,7 @@ block: block/ata.o
 drivers: drivers/pci.o
 	$(MAKE) -C drivers
 
-fs: fs/fat.o fs/vfs.o fs/ramfs.o fs/pipe.o
+fs: fs/fat.o fs/vfs.o fs/ramfs.o fs/pipe.o fs/pty.o
 	$(MAKE) -C fs
 
 init: init/kernel.o init/loader.o init/tables.o init/dshell.o init/syscall.o
@@ -120,7 +121,7 @@ mm: mm/mm.o mm/paging.o mm/pmem.o mm/vmm.o
 sched: sched/sched.o sched/exec.o sched/ps.o sched/signal.o
 	$(MAKE) -C sched
 
-output: output/output.o output/vga.o output/uart.o output/keyboard.o output/input.o output/framebuffer.o output/mouse.o
+output: output/output.o output/vga.o output/uart.o output/keyboard.o output/input.o output/tty.o output/framebuffer.o output/mouse.o
 	$(MAKE) -C output
 
 timer: timer/pit.o timer/timer.o timer/rtc.o
@@ -132,18 +133,18 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit nushell ps kill kui gui-assets desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-desktop-config test-controlcenter-ui test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-suite doom doom-image doom-aqua doom-aqua-image quake quake-image quake-aqua quake-aqua-image refresh-kui-extras duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
+.PHONY: toolchain userland userinit nushell ps kill kui gui-assets desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest ttytest ptytest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-desktop-config test-controlcenter-ui test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-vt100 test-terminal-async test-help-ui test-suite doom doom-image doom-aqua doom-aqua-image quake quake-image quake-aqua quake-aqua-image refresh-kui-extras duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
-		CPPFLAGS=-DSIGNAL_PROVIDED DESTDIR= all
+		CFLAGS="-g -fno-stack-protector -DSIGNAL_PROVIDED" DESTDIR= all
 	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
-		CPPFLAGS=-DSIGNAL_PROVIDED DESTDIR= install
+		CFLAGS="-g -fno-stack-protector -DSIGNAL_PROVIDED" DESTDIR= install
 
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit nushell ps kill desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest demandtest oomtest breakout cc
+	$(MAKE) userinit nushell ps kill desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest ttytest ptytest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
@@ -277,9 +278,9 @@ cide: extras/cide/cide.c extras/editor/editor.c extras/editor/editor_ipc.h extra
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/cide/cide.c extras/editor/c_syntax.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/cide
 
-kterm: extras/terminal/terminal.c extras/terminal/terminal_ipc.h $(KUI_LIBRARY)
+kterm: extras/terminal/terminal.c extras/terminal/terminal_ipc.h extras/terminal/vt100.c extras/terminal/vt100.h $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
-	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kterm
+	$(CC) $(GUI_CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include extras/terminal/terminal.c extras/terminal/vt100.c $(KUI_LIBRARY) $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/kterm
 
 ktermtest: tests/test-terminal-async.c $(KUI_LIBRARY)
 	mkdir -p $(USERLAND_STAGE)
@@ -534,10 +535,17 @@ test-editor-clipboard:
 		-o /tmp/os3-test-editor-clipboard
 	/tmp/os3-test-editor-clipboard /tmp/os3-editor-host
 
+test-terminal-vt100:
+	$(CC) -std=c11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
+		tests/test-terminal-vt100.c extras/terminal/vt100.c \
+		-o /tmp/os3-test-terminal-vt100
+	/tmp/os3-test-terminal-vt100
+
 test-terminal-async:
 	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
 		-DKYLEOS_HOST -DTERMINAL_SHELL_PATH='"/bin/sh"' \
-		extras/terminal/terminal.c extras/kui/kui.c extras/kui/kui_client.c \
+		extras/terminal/terminal.c extras/terminal/vt100.c \
+		extras/kui/kui.c extras/kui/kui_client.c \
 		extras/kui/kui_style.c extras/kui/kui_style_win95.c \
 		extras/kui/kui_style_aqua.c -o /tmp/os3-terminal-host
 	$(CC) -std=gnu11 -Wall -Wextra -Werror -I $(KERNEL_ROOT) \
@@ -599,6 +607,14 @@ polltest: extras/polltest/polltest.c
 signaltest: extras/signaltest/signaltest.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/signaltest
+
+ttytest: extras/ttytest/ttytest.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a -o $(USERLAND_STAGE)/ttytest
+
+ptytest: extras/ptytest/ptytest.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a -o $(USERLAND_STAGE)/ptytest
 
 demandtest: extras/demandtest/demandtest.c
 	mkdir -p $(USERLAND_STAGE)
@@ -746,6 +762,6 @@ iso-test: iso
 		-cdrom bootable.iso \
 		-serial stdio
 
-test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-kui-shells
+test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-vt100 test-terminal-async test-help-ui test-kui-shells
 	$(MAKE) image-reset IMAGE=$(TEST_IMAGE) IMAGE_MOUNT=$(TEST_IMAGE_MOUNT)
 	QEMU=$(QEMU) QEMU_OPTS='$(QEMU_OPTS)' TEST_KERNEL=$(KERNEL_ROOT)/kernel32.bin TEST_IMAGE=$(TEST_IMAGE) TEST_TIMEOUT=$(TEST_TIMEOUT) bash tests/e2e/all-tests.sh

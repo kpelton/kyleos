@@ -6,6 +6,7 @@
 #include <mm/pmem.h>
 #include <output/input.h>
 #include <output/mouse.h>
+#include <output/tty.h>
 
 static int ramfs_truncate_file(struct file *rfile);
 static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
@@ -19,6 +20,9 @@ static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
 #define ZERO_INO 3
 #define KMSG_INO 4
 #define MOUSE_INO 5
+#define TTY0_INO 6
+#define TTY1_INO 7
+#define TTY_LAST_INO (TTY1_INO + TTY_CONSOLE_COUNT - 1)
 #define PROC_PROCESSES_INO 1
 #define PROC_MEMINFO_INO 2
 #define RAMFS_INSTANCE_COUNT 3
@@ -54,11 +58,27 @@ static struct ramfs_instance *ramfs_for_device(struct vfs_device *dev)
 
 static int ramfs_alloc_inode(struct ramfs_instance *fs)
 {
-    int first = fs->has_console ? 6 : fs->has_proc ? 3 : 2;
+    int first = fs->has_console ? TTY_LAST_INO + 1 : fs->has_proc ? 3 : 2;
     for (int i = first; i < fs->inode_capacity; i++)
         if (fs->inodes[i].dev == NULL)
             return i;
     return -1;
+}
+
+static void create_device_inode(struct ramfs_instance *fs,
+                                struct vfs_device *dev, int inode,
+                                const char *name)
+{
+    int child = fs->inodes[0].last_child++;
+
+    fs->inodes[0].children[child] = inode;
+    fs->inodes[inode].dev = dev;
+    kstrcpy(fs->inodes[inode].i_name, name);
+    fs->inodes[inode].i_type = I_DEV;
+    fs->inodes[inode].i_ino = inode;
+    fs->inodes[inode].file_size = 0;
+    fs->inodes[inode].parent = 0;
+    fs->inodes[inode].blocks = NULL;
 }
 
 static void create_root_dir(struct vfs_device *dev, bool with_console,
@@ -71,46 +91,25 @@ static void create_root_dir(struct vfs_device *dev, bool with_console,
     kstrcpy(fs->inodes[0].i_name, dev->mountpoint_root);
     fs->inodes[0].i_type=I_DIR;
     fs->inodes[0].i_ino = 0;
-    fs->inodes[0].last_child = with_console ? 5 : with_proc ? 2 : 0;
+    fs->inodes[0].last_child = 0;
     fs->inodes[0].file_size = 0;
     fs->inodes[0].parent = -1;
     fs->inodes[0].blocks = NULL;
     if (with_console) {
-        fs->inodes[0].children[0] = CONSOLE_INO;
-        fs->inodes[CONSOLE_INO].dev = dev;
-        kstrcpy(fs->inodes[CONSOLE_INO].i_name,"console");
-        fs->inodes[CONSOLE_INO].i_type=I_DEV;
-        fs->inodes[CONSOLE_INO].i_ino = CONSOLE_INO;
-        fs->inodes[CONSOLE_INO].file_size = 0;
-        fs->inodes[CONSOLE_INO].parent = 0;
-        fs->inodes[CONSOLE_INO].blocks = NULL;
-        fs->inodes[0].children[1] = NULL_INO;
-        fs->inodes[NULL_INO].dev = dev;
-        kstrcpy(fs->inodes[NULL_INO].i_name, "null");
-        fs->inodes[NULL_INO].i_type = I_DEV;
-        fs->inodes[NULL_INO].i_ino = NULL_INO;
-        fs->inodes[NULL_INO].parent = 0;
-        fs->inodes[0].children[2] = ZERO_INO;
-        fs->inodes[ZERO_INO].dev = dev;
-        kstrcpy(fs->inodes[ZERO_INO].i_name, "zero");
-        fs->inodes[ZERO_INO].i_type = I_DEV;
-        fs->inodes[ZERO_INO].i_ino = ZERO_INO;
-        fs->inodes[ZERO_INO].parent = 0;
-        fs->inodes[0].children[3] = KMSG_INO;
-        fs->inodes[KMSG_INO].dev = dev;
-        kstrcpy(fs->inodes[KMSG_INO].i_name, "kmsg");
-        fs->inodes[KMSG_INO].i_type = I_DEV;
-        fs->inodes[KMSG_INO].i_ino = KMSG_INO;
-        fs->inodes[KMSG_INO].parent = 0;
-        fs->inodes[0].children[4] = MOUSE_INO;
-        fs->inodes[MOUSE_INO].dev = dev;
-        kstrcpy(fs->inodes[MOUSE_INO].i_name, "mouse");
-        fs->inodes[MOUSE_INO].i_type = I_DEV;
-        fs->inodes[MOUSE_INO].i_ino = MOUSE_INO;
-        fs->inodes[MOUSE_INO].file_size = 0;
-        fs->inodes[MOUSE_INO].parent = 0;
-        fs->inodes[MOUSE_INO].blocks = NULL;
+        create_device_inode(fs, dev, CONSOLE_INO, "console");
+        create_device_inode(fs, dev, NULL_INO, "null");
+        create_device_inode(fs, dev, ZERO_INO, "zero");
+        create_device_inode(fs, dev, KMSG_INO, "kmsg");
+        create_device_inode(fs, dev, MOUSE_INO, "mouse");
+        create_device_inode(fs, dev, TTY0_INO, "tty0");
+        for (int index = 0; index < TTY_CONSOLE_COUNT; index++) {
+            char name[] = "tty1";
+
+            name[3] = '1' + index;
+            create_device_inode(fs, dev, TTY1_INO + index, name);
+        }
     } else if (with_proc) {
+        fs->inodes[0].last_child = 2;
         fs->inodes[0].children[0] = PROC_PROCESSES_INO;
         fs->inodes[PROC_PROCESSES_INO].dev = dev;
         kstrcpy(fs->inodes[PROC_PROCESSES_INO].i_name, "processes");
@@ -216,29 +215,42 @@ int ramfs_init(void) {
         return -1;
     return 0;
 }
-static int ramfs_read_console(void *buf, uint32_t count) {
-    (void)count;
+static int ramfs_tty_index(uint64_t inode)
+{
+    if (inode == TTY0_INO)
+        return TTY_ACTIVE_CONSOLE;
+    if (inode == CONSOLE_INO)
+        return 0;
+    if (inode >= TTY1_INO && inode <= TTY_LAST_INO)
+        return (int)(inode - TTY1_INO);
+    return -2;
+}
+
+bool ramfs_file_is_tty(struct file *file)
+{
+    struct ramfs_instance *fs;
+
+    if (file == NULL || file->dev == NULL)
+        return false;
+    fs = ramfs_for_device(file->dev);
+    return fs->has_console && ramfs_tty_index(file->i_node.i_ino) != -2;
+}
+
+static int ramfs_read_console(uint64_t inode, void *buf, uint32_t count) {
     int val=0;
     while (val == 0)
     {
         if (signal_has_unmasked_pending(get_current_process()))
             return -1;
-        input_read(buf);    
-        val = kstrlen(buf);
+        val = tty_read(ramfs_tty_index(inode), buf, count);
         if (val == 0)
             ksleepm(50);
     }
     return val;
 }
 
-static int ramfs_write_console(void *buf, uint32_t count) {
-    char buffer[4096];
-    if (count > 4095)
-        panic("can't handle console write of this size");
-    memcpy(buffer,buf,count);
-    buffer[count]='\0';
-    kprintf("%s",buffer); 
-    return count;
+static int ramfs_write_console(uint64_t inode, void *buf, uint32_t count) {
+    return tty_write(ramfs_tty_index(inode), buf, count);
 }
 
 static int proc_append(char *buffer, int size, int position,
@@ -308,8 +320,8 @@ int ramfs_read_file (struct file * rfile,void *buf,uint32_t count) {
     struct ramfs_block *r_block = fs->inodes[rfile->i_node.i_ino].blocks;
     uint64_t file_size = fs->inodes[rfile->i_node.i_ino].file_size;
     int ret_count = count;
-    if (fs->has_console && rfile->i_node.i_ino == CONSOLE_INO) {
-        return ramfs_read_console(buf,count);
+    if (fs->has_console && ramfs_tty_index(rfile->i_node.i_ino) != -2) {
+        return ramfs_read_console(rfile->i_node.i_ino, buf, count);
     }
     if (fs->has_console && rfile->i_node.i_ino == NULL_INO)
         return 0;
@@ -361,8 +373,8 @@ int ramfs_stat_file (struct file * rfile,struct stat *st) {
 int ramfs_write_file (struct file * rfile,void *buf,uint32_t count) {
     struct ramfs_instance *fs = ramfs_for_device(rfile->dev);
 
-    if (fs->has_console && rfile->i_node.i_ino == CONSOLE_INO) {
-        return ramfs_write_console(buf,count);
+    if (fs->has_console && ramfs_tty_index(rfile->i_node.i_ino) != -2) {
+        return ramfs_write_console(rfile->i_node.i_ino, buf, count);
     }
     if (fs->has_console && (rfile->i_node.i_ino == NULL_INO ||
                             rfile->i_node.i_ino == ZERO_INO))
@@ -415,7 +427,7 @@ static int ramfs_truncate_file(struct file *rfile)
      * Character devices have no stored contents, so truncating one is a
      * successful no-op rather than an error. */
     if (fs->has_console && rfile->i_node.i_type == I_DEV &&
-        rfile->i_node.i_ino <= MOUSE_INO) {
+        rfile->i_node.i_ino <= TTY_LAST_INO) {
         rfile->pos = 0;
         return 0;
     }
@@ -561,7 +573,7 @@ static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
         new_name[0] == '\0' ||
         new_parent->dev != i_node->dev || new_parent->i_type != I_DIR)
         return -1;
-    if (fs->has_console && inode_num <= MOUSE_INO)
+    if (fs->has_console && inode_num <= TTY_LAST_INO)
         return -1;
     acquire_spinlock(&fs->lock);
     if (fs->inodes[inode_num].dev == NULL ||

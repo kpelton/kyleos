@@ -25,6 +25,14 @@ void serial_kprintf(char* str)
 
 }
 
+void serial_write(const void *buffer, uint32_t count)
+{
+    const char *bytes = buffer;
+
+    for (uint32_t index = 0; index < count; index++)
+        outb(PORT, bytes[index]);
+}
+
 void serial_init()
 {
    init_mutex(&uart_print_mutex);
@@ -55,4 +63,3 @@ void serial_irq()
     PIC_sendEOI(1);
     release_spinlock(&uart_spinlock);
 }
-

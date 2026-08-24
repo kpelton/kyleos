@@ -79,6 +79,14 @@ int user_process_fd_status(struct ktask *t, int fd, uint32_t *readable,
     return vfs_file_status(t->open_fds[fd], readable, writable, hung_up);
 }
 
+int user_process_isatty(struct ktask *task, int fd)
+{
+    if (task == NULL || fd < 0 || fd >= MAX_TASK_OPEN_FILES ||
+        task->open_fds[fd] == NULL)
+        return -1;
+    return vfs_file_is_tty(task->open_fds[fd]) ? 1 : 0;
+}
+
 static int user_process_poll_scan(struct ktask *task,
                                   struct kyleos_pollfd *fds,
                                   uint32_t count)
@@ -171,6 +179,38 @@ int user_process_pipe(struct ktask *t, int pipefd[2])
     t->open_fds[writefd] = writer;
     pipefd[0] = readfd;
     pipefd[1] = writefd;
+    return 0;
+}
+
+int user_process_openpty(struct ktask *t, int ptyfd[2])
+{
+    struct file *master;
+    struct file *slave;
+    int masterfd = -1;
+    int slavefd = -1;
+
+    if (t == NULL || ptyfd == NULL || vfs_create_pty(&master, &slave) < 0)
+        return -1;
+    for (int i = START_USER_FD; i < MAX_TASK_OPEN_FILES; i++)
+        if (t->open_fds[i] == NULL) {
+            masterfd = i;
+            break;
+        }
+    if (masterfd >= 0)
+        for (int i = masterfd + 1; i < MAX_TASK_OPEN_FILES; i++)
+            if (t->open_fds[i] == NULL) {
+                slavefd = i;
+                break;
+            }
+    if (masterfd < 0 || slavefd < 0) {
+        vfs_close_file(master);
+        vfs_close_file(slave);
+        return -1;
+    }
+    t->open_fds[masterfd] = master;
+    t->open_fds[slavefd] = slave;
+    ptyfd[0] = masterfd;
+    ptyfd[1] = slavefd;
     return 0;
 }
 

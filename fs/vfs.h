@@ -79,6 +79,8 @@ struct file {
     uint32_t flags;
     void *pipe;
     bool pipe_writer;
+    void *pty;
+    bool pty_master;
 };
 
 struct file_table {
@@ -130,6 +132,7 @@ int vfs_read_file_offset(struct file * rfile,void *buf,int count,uint32_t offset
 int vfs_file_status(struct file *file, uint32_t *readable,
                     uint32_t *writable, uint32_t *hung_up);
 int vfs_file_poll(struct file *file, int16_t events, int16_t *revents);
+bool vfs_file_is_tty(struct file *file);
 
 int vfs_create_dir(struct inode* parent, char *name);
 struct inode* vfs_create_file(struct inode* parent, char *name,uint32_t flags);
@@ -137,6 +140,7 @@ int vfs_unlink(struct inode *i_node);
 int vfs_rmdir(struct inode *i_node);
 int vfs_rename(struct inode *i_node, struct inode *new_parent, char *new_name);
 int vfs_create_pipe(struct file **reader, struct file **writer);
+int vfs_create_pty(struct file **master, struct file **slave);
 
 struct file* vfs_open_file(struct inode * i_node,uint32_t flags);
 struct file* vfs_clone_file(struct file *source);

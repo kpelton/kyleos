@@ -4,8 +4,10 @@
 #include <include/types.h>
 #include <fs/ramfs.h>
 #include <fs/vfs.h>
+struct file;
 #define RAMFS_MAX_DIRECTORY 1024
 int ramfs_init(void);
+bool ramfs_file_is_tty(struct file *file);
 
 struct ramFS
 {
