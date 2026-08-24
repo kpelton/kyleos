@@ -2,6 +2,7 @@
 #include <sched/sched.h>
 #include <init/tables.h>
 #include <sched/exec.h>
+#include <sched/signal.h>
 #include <timer/timer.h>
 #include <mm/paging.h>
 #include <mm/mm.h>
@@ -25,7 +26,9 @@ extern void resume_p(uint64_t *rsp, uint64_t *rbp);
 extern void resume_p_userspace(uint64_t *rsp, uint64_t *rbp);
 
 static const char process_types_str[PROCESS_TYPES_LEN][20] = {"Kernel", "User"};
-const char task_type_str[TASK_STATE_NUM][20] = {"RUNNING", "READY", "NEW", "BLOCKED", "DONE"};
+const char task_type_str[TASK_STATE_NUM][20] = {
+    "RUNNING", "READY", "NEW", "BLOCKED", "STOPPED", "DONE"
+};
 
 static int report_text(char *buffer, uint32_t size, int position,
                        const char *text)
@@ -48,6 +51,9 @@ static int report_number(char *buffer, uint32_t size, int position,
 void ksleepm(uint32_t ms)
 {
     struct ktask *process = get_current_process();
+
+    if (signal_has_unmasked_pending(process))
+        return;
     process->timer = new_timer(ms);
     // yield to another process
     schedule();
@@ -326,6 +332,7 @@ void kthread_add(void (*fptr)(), char *name)
     kstrcpy(t->name, name);
     t->context_switches = 0;
     t->parent = -1;
+    signal_task_init(t);
     pid += 1;
 }
 
@@ -357,6 +364,7 @@ int sched_proc_report(char *buffer, uint32_t size)
     int running = 0;
     int ready = 0;
     int blocked = 0;
+    int stopped = 0;
 
     if (buffer == NULL || size == 0) return 0;
     buffer[0] = '\0';
@@ -367,6 +375,7 @@ int sched_proc_report(char *buffer, uint32_t size)
         if (ktasks[i].state == TASK_RUNNING) running++;
         else if (ktasks[i].state == TASK_READY) ready++;
         else if (ktasks[i].state == TASK_BLOCKED) blocked++;
+        else if (ktasks[i].state == TASK_STOPPED) stopped++;
     }
     position = report_text(buffer, size, position, "Processes: ");
     position = report_number(buffer, size, position, processes);
@@ -376,6 +385,8 @@ int sched_proc_report(char *buffer, uint32_t size)
     position = report_number(buffer, size, position, ready);
     position = report_text(buffer, size, position, "\nBlocked: ");
     position = report_number(buffer, size, position, blocked);
+    position = report_text(buffer, size, position, "\nStopped: ");
+    position = report_number(buffer, size, position, stopped);
     position = report_text(buffer, size, position,
                            "\n\nPID  STATE     TYPE    NAME\n");
     for (int i = 0; i < SCHED_MAX_TASKS && position + 48 < (int)size; i++) {
@@ -445,6 +456,7 @@ int user_process_fork()
     t->pid = pid;
     t->context_switches = 0;
     t->parent = curr->pid;
+    signal_task_fork(t, curr);
     t->user_start_heap = (uint64_t *) USER_HEAP_VADDR;
     t->user_heap_loc = curr->user_heap_loc;
     t->heap_size = curr->heap_size;
@@ -505,6 +517,7 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     // Don't clear file descriptors
     // TODO cleanup inode from cwd
     sched_process_kill(t->pid,false,false);
+    signal_task_exec(t);
     user_process_add_exec(startaddr,name,mm,true,argv,t,cwd,false);
     t->pid = c_pid;
     t->cwd = cwd;
@@ -534,6 +547,7 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
 
     if (ta == NULL) {
         t = &ktasks[find_free_task()];
+        signal_task_init(t);
     } else {
         t = ta;
     }
@@ -683,10 +697,17 @@ bool sched_process_kill(int pid, bool cleanup, bool close_files)
             }
             t->state = TASK_DONE;
             for (j = 0; j < SCHED_MAX_TASKS; j++)
-                if (ktasks[j].pid == t->parent &&
-                    ktasks[j].wait_channel == &ktasks[j]) {
-                    ktasks[j].wait_channel = NULL;
-                    ktasks[j].state = TASK_READY;
+                if (ktasks[j].pid == t->parent) {
+                    if (ktasks[j].signal_actions[KYLEOS_SIGCHLD].handler !=
+                            KYLEOS_SIG_DFL &&
+                        ktasks[j].signal_actions[KYLEOS_SIGCHLD].handler !=
+                            KYLEOS_SIG_IGN)
+                        __sync_fetch_and_or(&ktasks[j].signal_pending,
+                                            1ULL << KYLEOS_SIGCHLD);
+                    if (ktasks[j].wait_channel == &ktasks[j]) {
+                        ktasks[j].wait_channel = NULL;
+                        ktasks[j].state = TASK_READY;
+                    }
                 }
             // TODO: have init process handle reaping all pids and update children PIDs
             if (cleanup == true || t->parent <= 0)
@@ -714,7 +735,8 @@ done:
 /* Return the reaped PID, 0 when matching children still run, or -1 when the
  * caller has no matching child.  Keeping the scan and reap under the
  * scheduler lock prevents a task slot from being reused between the two. */
-int sched_reap_child(int parent_pid, int requested_pid, int *exit_code)
+int sched_reap_child(int parent_pid, int requested_pid, int *exit_code,
+                     bool report_stopped)
 {
     int i;
     bool found = false;
@@ -729,11 +751,21 @@ int sched_reap_child(int parent_pid, int requested_pid, int *exit_code)
         if (requested_pid != -1 && child->pid != requested_pid)
             continue;
         found = true;
+        if (report_stopped && child->state == TASK_STOPPED &&
+            !child->stop_reported) {
+            child->stop_reported = 1;
+            if (exit_code != NULL)
+                *exit_code = ((child->stop_signal & 0xff) << 8) | 0x7f;
+            release_spinlock(&sched_spinlock);
+            return child->pid;
+        }
         if (child->state != TASK_DONE)
             continue;
         reaped_pid = child->pid;
         if (exit_code != NULL)
-            *exit_code = child->exit_code;
+            *exit_code = child->exit_signal != 0
+                       ? child->exit_signal & 0x7f
+                       : (child->exit_code & 0xff) << 8;
         child->pid = -1;
         release_spinlock(&sched_spinlock);
         return reaped_pid;
@@ -742,7 +774,8 @@ int sched_reap_child(int parent_pid, int requested_pid, int *exit_code)
     return found ? 0 : -1;
 }
 
-int sched_wait_child(int parent_pid, int requested_pid, int *exit_code)
+int sched_wait_child(int parent_pid, int requested_pid, int *exit_code,
+                     bool report_stopped)
 {
     struct ktask *parent = get_current_process();
     bool found = false;
@@ -753,10 +786,20 @@ int sched_wait_child(int parent_pid, int requested_pid, int *exit_code)
             (requested_pid != -1 && child->pid != requested_pid))
             continue;
         found = true;
+        if (report_stopped && child->state == TASK_STOPPED &&
+            !child->stop_reported) {
+            child->stop_reported = 1;
+            if (exit_code != NULL)
+                *exit_code = ((child->stop_signal & 0xff) << 8) | 0x7f;
+            release_spinlock(&sched_spinlock);
+            return child->pid;
+        }
         if (child->state == TASK_DONE) {
             int reaped = child->pid;
             if (exit_code != NULL)
-                *exit_code = child->exit_code;
+                *exit_code = child->exit_signal != 0
+                           ? child->exit_signal & 0x7f
+                           : (child->exit_code & 0xff) << 8;
             child->pid = -1;
             release_spinlock(&sched_spinlock);
             return reaped;
@@ -772,6 +815,31 @@ int sched_wait_child(int parent_pid, int requested_pid, int *exit_code)
     schedule();
     parent->wait_channel = NULL;
     return 0;
+}
+
+void sched_process_stopped(struct ktask *task, int signal)
+{
+    if (task == NULL)
+        return;
+    acquire_spinlock(&sched_spinlock);
+    task->stop_signal = signal;
+    task->stop_reported = 0;
+    for (int i = 0; i < SCHED_MAX_TASKS; i++) {
+        struct ktask *parent = &ktasks[i];
+
+        if (parent->pid != task->parent)
+            continue;
+        if (parent->signal_actions[KYLEOS_SIGCHLD].handler != KYLEOS_SIG_DFL &&
+            parent->signal_actions[KYLEOS_SIGCHLD].handler != KYLEOS_SIG_IGN)
+            __sync_fetch_and_or(&parent->signal_pending,
+                                1ULL << KYLEOS_SIGCHLD);
+        if (parent->wait_channel == parent) {
+            parent->wait_channel = NULL;
+            parent->state = TASK_READY;
+        }
+        break;
+    }
+    release_spinlock(&sched_spinlock);
 }
 
 
@@ -825,8 +893,9 @@ static int find_next_task(int current_task)
     {
 
         i = (i + 1) % SCHED_MAX_TASKS;
-        if (ktasks[i].pid != -1 && ktasks[i].state != TASK_BLOCKED &&
-            ktasks[i].state != TASK_DONE)
+        if (ktasks[i].pid != -1 &&
+            (ktasks[i].state == TASK_NEW ||
+             ktasks[i].state == TASK_READY))
         {
             found_task = i;
         }
@@ -843,6 +912,10 @@ static void update_timers()
     int i;
     for (i = 0; i < SCHED_MAX_TASKS; i++)
     {
+        if (ktasks[i].state == TASK_STOPPED)
+        {
+            continue;
+        }
         if (update_timer(&ktasks[i].timer))
         {
             ktasks[i].state = TASK_READY;
@@ -874,7 +947,7 @@ void schedule_impl()
     if (prev_task != -1 && ktasks[prev_task].state != TASK_NEW &&
         ktasks[prev_task].state != TASK_DONE)
     {
-        if (ktasks[prev_task].state != TASK_BLOCKED)
+        if (ktasks[prev_task].state == TASK_RUNNING)
             ktasks[prev_task].state = TASK_READY;
         // save old stack
         asm volatile("movq %%rsp ,%0"
@@ -888,7 +961,7 @@ void schedule_impl()
         if (prev_task != -1 && ktasks[prev_task].state != TASK_NEW &&
             ktasks[prev_task].state != TASK_DONE)
         {
-            if (ktasks[prev_task].state != TASK_BLOCKED)
+            if (ktasks[prev_task].state == TASK_RUNNING)
                 ktasks[prev_task].state = TASK_READY;
             // save old stack
         }

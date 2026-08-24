@@ -2,6 +2,7 @@
 #include <mm/mm.h>
 #include <fs/vfs.h>
 #include <sched/sched.h>
+#include <sched/signal.h>
 #include <mm/pmem.h>
 #include <output/input.h>
 #include <output/mouse.h>
@@ -220,9 +221,12 @@ static int ramfs_read_console(void *buf, uint32_t count) {
     int val=0;
     while (val == 0)
     {
+        if (signal_has_unmasked_pending(get_current_process()))
+            return -1;
         input_read(buf);    
         val = kstrlen(buf);
-        ksleepm(50);
+        if (val == 0)
+            ksleepm(50);
     }
     return val;
 }

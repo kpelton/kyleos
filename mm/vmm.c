@@ -354,5 +354,16 @@ bool vmm_handle_page_fault(struct vmm_map *map, uint64_t address,
 
 bool vmm_populate_page(struct vmm_map *map, uint64_t address)
 {
+    uint64_t page = address & ~(PAGE_SIZE - 1);
+    uint64_t *pte;
+
+    if (map == NULL)
+        return false;
+    pte = paging_walk(&map->pagetable, page);
+    if (pte != NULL && (*pte & PAGE_PRESENT) != 0) {
+        if ((*pte & PAGE_COW) != 0)
+            return paging_resolve_cow_fault(&map->pagetable, page);
+        return (*pte & READ_WRITE) != 0;
+    }
     return vmm_handle_page_fault(map, address, PF_USER | PF_WRITE);
 }

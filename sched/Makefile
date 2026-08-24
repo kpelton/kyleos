@@ -9,6 +9,9 @@ exec.o :  exec.c exec.h
 ps.o : ps.c ps.h
 	$(CC) $(CFLAGS) -o $@ -c ps.c
 
+signal.o : signal.c signal.h sched.h
+	$(CC) $(CFLAGS) -o $@ -c signal.c
+
 #asm_calls.o: asm_calls.s
 #	$(AS) $(ASFLAGS) -o $@ $<
 

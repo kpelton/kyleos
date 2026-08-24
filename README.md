@@ -70,7 +70,8 @@ See the [GUI architecture guide](docs/gui-architecture.html),
 ### Core commands
 
 `ls`, `cat`, `cp`, `mv`, `rm`, `mkdir`, `rmdir`, `grep`, `wc`, `head`, `tail`,
-`ed`, `kedit`, `sh`, and the filesystem/process regression tools.
+`ps`, `kill`, `ed`, `kedit`, `sh`, and the filesystem/process regression
+tools.
 
 ### GUI applications
 
@@ -107,6 +108,9 @@ are built and installed by their respective image targets.
 - Pipes and shell redirection, including chained pipelines, repeat loops,
   `*`/`?` wildcard expansion, and `$?` reporting for the previous foreground
   command.
+- POSIX-style signal handlers, masks, pending signals, stop/continue state,
+  signal-aware wait statuses, and PID-based shell job control with `&`,
+  `jobs`, `fg`, `bg`, and job-aware `kill`.
 - Native `poll(2)` through Newlib for up to 64 descriptors, with event-driven
   pipe wakeups, finite or infinite timeouts, and regular-file readiness.
 - In-image filesystem, heap, and user-fault regression suites, plus a single
@@ -275,6 +279,12 @@ shell's normal input and output redirection:
 ```sh
 repeat 200 ls > /dev/null
 ```
+
+Background commands are assigned shell job numbers. Use `jobs` to inspect
+them, `fg %1` or `bg %1` to resume a job, and `kill -STOP %1`, `kill -CONT %1`,
+or `kill %1` to signal every process in that job. This is PID-based job control;
+process groups and controlling-terminal Ctrl+C/Ctrl+Z delivery are not yet
+implemented.
 
 ## Init and userspace boot
 

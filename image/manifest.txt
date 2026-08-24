@@ -39,6 +39,7 @@ kuid
 kterm
 ktermtest
 ksheet
+kill
 ls
 mkdir
 minesweeper
@@ -48,6 +49,8 @@ oomtest
 paint
 pipetest
 polltest
+ps
+signaltest
 parallel-writer-a
 parallel-writer-b
 rdwr

@@ -31,7 +31,7 @@ endif
 if HAVE_LIBC_SYS_OR1K_DIR
 include %D%/or1k/Makefile.inc
 endif
-if HAVE_LIBC_SYS_KYLEOS_DIR
+if HAVE_LIBC_SYS_RDOS_DIR
 include %D%/rdos/Makefile.inc
 endif
 if HAVE_LIBC_SYS_RTEMS_DIR
@@ -67,4 +67,6 @@ endif
 if HAVE_LIBC_SYS_Z8KSIM_DIR
 include %D%/z8ksim/Makefile.inc
 endif
+if HAVE_LIBC_SYS_KYLEOS_DIR
 include %D%/kyleos/Makefile.inc
+endif

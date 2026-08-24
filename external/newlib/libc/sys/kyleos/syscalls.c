@@ -1,6 +1,8 @@
 #include <sys/errno.h>
 #include <sys/fcntl.h>
 #include <poll.h>
+#include <signal.h>
+#include <reent.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/times.h>
@@ -12,12 +14,51 @@
  * incompatible types under newer compilers. */
 struct dirent;
 
+#define KYLEOS_SYS_GETPID 36
+#define KYLEOS_SYS_KILL 37
+#define KYLEOS_SYS_SIGACTION 38
+#define KYLEOS_SYS_SIGPROCMASK 39
+#define KYLEOS_SYS_SIGPENDING 40
+#define KYLEOS_SYS_SIGRETURN 41
+
+struct kyleos_sigaction {
+    uintptr_t handler;
+    unsigned long mask;
+    uintptr_t restorer;
+    uint32_t flags;
+    uint32_t reserved;
+};
+
+extern void __kyleos_signal_return(void);
+
+__asm__(
+    ".text\n"
+    ".global __kyleos_signal_return\n"
+    ".type __kyleos_signal_return, @function\n"
+    "__kyleos_signal_return:\n"
+    "mov %rsp, %rdi\n"
+    "mov $41, %rax\n"
+    "int $0x80\n"
+    "ud2\n"
+    ".size __kyleos_signal_return, .-__kyleos_signal_return\n");
+
+static long sys_signal_call3(long number, long first, long second, long third)
+{
+    register long result asm("rax") = number;
+
+    asm volatile("int $0x80" : "+a"(result)
+                 : "D"(first), "S"(second), "d"(third)
+                 : "memory");
+    return result;
+}
+
 static int sys_sleep(unsigned int msec)
 {
-    long val = 0;
-    (void)msec;
-    asm volatile("mov $0, %%rax; int $0x80\n nop\n; nop;nop;nop;movq %%rax ,%0" : "=g"(val));
-    return val;
+    register long result asm("rax") = 0;
+
+    asm volatile("int $0x80" : "+a"(result) : "D"((long)msec)
+                 : "memory");
+    return (int)result;
 }
 
 static int sys_gettimeofday(struct timeval *tv)
@@ -144,12 +185,12 @@ static void sys_exit(int code)
 
 static int sys_wait(int pid, int *status, int options)
 {
-    long val = 0;
-    (void)pid;
-    (void)status;
-    (void)options;
-    asm volatile("mov $7, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
-    return val;
+    register long result asm("rax") = 7;
+
+    asm volatile("int $0x80" : "+a"(result)
+                 : "D"((long)pid), "S"(status), "d"((long)options)
+                 : "memory");
+    return (int)result;
 }
 
 static int sys_exec(char *path, char **argv)
@@ -243,9 +284,7 @@ int fstat(int file, struct stat *st)
 };
 int getpid()
 {
-    for (;;)
-        ;
-    return 0;
+    return (int)sys_signal_call3(KYLEOS_SYS_GETPID, 0, 0, 0);
 };
 int isatty(int file)
 {
@@ -255,10 +294,82 @@ int isatty(int file)
 };
 int kill(int pid, int sig)
 {
-    for (;;)
-        ;
-    return 0;
+    return (int)sys_signal_call3(KYLEOS_SYS_KILL, pid, sig, 0);
 };
+
+int sigaction(int signal_number, const struct sigaction *action,
+              struct sigaction *old_action)
+{
+    struct kyleos_sigaction kernel_action;
+    struct kyleos_sigaction kernel_old_action;
+    struct kyleos_sigaction *kernel_action_pointer = NULL;
+    struct kyleos_sigaction *kernel_old_action_pointer = NULL;
+    int result;
+
+    if (action != NULL) {
+        kernel_action.handler = (uintptr_t)action->sa_handler;
+        kernel_action.mask = action->sa_mask;
+        kernel_action.restorer = (uintptr_t)__kyleos_signal_return;
+        kernel_action.flags = (uint32_t)action->sa_flags;
+        kernel_action.reserved = 0;
+        kernel_action_pointer = &kernel_action;
+    }
+    if (old_action != NULL)
+        kernel_old_action_pointer = &kernel_old_action;
+    result = (int)sys_signal_call3(KYLEOS_SYS_SIGACTION, signal_number,
+                                   (long)kernel_action_pointer,
+                                   (long)kernel_old_action_pointer);
+    if (result == 0 && old_action != NULL) {
+        old_action->sa_handler = (_sig_func_ptr)kernel_old_action.handler;
+        old_action->sa_mask = kernel_old_action.mask;
+        old_action->sa_flags = (int)kernel_old_action.flags;
+    }
+    return result;
+}
+
+int sigprocmask(int how, const sigset_t *set, sigset_t *old_set)
+{
+    return (int)sys_signal_call3(KYLEOS_SYS_SIGPROCMASK, how,
+                                 (long)set, (long)old_set);
+}
+
+int sigpending(sigset_t *set)
+{
+    return (int)sys_signal_call3(KYLEOS_SYS_SIGPENDING, (long)set, 0, 0);
+}
+
+_sig_func_ptr _signal_r(struct _reent *reent, int signal_number,
+                        _sig_func_ptr handler)
+{
+    struct sigaction action;
+    struct sigaction old_action;
+
+    sigemptyset(&action.sa_mask);
+    action.sa_handler = handler;
+    action.sa_flags = 0;
+    if (sigaction(signal_number, &action, &old_action) < 0) {
+        if (reent != NULL)
+            _REENT_ERRNO(reent) = EINVAL;
+        return SIG_ERR;
+    }
+    return old_action.sa_handler;
+}
+
+_sig_func_ptr signal(int signal_number, _sig_func_ptr handler)
+{
+    return _signal_r(_REENT, signal_number, handler);
+}
+
+int _init_signal_r(struct _reent *reent)
+{
+    (void)reent;
+    return 0;
+}
+
+int _init_signal(void)
+{
+    return 0;
+}
 int link(char *old, char *new)
 {
     for (;;)

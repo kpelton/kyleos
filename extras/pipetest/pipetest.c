@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -329,6 +330,13 @@ static int check(const char *name, int passed)
 int main(void)
 {
     int failures = 0;
+
+    /* Broken-pipe behavior is tested through write() return values below.
+     * Ignore SIGPIPE so the writers survive long enough to inspect them. */
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        puts("FAIL pipe unable to ignore SIGPIPE");
+        return 1;
+    }
 
     failures += check("reader wakeup and EOF", test_reader_wakeup_and_eof());
     failures += check("full-buffer writer wakeup", test_writer_wakeup());

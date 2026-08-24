@@ -10,9 +10,64 @@
 #include <sched/exec.h>
 #include <sched/ps.h>
 #include <sched/sched.h>
+#include <sched/signal.h>
 #include <timer/pit.h>
 #include <timer/rtc.h>
 typedef int (*sys_call)(void);
+
+static bool user_range_valid(const void *pointer, uint64_t size)
+{
+    uint64_t start = (uint64_t)pointer;
+    uint64_t end = start + size;
+
+    return pointer != NULL && end >= start &&
+           end <= (uint64_t)KERN_SPACE_BOUNDRY;
+}
+
+static int getpid_syscall(void)
+{
+    struct ktask *task = get_current_process();
+    return task == NULL ? -1 : task->pid;
+}
+
+static int kill_syscall(int pid, int signal)
+{
+    return signal_send(pid, signal);
+}
+
+static int sigaction_syscall(int signal,
+                             const struct kyleos_sigaction *action,
+                             struct kyleos_sigaction *old_action)
+{
+    if ((action != NULL && !user_range_valid(action, sizeof(*action))) ||
+        (old_action != NULL &&
+         !user_range_valid(old_action, sizeof(*old_action))))
+        return -1;
+    return signal_action(signal, action, old_action);
+}
+
+static int sigprocmask_syscall(int how, const uint64_t *set,
+                               uint64_t *old_set)
+{
+    if ((set != NULL && !user_range_valid(set, sizeof(*set))) ||
+        (old_set != NULL && !user_range_valid(old_set, sizeof(*old_set))))
+        return -1;
+    return signal_set_mask(how, set, old_set);
+}
+
+static int sigpending_syscall(uint64_t *set)
+{
+    if (!user_range_valid(set, sizeof(*set)))
+        return -1;
+    return signal_get_pending(set);
+}
+
+/* sigreturn is handled directly by usermode_int so it can restore the
+ * interrupt frame.  This table entry is only a defensive fallback. */
+static int sigreturn_syscall(void)
+{
+    return -1;
+}
 
 static int sleep(int msec)
 {
@@ -865,7 +920,13 @@ void *syscall_tbl[] = {
     (void *)&framebuffer_present_rect_syscall,  // 32
     (void *)&fd_status_syscall,                 // 33
     (void *)&gettimeofday_syscall,              // 34
-    (void *)&poll_syscall                       // 35
+    (void *)&poll_syscall,                      // 35
+    (void *)&getpid_syscall,                    // 36
+    (void *)&kill_syscall,                      // 37
+    (void *)&sigaction_syscall,                 // 38
+    (void *)&sigprocmask_syscall,               // 39
+    (void *)&sigpending_syscall,                // 40
+    (void *)&sigreturn_syscall                  // 41
 };
 
-const int NR_syscall = sizeof(syscall_tbl);
+const int NR_syscall = sizeof(syscall_tbl) / sizeof(syscall_tbl[0]);

@@ -2,6 +2,7 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -181,6 +182,7 @@ static int start_shell(const char *path)
     if (child == 0) {
         char *argv[] = { (char *)path, NULL };
 
+        (void)signal(SIGPIPE, SIG_DFL);
         close(to_shell[1]);
         close(from_shell[0]);
         dup2(to_shell[0], 0);
@@ -532,6 +534,7 @@ static int start_process(struct shell_window *window, const char *path)
     if (child == 0) {
         char *argv[] = { (char *)base_name(path), "--kui-client", NULL };
 
+        (void)signal(SIGPIPE, SIG_DFL);
         close(to_child[1]);
         close(from_child[0]);
         dup2(to_child[0], 0);
@@ -750,7 +753,7 @@ static void position_window(struct shell_window *window)
     if (window->y > max_y) window->y = max_y;
 }
 
-static void close_window_index(int index)
+static void release_window_index(int index, int notify_client)
 {
     struct shell_window *window;
 
@@ -765,14 +768,20 @@ static void close_window_index(int index)
     window = &windows[index];
     shell_log("CLOSE request pid=%d app=%s title=%s\n", window->pid,
               window->application, window->title);
-    send_window_event(index, KUI_EVENT_CLOSE, 0, 0, 0, 0, 0,
-                      0, 0, 0, 0, 0, NULL, NULL);
+    if (notify_client)
+        send_window_event(index, KUI_EVENT_CLOSE, 0, 0, 0, 0, 0,
+                          0, 0, 0, 0, 0, NULL, NULL);
     close(window->input_fd);
     close(window->output_fd);
     retire_window_process(window->pid);
     free(window->content_pixels);
     free(window->display_commands);
     memset(window, 0, sizeof(*window));
+}
+
+static void close_window_index(int index)
+{
+    release_window_index(index, 1);
 }
 
 static int run_exclusive(const char *path)
@@ -792,7 +801,11 @@ static int run_exclusive(const char *path)
     memset(frame_pixels, 0, frame_bytes);
     kui_present(&frame);
     child = fork();
-    if (child == 0) { execve(path, argv, NULL); _exit(127); }
+    if (child == 0) {
+        (void)signal(SIGPIPE, SIG_DFL);
+        execve(path, argv, NULL);
+        _exit(127);
+    }
     if (child > 0) waitpid(child, &status, 0);
     kui_tty_raw(1);
     while (kui_key_poll(&pressed, &code, &extended) > 0) { }
@@ -2106,7 +2119,7 @@ static int poll_gui_clients(int *shell_disconnected)
         } else if (windows[index].visible) {
             shell_log("POLL disconnected pid=%d app=%s events=0x%x\n",
                       windows[index].pid, windows[index].application, events);
-            close_window_index(index);
+            release_window_index(index, 0);
             changed = 1;
         }
     }
@@ -2126,6 +2139,14 @@ int desktop_shell_run(const char *shell_path)
 {
     uint32_t last_clock_minute;
     int shell_restarts = 0;
+
+    /* GUI clients communicate over pipes. A client can disappear between
+     * poll() and an event write; keep EPIPE as a recoverable per-window
+     * protocol error instead of letting SIGPIPE terminate the compositor. */
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        fprintf(stderr, "kuid: unable to ignore SIGPIPE\n");
+        return 1;
+    }
 
     if (start_shell(shell_path) < 0) {
         fprintf(stderr, "kuid: unable to start shell %s\n", shell_path);

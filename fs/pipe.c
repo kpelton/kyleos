@@ -1,6 +1,7 @@
 #include <fs/pipe.h>
 #include <mm/mm.h>
 #include <sched/sched.h>
+#include <sched/signal.h>
 
 int pipe_read(struct pipe_data *pipe, void *buf, int count)
 {
@@ -30,6 +31,10 @@ int pipe_read(struct pipe_data *pipe, void *buf, int count)
                 sched_io_notify();
             return copied;
         }
+        if (signal_has_unmasked_pending(get_current_process())) {
+            release_spinlock(&pipe->lock);
+            return -1;
+        }
         pipe->read_wait = 1;
         release_spinlock(&pipe->lock);
         sched_sleep_on_if(&pipe->read_wait, &pipe->read_wait);
@@ -48,6 +53,7 @@ int pipe_write(struct pipe_data *pipe, const void *buf, int count)
         acquire_spinlock(&pipe->lock);
         if (pipe->readers == 0) {
             release_spinlock(&pipe->lock);
+            signal_send(get_current_process()->pid, KYLEOS_SIGPIPE);
             return copied ? copied : -1;
         }
         while (copied < count && pipe->used < PIPE_BUFFER_SIZE) {
@@ -64,6 +70,9 @@ int pipe_write(struct pipe_data *pipe, const void *buf, int count)
             sched_wakeup(&pipe->read_wait);
         if (copied > before)
             sched_io_notify();
+        if (copied < count &&
+            signal_has_unmasked_pending(get_current_process()))
+            return copied ? copied : -1;
         if (copied < count)
             sched_sleep_on_if(&pipe->write_wait, &pipe->write_wait);
     }

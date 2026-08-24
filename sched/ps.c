@@ -1,4 +1,5 @@
 #include <sched/ps.h>
+#include <sched/signal.h>
 #include <output/output.h>
 #include <mm/paging.h>
 #include <mm/pmem.h>
@@ -126,6 +127,8 @@ int user_process_poll(struct ktask *task, struct kyleos_pollfd *fds,
 
         if (ready != 0 || timeout_ms == 0)
             return ready;
+        if (signal_has_unmasked_pending(task))
+            return -1;
         if (timeout_ms > 0) {
             uint32_t elapsed = read_jiffies() - start;
             uint32_t remaining_ticks;
@@ -175,6 +178,7 @@ void user_process_exit(struct ktask *t, int code)
 {
     //kprintf("Exit called");
     t->exit_code = code;
+    t->exit_signal = 0;
     sched_process_kill(t->pid,false,true);
     schedule();
 }
@@ -210,23 +214,28 @@ void *user_process_sbrk(struct ktask *t, uint64_t increment)
 int process_wait(int pid, int *status, int options)
 {
     struct ktask *current = get_current_process();
+    bool report_stopped = (options & 2) != 0;
 
-    /* KyleOS currently implements only the POSIX WNOHANG option. */
-    if (pid == 0 || pid < -1 || (options & ~1) != 0)
+    /* KyleOS currently implements POSIX WNOHANG and WUNTRACED. */
+    if (pid == 0 || pid < -1 || (options & ~3) != 0)
         return -1;
     while (1) {
         int exit_code = 0;
         int result = (options & 1)
-                   ? sched_reap_child(current->pid, pid, &exit_code)
-                   : sched_wait_child(current->pid, pid, &exit_code);
+                   ? sched_reap_child(current->pid, pid, &exit_code,
+                                      report_stopped)
+                   : sched_wait_child(current->pid, pid, &exit_code,
+                                      report_stopped);
 
         if (result != 0)
             {
                 if (result > 0 && status != NULL)
-                    *status = (exit_code & 0xff) << 8;
+                    *status = exit_code;
                 return result;
             }
         if (options & 1)
             return 0;
+        if (signal_has_unmasked_pending(current))
+            return -1;
     }
 }

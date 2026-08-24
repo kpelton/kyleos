@@ -15,6 +15,8 @@
 [extern sched_save_context]
 [extern schedule_impl]
 [extern syscall]
+[extern signal_deliver]
+[extern signal_sigreturn]
 [extern pagefault]
 [extern general_protection_fault]
 [global gdt_flush]
@@ -205,6 +207,8 @@ usermode_int:
     push r14
     push r15
     pushfq
+    cmp rax,41
+    je .signal_return
     ;;load syscall addr and call it
     push rsi
     mov r8, syscall_tbl
@@ -214,6 +218,11 @@ usermode_int:
     call save_context_asm
     pop rsi
     call [r8]
+.deliver_signal:
+    mov rsi,rax
+    mov rdi,rsp
+    call signal_deliver
+.restore:
     popfq
     pop r15
     pop r14
@@ -230,6 +239,10 @@ usermode_int:
     pop rcx
     pop rbx
     iretq
+.signal_return:
+    mov rsi,rsp
+    call signal_sigreturn
+    jmp .restore
 
 [global jump_usermode]
 jump_usermode:
@@ -392,7 +405,7 @@ resume_p_userspace:
 panic_handler:
     cli
     mov rdi,rax; Exception code
-    mov rsi,[rsp+8] ; RIP is pushed on stack
+    mov rsi,[rsp] ; RIP is at the top of an exception frame without an error code
     call print_regs
     jmp $
     iretq

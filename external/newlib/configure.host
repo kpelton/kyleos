@@ -422,6 +422,9 @@ case "${host}" in
 	posix_dir=posix
 	xdr_dir=xdr
 	;;
+  *-*-kyleos*)
+	sys_dir=kyleos
+	;;
   *-*-netware*)
 	signal_dir=
 	sys_dir=netware
@@ -588,6 +591,9 @@ case "${host}" in
 	CC="${CC} -I${cygwin_srcdir}/include"
 	newlib_cflags="${newlib_cflags} -DHAVE_OPENDIR -DHAVE_RENAME -DGETREENT_PROVIDED -DSIGNAL_PROVIDED -DHAVE_BLKSIZE -DHAVE_FCNTL -DMALLOC_PROVIDED"
 	syscall_dir=syscalls
+	;;
+  *-*-kyleos*)
+	newlib_cflags="${newlib_cflags} -DMISSING_SYSCALL_NAMES -DSIGNAL_PROVIDED"
 	;;
 # RTEMS supplies its own versions of some routines:
 #       malloc()            (reentrant version)

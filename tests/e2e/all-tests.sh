@@ -72,6 +72,18 @@ exec 3<> "$serial_input"
 qemu_pid=$!
 
 wait_for_text "Kyle OS has booted" 30 || fail "kernel did not boot within 30 seconds"
+printf 'nushell < /tests/jobs.sh\n' >&3
+wait_for_text "JOB-CONTROL-COMPLETE" 30 || fail "shell job-control test did not complete"
+grep -Eq '^\[1\] Running +[0-9]+ sleep 1$' "$log" ||
+    fail "background job was not listed"
+grep -Eq '^\[2\] Stopped +[0-9]+ sleep 20$' "$log" ||
+    fail "stopped job was not reported"
+grep -Eq '^\[2\] Running +sleep 20$' "$log" ||
+    fail "bg did not resume the stopped job"
+grep -Fq "KILL-COMMAND-STATUS 0" "$log" ||
+    fail "standalone kill command failed"
+grep -Fq "PID  STATE     TYPE    NAME" "$log" ||
+    fail "ps did not print the process table"
 printf 'nushell < /tests/all.sh\n' >&3
 
 deadline=$((SECONDS + timeout_seconds))
@@ -79,8 +91,8 @@ while (( SECONDS < deadline )); do
     if grep -Fq "ALL-TESTS-FAILED" "$log"; then
         fail "the in-image runner reported a failure"
     fi
-    if grep -Fq "ALL-TESTS-COMPLETE count=10" "$log"; then
-        marker_count=$(grep -Fc "ALL-TESTS-COMPLETE count=10" "$log")
+    if grep -Fq "ALL-TESTS-COMPLETE count=11" "$log"; then
+        marker_count=$(grep -Fc "ALL-TESTS-COMPLETE count=11" "$log")
         [[ $marker_count -eq 1 ]] || fail "completion marker appeared $marker_count times"
         echo "QEMU test suite passed; serial log: $log"
         exit 0

@@ -5,6 +5,7 @@
 #include <mm/paging.h>
 #include <mm/vmm.h>
 #include <fs/vfs.h>
+#include <include/uapi/signal.h>
 #define MAX_TASK_OPEN_FILES 64
 #define SCHED_MAX_TASKS 1024
 #define SCHED_MAX_NAME 32
@@ -34,8 +35,11 @@ void sched_io_wait(uint32_t generation, int timeout_ms);
 struct ktask* get_current_process();
 struct ktask *sched_get_process(int pid);
 int sched_proc_report(char *buffer, uint32_t size);
-int sched_reap_child(int parent_pid, int requested_pid, int *exit_code);
-int sched_wait_child(int parent_pid, int requested_pid, int *exit_code);
+int sched_reap_child(int parent_pid, int requested_pid, int *exit_code,
+                     bool report_stopped);
+int sched_wait_child(int parent_pid, int requested_pid, int *exit_code,
+                     bool report_stopped);
+void sched_process_stopped(struct ktask *task, int signal);
 bool sched_process_kill(int pid,bool cleanup,bool closefiles);
 int user_process_fork();
 void sched_save_context(uint64_t rip, uint64_t rsp);
@@ -49,6 +53,7 @@ enum sched_states {
     TASK_READY,
     TASK_NEW,
     TASK_BLOCKED,
+    TASK_STOPPED,
     TASK_DONE,
     TASK_STATE_NUM
 };
@@ -63,9 +68,12 @@ struct ktask{
     int pid;
     int parent;
     int exit_code;
+    int exit_signal;
     char name[SCHED_MAX_NAME];
     uint8_t state;
     uint8_t type;
+    uint8_t stop_signal;
+    uint8_t stop_reported;
     uint64_t *stack_alloc;
     uint64_t *start_stack;
     uint64_t *user_stack_alloc;
@@ -86,6 +94,9 @@ struct ktask{
     uint64_t fxsave_region[FXSAVE_SIZE/sizeof(uint64_t)] __attribute__((aligned(16)));
     struct inode *cwd;
     void *wait_channel;
+    uint64_t signal_pending;
+    uint64_t signal_mask;
+    struct kyleos_sigaction signal_actions[KYLEOS_NSIG];
 
 };
 

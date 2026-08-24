@@ -545,11 +545,11 @@ check_PROGRAMS =
 @HAVE_LIBC_SYS_NETWARE_DIR_TRUE@	libc/sys/netware/link.c
 
 @HAVE_LIBC_SYS_OR1K_DIR_TRUE@am__append_54 = libc/sys/or1k/getreent.S libc/sys/or1k/mlock.c
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@am__append_55 = \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/chown.c libc/sys/rdos/close.c libc/sys/rdos/execve.c libc/sys/rdos/fork.c libc/sys/rdos/fstat.c libc/sys/rdos/getenv.c \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/getpid.c libc/sys/rdos/gettod.c libc/sys/rdos/isatty.c libc/sys/rdos/kill.c libc/sys/rdos/link.c libc/sys/rdos/lseek.c libc/sys/rdos/open.c libc/sys/rdos/rdoshelp.c \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/rdos.S libc/sys/rdos/read.c libc/sys/rdos/readlink.c libc/sys/rdos/sbrk.c libc/sys/rdos/stat.c libc/sys/rdos/symlink.c libc/sys/rdos/times.c libc/sys/rdos/unlink.c \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/wait.c libc/sys/rdos/write.c
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@am__append_55 = \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/chown.c libc/sys/rdos/close.c libc/sys/rdos/execve.c libc/sys/rdos/fork.c libc/sys/rdos/fstat.c libc/sys/rdos/getenv.c \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/getpid.c libc/sys/rdos/gettod.c libc/sys/rdos/isatty.c libc/sys/rdos/kill.c libc/sys/rdos/link.c libc/sys/rdos/lseek.c libc/sys/rdos/open.c libc/sys/rdos/rdoshelp.c \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/rdos.S libc/sys/rdos/read.c libc/sys/rdos/readlink.c libc/sys/rdos/sbrk.c libc/sys/rdos/stat.c libc/sys/rdos/symlink.c libc/sys/rdos/times.c libc/sys/rdos/unlink.c \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/wait.c libc/sys/rdos/write.c
 
 @HAVE_LIBC_SYS_RTEMS_DIR_TRUE@am__append_56 = libc/sys/rtems/dummysys.c libc/sys/rtems/cpusetalloc.c libc/sys/rtems/cpusetfree.c
 @HAVE_LIBC_SYS_SH_DIR_TRUE@am__append_57 = libc/sys/sh/syscalls.c libc/sys/sh/trap.S libc/sys/sh/creat.c libc/sys/sh/ftruncate.c libc/sys/sh/truncate.c
@@ -1616,30 +1616,30 @@ am__objects_51 = libc/ssp/a-chk_fail.$(OBJEXT) \
 @HAVE_LIBC_SYS_NETWARE_DIR_TRUE@	libc/sys/netware/a-link.$(OBJEXT)
 @HAVE_LIBC_SYS_OR1K_DIR_TRUE@am__objects_64 = libc/sys/or1k/a-getreent.$(OBJEXT) \
 @HAVE_LIBC_SYS_OR1K_DIR_TRUE@	libc/sys/or1k/a-mlock.$(OBJEXT)
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@am__objects_65 = libc/sys/rdos/a-chown.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-close.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-execve.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-fork.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-fstat.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-getenv.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-getpid.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-gettod.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-isatty.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-kill.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-link.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-lseek.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-open.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-rdoshelp.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-rdos.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-read.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-readlink.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-sbrk.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-stat.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-symlink.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-times.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-unlink.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-wait.$(OBJEXT) \
-@HAVE_LIBC_SYS_KYLEOS_DIR_TRUE@	libc/sys/rdos/a-write.$(OBJEXT)
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@am__objects_65 = libc/sys/rdos/a-chown.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-close.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-execve.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-fork.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-fstat.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-getenv.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-getpid.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-gettod.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-isatty.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-kill.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-link.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-lseek.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-open.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-rdoshelp.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-rdos.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-read.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-readlink.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-sbrk.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-stat.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-symlink.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-times.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-unlink.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-wait.$(OBJEXT) \
+@HAVE_LIBC_SYS_RDOS_DIR_TRUE@	libc/sys/rdos/a-write.$(OBJEXT)
 @HAVE_LIBC_SYS_RTEMS_DIR_TRUE@am__objects_66 = libc/sys/rtems/a-dummysys.$(OBJEXT) \
 @HAVE_LIBC_SYS_RTEMS_DIR_TRUE@	libc/sys/rtems/a-cpusetalloc.$(OBJEXT) \
 @HAVE_LIBC_SYS_RTEMS_DIR_TRUE@	libc/sys/rtems/a-cpusetfree.$(OBJEXT)

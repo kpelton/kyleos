@@ -77,7 +77,7 @@ OBJ_FILES = asm/asm.o asm/asm_calls.o \
 	mm/paging.o mm/mm.o mm/pmem.o mm/vmm.o mm/mtrr.o \
 	output/keyboard.o output/uart.o output/vga.o output/framebuffer.o \
 	output/output.o output/input.o output/mouse.o \
-	sched/sched.o sched/ps.o sched/exec.o \
+	sched/sched.o sched/ps.o sched/exec.o sched/signal.o \
 	timer/timer.o timer/rtc.o timer/pit.o \
 	utils/llist.o
 
@@ -117,7 +117,7 @@ irq: irq/irq.o
 mm: mm/mm.o mm/paging.o mm/pmem.o mm/vmm.o
 	$(MAKE) -C mm
 
-sched: sched/sched.o sched/exec.o sched/ps.o
+sched: sched/sched.o sched/exec.o sched/ps.o sched/signal.o
 	$(MAKE) -C sched
 
 output: output/output.o output/vga.o output/uart.o output/keyboard.o output/input.o output/framebuffer.o output/mouse.o
@@ -132,24 +132,24 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit kui gui-assets desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-desktop-config test-controlcenter-ui test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-suite doom doom-image doom-aqua doom-aqua-image quake quake-image quake-aqua quake-aqua-image refresh-kui-extras duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
+.PHONY: toolchain userland userinit nushell ps kill kui gui-assets desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-desktop-config test-controlcenter-ui test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-async test-help-ui test-suite doom doom-image doom-aqua doom-aqua-image quake quake-image quake-aqua quake-aqua-image refresh-kui-extras duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
-		DESTDIR= all
+		CPPFLAGS=-DSIGNAL_PROVIDED DESTDIR= all
 	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
-		DESTDIR= install
+		CPPFLAGS=-DSIGNAL_PROVIDED DESTDIR= install
 
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
-	$(MAKE) userinit desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest demandtest oomtest breakout cc
+	$(MAKE) userinit nushell ps kill desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
-		if [ -f $(CORE_SRC)/$$program ]; then cp $(CORE_SRC)/$$program $(USERLAND_STAGE)/$$program; \
+		if [ -f $(USERLAND_STAGE)/$$program ]; then :; \
+		elif [ -f $(CORE_SRC)/$$program ]; then cp $(CORE_SRC)/$$program $(USERLAND_STAGE)/$$program; \
 		elif [ -f $(PROGS_SRC)/progs/$$program ]; then cp $(PROGS_SRC)/progs/$$program $(USERLAND_STAGE)/$$program; \
-		elif [ -f $(USERLAND_STAGE)/$$program ]; then :; \
 		else echo "missing userland program: $$program" >&2; exit 1; fi; \
 	done < image/manifest.txt
 
@@ -160,6 +160,18 @@ kedit: extras/kedit/kedit.c
 userinit: extras/init/init.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/init
+
+nushell: extras/shell/nushell.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a -o $(USERLAND_STAGE)/nushell
+
+ps: extras/shell/ps.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a -o $(USERLAND_STAGE)/ps
+
+kill: extras/shell/kill.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a -o $(USERLAND_STAGE)/kill
 
 kui: $(KUI_LIBRARY)
 
@@ -583,6 +595,10 @@ pipetest: extras/pipetest/pipetest.c
 polltest: extras/polltest/polltest.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/polltest
+
+signaltest: extras/signaltest/signaltest.c
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a $(SYSROOT)/lib/libm.a -o $(USERLAND_STAGE)/signaltest
 
 demandtest: extras/demandtest/demandtest.c
 	mkdir -p $(USERLAND_STAGE)
