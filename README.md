@@ -22,6 +22,8 @@ KyleOS is a bootable system rather than a userspace demo. The image combines a
 small preemptive kernel, a FAT32-backed root filesystem, a Unix-like command
 environment, and two window-manager shells sharing the same GUI applications.
 It runs in QEMU and on compatible x86 hardware with legacy BIOS and PS/2 input.
+The GUI userspace requires an SSE4.2-capable CPU; the default QEMU profile uses
+`-cpu max` so those instructions are available.
 
 ## Kernel and platform
 
@@ -35,8 +37,9 @@ It runs in QEMU and on compatible x86 hardware with legacy BIOS and PS/2 input.
 - PCI device discovery for IDE and display hardware. Runtime disk I/O uses
   PCI IDE bus-master DMA on supported compatibility-mode controllers, with
   IRQ completion, bounded timeouts, and automatic PIO fallback for reads.
-- `/dev/console`, `/dev/null`, `/dev/zero`, `/dev/kmsg`, UART/serial input,
-  keyboard input, PS/2 mouse input, and raw-console mode.
+- `/dev/console`, four switchable virtual terminals, `/dev/ttyS0`,
+  `/dev/null`, `/dev/zero`, `/dev/kmsg`, UART/serial input, keyboard input,
+  PS/2 mouse input, and raw-console mode.
 - User-mode page and general-protection faults terminate the offending process;
   kernel faults retain register-dump diagnostics.
 
@@ -61,7 +64,8 @@ protocol over pipes.
   demonstrations.
 
 See the [GUI architecture guide](docs/gui-architecture.html),
-[Markdown architecture notes](docs/gui-architecture.md), and the
+[Markdown architecture notes](docs/gui-architecture.md), the
+[KUI/KUID protocol map](reports/kuid-protocol.html),
 [project growth graph](docs/project-growth.html), and the
 [Aqua desktop screenshot](docs/kyleos-aqua-desktop.png).
 
@@ -95,7 +99,8 @@ are built and installed by their respective image targets.
   `fork`, demand-paged `exec`, `wait`, file descriptors, and standard
   input/output/error.
 - A userspace `/sbin/init` running as PID 1, with orphan adoption, child
-  reaping, and automatic console-shell restart.
+  reaping, four supervised virtual-console shells, and a supervised COM1
+  serial shell.
 - FAT32 root filesystem plus separate RAM filesystems at `/dev` and `/tmp`.
 - PCI IDE bus-master DMA for runtime reads and writes, using a 32 KiB,
   64-KiB-boundary-safe bounce buffer and physical PRDT. Fast transfers complete
@@ -104,20 +109,26 @@ are built and installed by their respective image targets.
 - `/dev/console`, `/dev/null`, `/dev/zero`, and a writable 64 KiB kernel-log
   ring at `/dev/kmsg` with monotonic timestamps.
 - Directories, file and empty-directory removal, 8.3-safe rename,
-  truncate-on-open, seek, file sizes, and a simple VFS.
+  case-insensitive FAT lookup, truncate/append opens, shared open-file
+  positions across `fork`, seek, file sizes, and a simple VFS.
 - Pipes and shell redirection, including chained pipelines, repeat loops,
   `*`/`?` wildcard expansion, and `$?` reporting for the previous foreground
   command.
 - POSIX-style signal handlers, masks, pending signals, stop/continue state,
-  signal-aware wait statuses, and PID-based shell job control with `&`,
-  `jobs`, `fg`, `bg`, and job-aware `kill`.
+  signal-aware wait statuses, process groups, sessions, and terminal-aware
+  shell job control with `&`, `jobs`, `fg`, `bg`, and job-aware `kill`.
+- PTY line discipline with canonical input, echo, configurable control
+  characters, foreground-process-group ownership, and terminal-generated
+  Ctrl+C, Ctrl+\, and Ctrl+Z signals.
 - Native `poll(2)` through Newlib for up to 64 descriptors, with event-driven
   pipe wakeups, finite or infinite timeouts, and regular-file readiness.
 - In-image filesystem, heap, and user-fault regression suites, plus a single
   integrated runner: `nushell < /tests/all.sh`.
 - User-mode page and general-protection faults terminate only the offending
   process; kernel-mode faults retain the register-dump panic path.
-- UART/serial input, keyboard input, raw-console mode, and a framebuffer.
+- Four virtual consoles selected with Alt+F1 through Alt+F4, a separate COM1
+  login at `/dev/ttyS0`, keyboard input, raw-console mode, and a 1920x1080
+  framebuffer on the supported BGA display path.
 - PS/2 mouse input and a shared userspace compositor at `/bin/kuid`. Launch
   `/bin/desktop` for the classic taskbar/Start environment or `/bin/aqua` for
   the Aqua-inspired menu bar, Dock, and traffic-light window controls. Both
@@ -258,6 +269,8 @@ New generated images use this layout:
 │   └── init             # PID 1 and console supervisor
 ├── dev/                 # RAM filesystem
 │   ├── console
+│   ├── tty1 ... tty4       # Alt+F1 ... Alt+F4 virtual terminals
+│   ├── ttyS0               # COM1 serial terminal
 │   ├── null
 │   ├── zero
 │   └── kmsg
@@ -282,16 +295,19 @@ repeat 200 ls > /dev/null
 
 Background commands are assigned shell job numbers. Use `jobs` to inspect
 them, `fg %1` or `bg %1` to resume a job, and `kill -STOP %1`, `kill -CONT %1`,
-or `kill %1` to signal every process in that job. This is PID-based job control;
-process groups and controlling-terminal Ctrl+C/Ctrl+Z delivery are not yet
-implemented.
+or `kill %1` to signal every process in that job. Pipelines and jobs use real
+process groups. The shell transfers PTY foreground ownership to foreground
+jobs, so Ctrl+C, Ctrl+\, and Ctrl+Z are delivered by the terminal line
+discipline to the complete foreground process group.
 
 ## Init and userspace boot
 
-The kernel starts `/sbin/init` as PID 1.  Init inherits the three console file
-descriptors, forks `/bin/nushell`, waits for it, and restarts it whenever it
-exits or is terminated by a userspace fault.  When another process exits, its
-live children are reparented to PID 1 so init can reap them.
+The kernel starts `/sbin/init` as PID 1. Init starts `/bin/nushell` on
+`/dev/tty1` through `/dev/tty4` and `/dev/ttyS0`, waits for the supervised
+shells, and restarts any one that exits or is terminated by a userspace fault.
+Use Alt+F1 through Alt+F4 to switch virtual consoles; the serial shell uses
+COM1. When another process exits, its live children are reparented to PID 1 so
+init can reap them.
 
 For compatibility with older disk images, the kernel falls back to
 `/bin/nushell` and then the legacy root-level `nushell` when `/sbin/init` is
@@ -337,7 +353,7 @@ inside a normal Aqua window. It does not replace the original fullscreen
 
 The original GPL Quake engine is pinned as the `extras/quake` submodule. The
 KyleOS port uses the portable C software renderer at 320x200, scaled to a
-640x400 presentation surface on the 1280x720 framebuffer. The original
+640x400 presentation surface on the 1920x1080 framebuffer. The original
 fullscreen binary remains keyboard-only. The separate Aqua build runs in a
 normal resizable window and accepts KUI keyboard, mouse-look, and mouse-button
 events. Sound and external networking remain disabled.
@@ -414,11 +430,11 @@ make test-kui-shells test-ksheet-ui test-editor-clipboard \
   test-terminal-async test-help-ui
 ```
 
-The shell writes app lifecycle and protocol failures to `/SHELL.LOG` without
+The shell appends lifecycle and protocol failures to `/shell.log` without
 polluting the KUI stdout stream. In the running system, inspect it with:
 
 ```sh
-cat /SHELL.LOG
+cat /shell.log
 ```
 
 The integrated in-OS regression runner is documented below.
@@ -577,21 +593,24 @@ grep "Moses" /usr/share/text/bible.txt | grep "said"
 
 ## Current limitations
 
-- No multiuser model, permissions, signals, networking, or dynamic linker.
-- Init currently supervises one console shell; it does not yet parse service
-  configuration, manage dependencies, or provide shutdown/reboot targets.
+- No multiuser model, permissions, networking, or dynamic linker.
+- Init supervises four virtual-console shells and one serial shell; it does not
+  yet parse service configuration, manage dependencies, or provide
+  shutdown/reboot targets.
 - The FAT implementation is intentionally small; rename targets must use
   conventional 8.3-compatible names.
 - IDE DMA currently supports the selected boot disk on a compatibility-mode
   PCI IDE channel. Native-mode PCI interrupt routing, multiple active channels,
   scatter/gather requests, and storage above the legacy 28-bit LBA range are
   not implemented; unsupported controllers continue through PIO.
-- No hard links, symlinks, full terminal/termios support, or configurable
-  shell environment.
+- No hard links, symlinks, or configurable shell environment. The PTY line
+  discipline implements canonical input, echo, signal-generating control
+  characters, foreground groups, and a basic `termios` ABI, but not the full
+  POSIX input/output flag and baud-rate behavior.
 - Channel wait queues cover blocking `waitpid`, mutex contention, and
-  generation-based `poll` wakeups. `poll` currently reports pipe and regular
-  file readiness; device-specific input readiness and signal cancellation are
-  still pending.
+  generation-based `poll` wakeups. `poll` currently reports pipe, PTY, and
+  regular-file readiness; other device-specific input readiness and signal
+  cancellation are still pending.
 - Copy-on-write currently uses full TLB flushes at process switches and has no
   swap, page eviction, file-backed `mmap`, shared-memory mappings, or a
   copy-on-write page cache. ELF load segments that overlap at page granularity

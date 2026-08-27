@@ -26,7 +26,7 @@ struct tty_key_event {
     bool pressed;
 };
 
-static struct tty_console consoles[TTY_CONSOLE_COUNT];
+static struct tty_console consoles[TTY_CONSOLE_COUNT + 1];
 static struct tty_key_event key_queue[TTY_KEY_QUEUE_SIZE];
 static uint32_t key_head;
 static uint32_t key_tail;
@@ -37,7 +37,7 @@ static int resolve_console(int console)
 {
     if (console == TTY_ACTIVE_CONSOLE)
         return active_console;
-    if (console < 0 || console >= TTY_CONSOLE_COUNT)
+    if (console < 0 || console > TTY_SERIAL_CONSOLE)
         return -1;
     return console;
 }
@@ -50,11 +50,11 @@ static void clear_bytes(char *buffer, uint32_t count)
 
 static void tty_echo(int console, const char *text, uint32_t count)
 {
-    vga_console_write(console, text, count);
-#ifndef KYLEOS_DISABLE_SERIAL_OUTPUT
-    if (console == tty_active_console())
+    if (console == TTY_SERIAL_CONSOLE) {
         serial_write(text, count);
-#endif
+        return;
+    }
+    vga_console_write(console, text, count);
 }
 
 void tty_init(void)
@@ -63,7 +63,7 @@ void tty_init(void)
     active_console = 0;
     key_head = 0;
     key_tail = 0;
-    for (int index = 0; index < TTY_CONSOLE_COUNT; index++) {
+    for (int index = 0; index <= TTY_SERIAL_CONSOLE; index++) {
         clear_bytes(consoles[index].ready, sizeof(consoles[index].ready));
         clear_bytes(consoles[index].editing,
                     sizeof(consoles[index].editing));
@@ -121,23 +121,27 @@ int tty_write(int console, const void *buffer, uint32_t count)
     release_spinlock(&tty_lock);
     if (console < 0)
         return -1;
-    vga_console_write(console, buffer, count);
-#ifndef KYLEOS_DISABLE_SERIAL_OUTPUT
-    if (console == tty_active_console())
+    if (console == TTY_SERIAL_CONSOLE) {
         serial_write(buffer, count);
-#endif
+        return (int)count;
+    }
+    vga_console_write(console, buffer, count);
     return (int)count;
 }
 
-void tty_receive_char(char character)
+static void tty_receive_char_on(int console, char character, bool echo_input)
 {
     struct tty_console *tty;
-    int console;
     char echo[3];
     uint32_t echo_length = 0;
 
     acquire_spinlock(&tty_lock);
-    console = active_console;
+    if (console == TTY_ACTIVE_CONSOLE)
+        console = active_console;
+    if (console < 0 || console > TTY_SERIAL_CONSOLE) {
+        release_spinlock(&tty_lock);
+        return;
+    }
     tty = &consoles[console];
     if (tty->raw) {
         uint32_t next = (tty->raw_head + 1) % TTY_RAW_QUEUE_SIZE;
@@ -165,7 +169,7 @@ void tty_receive_char(char character)
             echo_length = 3;
         }
         release_spinlock(&tty_lock);
-        if (echo_length != 0)
+        if (echo_input && echo_length != 0)
             tty_echo(console, echo, echo_length);
         return;
     }
@@ -185,6 +189,16 @@ void tty_receive_char(char character)
     echo_length = 1;
     release_spinlock(&tty_lock);
     tty_echo(console, echo, echo_length);
+}
+
+void tty_receive_char(char character)
+{
+    tty_receive_char_on(TTY_ACTIVE_CONSOLE, character, true);
+}
+
+void tty_receive_serial_char(char character)
+{
+    tty_receive_char_on(TTY_SERIAL_CONSOLE, character, true);
 }
 
 void tty_set_raw(int console, bool enabled)

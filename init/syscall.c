@@ -37,7 +37,53 @@ static int isatty_syscall(int fd)
 
 static int kill_syscall(int pid, int signal)
 {
-    return signal_send(pid, signal);
+    return signal_kill(pid, signal);
+}
+
+static int getpgid_syscall(int pid)
+{
+    return sched_get_process_group(pid);
+}
+
+static int setpgid_syscall(int pid, int process_group)
+{
+    struct ktask *current = get_current_process();
+
+    return current == NULL ? -1 :
+           sched_set_process_group(current->pid, pid, process_group);
+}
+
+static int setsid_syscall(void)
+{
+    struct ktask *current = get_current_process();
+
+    return current == NULL ? -1 : sched_create_session(current->pid);
+}
+
+static int tcgetpgrp_syscall(int fd)
+{
+    return user_process_tcgetpgrp(get_current_process(), fd);
+}
+
+static int tcsetpgrp_syscall(int fd, int process_group)
+{
+    return user_process_tcsetpgrp(get_current_process(), fd, process_group);
+}
+
+static int tcgetattr_syscall(int fd, struct kyleos_termios *termios)
+{
+    if (!user_range_valid(termios, sizeof(*termios)))
+        return -1;
+    return user_process_tcgetattr(get_current_process(), fd, termios);
+}
+
+static int tcsetattr_syscall(int fd, int action,
+                             const struct kyleos_termios *termios)
+{
+    if (!user_range_valid(termios, sizeof(*termios)))
+        return -1;
+    return user_process_tcsetattr(get_current_process(), fd, action,
+                                  termios);
 }
 
 static int sigaction_syscall(int signal,
@@ -856,8 +902,20 @@ static int dup(const int oldfd)
 #ifdef DEBUG_SYSCALL
     kprintf("DUP\n");
 #endif
-    //TODO broken
-    return oldfd;
+    struct ktask *t = get_current_process();
+    int newfd;
+
+    if (oldfd < 0 || oldfd >= MAX_TASK_OPEN_FILES ||
+        t->open_fds[oldfd] == NULL)
+        return -1;
+    for (newfd = 0; newfd < MAX_TASK_OPEN_FILES; newfd++)
+        if (t->open_fds[newfd] == NULL)
+            break;
+    if (newfd == MAX_TASK_OPEN_FILES)
+        return -1;
+    t->open_fds[newfd] = t->open_fds[oldfd];
+    t->open_fds[newfd]->refcount++;
+    return newfd;
 }
 
 static int dup2(const int oldfd,const int newfd)
@@ -871,6 +929,9 @@ static int dup2(const int oldfd,const int newfd)
 
     if (newfd >= MAX_TASK_OPEN_FILES || newfd < 0)
         return -1;
+
+    if (oldfd == newfd)
+        return newfd;
     
     // See if oldfd is really open
     struct ktask *t = get_current_process();
@@ -940,7 +1001,14 @@ void *syscall_tbl[] = {
     (void *)&sigpending_syscall,                // 40
     (void *)&sigreturn_syscall,                 // 41
     (void *)&isatty_syscall,                    // 42
-    (void *)&openpty_syscall                    // 43
+    (void *)&openpty_syscall,                   // 43
+    (void *)&getpgid_syscall,                   // 44
+    (void *)&setpgid_syscall,                   // 45
+    (void *)&setsid_syscall,                    // 46
+    (void *)&tcgetpgrp_syscall,                 // 47
+    (void *)&tcsetpgrp_syscall,                 // 48
+    (void *)&tcgetattr_syscall,                 // 49
+    (void *)&tcsetattr_syscall                  // 50
 };
 
 const int NR_syscall = sizeof(syscall_tbl) / sizeof(syscall_tbl[0]);

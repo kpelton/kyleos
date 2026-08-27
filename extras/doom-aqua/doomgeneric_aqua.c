@@ -154,11 +154,16 @@ int main(int argc, char **argv)
     struct kui_client client;
     struct kui_event event;
     int first_event = 1;
+    uint32_t phase_started;
+    uint32_t phase_elapsed;
 
     if (separate_protocol_output() < 0) return 1;
     kui_client_init(&client);
-    if (kui_client_read_event(&event) < 0 || event.type != KUI_EVENT_INIT ||
-        send_loading(&client, &event) < 0) {
+    if (kui_client_read_event(&event) < 0 || event.type != KUI_EVENT_INIT) {
+        kui_client_free(&client);
+        return 1;
+    }
+    if (send_loading(&client, &event) < 0) {
         kui_client_free(&client);
         return 1;
     }
@@ -168,8 +173,11 @@ int main(int argc, char **argv)
         argc = 3;
         argv = default_argv;
     }
+    phase_started = raw_ticks_ms();
     doomgeneric_Create(argc, argv);
-    puts("doom-aqua: engine initialization complete");
+    phase_elapsed = raw_ticks_ms() - phase_started;
+    fprintf(stdout, "doom-aqua: engine initialization complete (%u ms)\n",
+            phase_elapsed);
     timer_pause_started = raw_ticks_ms();
     timer_paused = 1;
 
@@ -192,6 +200,7 @@ int main(int argc, char **argv)
             if (first_event) puts("doom-aqua: first tick complete");
         }
 
+        phase_started = raw_ticks_ms();
         kui_client_begin(&client, &event, window_title);
         kui_client_set_constraints(&client, 320, 200, 640, 400);
         if (redraw) {
@@ -206,11 +215,21 @@ int main(int argc, char **argv)
         if (first_event)
             fprintf(stdout, "doom-aqua: first frame bytes=%u\n",
                     client.display.length);
+        if (first_event) {
+            phase_elapsed = raw_ticks_ms() - phase_started;
+            fprintf(stdout, "doom-aqua: first frame built in %u ms\n",
+                    phase_elapsed);
+        }
+        phase_started = raw_ticks_ms();
         if (kui_client_send_fd(&client, protocol_output) < 0) {
             puts("doom-aqua: KUI response failed");
             break;
         }
-        if (first_event) puts("doom-aqua: first frame sent");
+        if (first_event) {
+            phase_elapsed = raw_ticks_ms() - phase_started;
+            fprintf(stdout, "doom-aqua: first frame sent in %u ms\n",
+                    phase_elapsed);
+        }
         first_event = 0;
     }
     puts("doom-aqua: event loop ended");

@@ -164,6 +164,37 @@ int signal_send(int pid, int signal)
     return 0;
 }
 
+int signal_send_group(int process_group, int signal)
+{
+    int pids[SCHED_MAX_TASKS];
+    int count;
+    int delivered = 0;
+
+    if (process_group <= 0 || signal < 0 || signal >= KYLEOS_NSIG)
+        return -1;
+    count = sched_process_group_members(process_group, pids,
+                                        SCHED_MAX_TASKS);
+    for (int index = 0; index < count; index++)
+        if (signal_send(pids[index], signal) == 0)
+            delivered++;
+    return delivered > 0 ? 0 : -1;
+}
+
+int signal_kill(int pid, int signal)
+{
+    struct ktask *current = get_current_process();
+
+    if (pid > 0)
+        return signal_send(pid, signal);
+    if (current == NULL)
+        return -1;
+    if (pid == 0)
+        return signal_send_group(current->process_group, signal);
+    if (pid < -1)
+        return signal_send_group(-pid, signal);
+    return -1;
+}
+
 int signal_action(int signal, const struct kyleos_sigaction *action,
                   struct kyleos_sigaction *old_action)
 {

@@ -23,6 +23,7 @@ static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
 #define TTY0_INO 6
 #define TTY1_INO 7
 #define TTY_LAST_INO (TTY1_INO + TTY_CONSOLE_COUNT - 1)
+#define TTYS0_INO (TTY_LAST_INO + 1)
 #define PROC_PROCESSES_INO 1
 #define PROC_MEMINFO_INO 2
 #define RAMFS_INSTANCE_COUNT 3
@@ -58,7 +59,7 @@ static struct ramfs_instance *ramfs_for_device(struct vfs_device *dev)
 
 static int ramfs_alloc_inode(struct ramfs_instance *fs)
 {
-    int first = fs->has_console ? TTY_LAST_INO + 1 : fs->has_proc ? 3 : 2;
+    int first = fs->has_console ? TTYS0_INO + 1 : fs->has_proc ? 3 : 2;
     for (int i = first; i < fs->inode_capacity; i++)
         if (fs->inodes[i].dev == NULL)
             return i;
@@ -108,6 +109,7 @@ static void create_root_dir(struct vfs_device *dev, bool with_console,
             name[3] = '1' + index;
             create_device_inode(fs, dev, TTY1_INO + index, name);
         }
+        create_device_inode(fs, dev, TTYS0_INO, "ttyS0");
     } else if (with_proc) {
         fs->inodes[0].last_child = 2;
         fs->inodes[0].children[0] = PROC_PROCESSES_INO;
@@ -223,6 +225,8 @@ static int ramfs_tty_index(uint64_t inode)
         return 0;
     if (inode >= TTY1_INO && inode <= TTY_LAST_INO)
         return (int)(inode - TTY1_INO);
+    if (inode == TTYS0_INO)
+        return TTY_SERIAL_CONSOLE;
     return -2;
 }
 

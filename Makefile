@@ -10,8 +10,9 @@ TEST_IMAGE ?= $(KERNEL_ROOT)/build/image/test-suite.img
 TEST_IMAGE_MOUNT ?= $(KERNEL_ROOT)/build/image/test-suite-mnt
 TEST_TIMEOUT ?= 180
 QEMU ?= qemu-system-x86_64
-# Extra options are intentionally overridable: e.g. `make test QEMU_OPTS="-enable-kvm"`.
-QEMU_OPTS ?= -rtc base=localtime
+# Extra options are intentionally overridable: e.g. `make test QEMU_OPTS="-cpu host -enable-kvm"`.
+# GUI userspace is built with SSE4.2, which QEMU's generic qemu64 CPU omits.
+QEMU_OPTS ?= -cpu max -rtc base=localtime
 USERLAND_STAGE ?= $(KERNEL_ROOT)/build/userland
 KUI_LIBRARY ?= $(USERLAND_STAGE)/libkui.a
 KUI_OBJECT ?= $(USERLAND_STAGE)/kui.o

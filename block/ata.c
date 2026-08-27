@@ -501,7 +501,7 @@ uint8_t read_status(void)
 
 void print_drive_status(void)
 {
-    kprintf("ATA STATUS:0x%x\n", read_status());
+    klog("ATA STATUS:0x%x\n", read_status());
 }
 int write_sectors(uint32_t sec, uint32_t count, const void *buffer)
 {
@@ -585,7 +585,7 @@ void ata_init(void) {
                                          PCI_SUBCLASS_IDE,
                                          controller_index++)) != NULL) {
         pci_enable_io(controller);
-        kprintf("ATA: PCI IDE controller %d:%d.%d prog 0x%x\n",
+        klog("ATA: PCI IDE controller %d:%d.%d prog 0x%x\n",
                 controller->bus, controller->slot, controller->function,
                 controller->prog_if);
 
@@ -701,7 +701,7 @@ static bool ata_init_port()
     bool passed = false;
     uint8_t mbr[ATA_SECTOR_SIZE];
     ata_cache_reset();
-    kprintf("ATA: trying command port 0x%x\n",
+    klog("ATA: trying command port 0x%x\n",
             ata_channel.command_base);
     if (read_sec(0, mbr) < 0)
         return false;
@@ -709,7 +709,7 @@ static bool ata_init_port()
     part_size = mbr[0x1ca] | mbr[0x1cb] << 8 | mbr[0x1cc] << 16 | mbr[0x1cd] << 24;
     valid_mbr = mbr[0x1fe] | mbr[0x1ff] << 8;
     part_type = mbr[0x1c2];
-    kprintf("mbr:0x%x\n",valid_mbr);
+    klog("mbr:0x%x\n",valid_mbr);
     // Look for valid MBR 0x55aa
     if (valid_mbr == 0xaa55)
     {
@@ -717,10 +717,10 @@ static bool ata_init_port()
         fs1.fs_start = part_start;
         fs1.fs_size = part_size;
         fs1.part_type = part_type;
-        kprintf("MBR INFO:\n");
-        kprintf("fs start: 0x%x\n", fs1.fs_start);
-        kprintf("fs size:  0x%x\n", fs1.fs_size);
-        kprintf("part_type: 0x%x\n", fs1.part_type);
+        klog("MBR INFO:\n");
+        klog("fs start: 0x%x\n", fs1.fs_start);
+        klog("fs size:  0x%x\n", fs1.fs_size);
+        klog("part_type: 0x%x\n", fs1.part_type);
 
         fat_init(fs1);
 

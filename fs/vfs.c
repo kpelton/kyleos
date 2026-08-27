@@ -7,8 +7,24 @@ struct vfs_device vfs_devices[VFS_MAX_DEVICES];
 
 static int current_device = 0;
 static struct file_table ftable ;
+static struct spinlock vfs_append_lock;
 static struct inode* vfs_find_file_in_dir(const char *filename, struct dnode *dptr);
 struct inode* top_root_inode;
+
+static bool vfs_exact_name_equal(const char *left, const char *right)
+{
+    return left != NULL && right != NULL && kstrcmp(left, right) == 0;
+}
+
+static bool vfs_name_equal(struct dnode *dir, const char *left,
+                           const char *right)
+{
+    if (dir != NULL && dir->root_inode != NULL &&
+        dir->root_inode->dev != NULL && dir->root_inode->dev->ops != NULL &&
+        dir->root_inode->dev->ops->name_equal != NULL)
+        return dir->root_inode->dev->ops->name_equal(left, right);
+    return vfs_exact_name_equal(left, right);
+}
 
 static bool vfs_file_is_open(struct inode *i_node)
 {
@@ -23,6 +39,7 @@ static bool vfs_file_is_open(struct inode *i_node)
 void vfs_init()
 {
     init_spinlock(&ftable.lock);
+    init_spinlock(&vfs_append_lock);
     int i;
     acquire_spinlock(&ftable.lock);
     for (i = 0; i < VFS_MAX_OPEN; i++)
@@ -214,6 +231,8 @@ struct file *vfs_open_file(struct inode *i_node, uint32_t flags)
     if (i_node)
     {
         retfile = vfs_get_open_file(i_node);
+        if (retfile == NULL)
+            return NULL;
         retfile->pos = 0;
         retfile->flags = flags;
         //Release lock aquired in get open_file
@@ -222,28 +241,16 @@ struct file *vfs_open_file(struct inode *i_node, uint32_t flags)
     return retfile;
 }
 
-/* Forked processes need their own descriptor object.  Sharing the same file
- * table entry made a child's close() clear the parent's console descriptor. */
+/* A fork duplicates descriptors, not open-file descriptions.  Keep one file
+ * object so parent and child share flags and the current file position. */
 struct file *vfs_clone_file(struct file *source)
 {
-    struct file *copy = NULL;
     if (source == NULL)
         return NULL;
     acquire_spinlock(&ftable.lock);
-    for (int i = 0; i < VFS_MAX_OPEN; i++) {
-        if (ftable.open_files[i].refcount == 0) {
-            copy = &ftable.open_files[i];
-            *copy = *source;
-            copy->refcount = 1;
-            if (copy->pipe != NULL)
-                pipe_add_ref((struct pipe_data *)copy->pipe, copy->pipe_writer);
-            if (copy->pty != NULL)
-                pty_add_ref((struct pty_data *)copy->pty, copy->pty_master);
-            break;
-        }
-    }
+    source->refcount++;
     release_spinlock(&ftable.lock);
-    return copy;
+    return source;
 }
 
 void vfs_close_file(struct file *ofile)
@@ -308,7 +315,7 @@ struct inode *vfs_walk_path(const char *path, struct dnode *pwd)
         {
             //Traverse directories in path
             //kprintf("current:%s buffer:%s\n",ptr->current->i_name,buffer);
-            if (kstrcmp(ptr->current->i_name, buffer) == 0 && ptr->current->i_type == I_DIR)
+            if (vfs_name_equal(dptr, ptr->current->i_name, buffer) && ptr->current->i_type == I_DIR)
             {
                 prev_dptr = dptr;
                 // Something left in the path name and not the final node
@@ -353,7 +360,7 @@ static struct inode* vfs_find_file_in_dir(const char *filename, struct dnode *dp
     while (ptr)
     {
         //kprintf("find in file  %s\n",ptr->current->i_name);
-         if (kstrcmp(ptr->current->i_name, filename) == 0)
+         if (vfs_name_equal(dptr, ptr->current->i_name, filename))
          {
             iptr = kmalloc(sizeof(struct inode));
             struct inode *mnt = fs_is_mount_point(ptr->current);
@@ -469,6 +476,38 @@ bool vfs_file_is_tty(struct file *file)
     return false;
 }
 
+int vfs_terminal_get_foreground_group(struct file *file)
+{
+    if (file == NULL || file->pty == NULL)
+        return -1;
+    return pty_get_foreground_group((struct pty_data *)file->pty);
+}
+
+int vfs_terminal_set_foreground_group(struct file *file, int session,
+                                      int process_group)
+{
+    if (file == NULL || file->pty == NULL)
+        return -1;
+    return pty_set_foreground_group((struct pty_data *)file->pty, session,
+                                    process_group);
+}
+
+int vfs_terminal_get_attributes(struct file *file,
+                                struct kyleos_termios *termios)
+{
+    if (file == NULL || file->pty == NULL)
+        return -1;
+    return pty_get_termios((struct pty_data *)file->pty, termios);
+}
+
+int vfs_terminal_set_attributes(struct file *file, int action,
+                                const struct kyleos_termios *termios)
+{
+    if (file == NULL || file->pty == NULL)
+        return -1;
+    return pty_set_termios((struct pty_data *)file->pty, action, termios);
+}
+
 /* Keep seeking in the VFS so every filesystem shares the same file-position
  * semantics.  WAD readers make frequent absolute seeks into one file. */
 int vfs_seek_file(struct file *rfile, long offset, int whence)
@@ -508,11 +547,20 @@ int vfs_write_file(struct file *rfile, void *buf, int count)
     /* Callers such as fopen("wb") retain create/truncate bits in flags. */
     if (count < 0 || (access_mode != O_WRONLY && access_mode != O_RDWR))
         return -1;
+    if ((rfile->flags & O_APPEND) != 0)
+        acquire_spinlock(&vfs_append_lock);
+    if ((rfile->flags & O_APPEND) != 0) {
+        struct stat status;
+        if (vfs_stat_file(rfile, &status) == 0)
+            rfile->pos = status.st_size;
+    }
     int idev;
     idev = rfile->dev->devicenum;
     int rcount = vfs_devices[idev].ops->write_file(rfile, buf, count);
     if (rcount > 0)
         rfile->pos += rcount;
+    if ((rfile->flags & O_APPEND) != 0)
+        release_spinlock(&vfs_append_lock);
     return rcount;
 
 }
@@ -688,6 +736,16 @@ int vfs_create_pty(struct file **master, struct file **slave)
     memzero8((uint8_t *)pty, sizeof(*pty));
     pty->master_refs = 1;
     pty->slave_refs = 1;
+    pty->termios.input_flags = KYLEOS_ICRNL;
+    pty->termios.local_flags = KYLEOS_ISIG | KYLEOS_ICANON |
+                               KYLEOS_ECHO | KYLEOS_ECHOE |
+                               KYLEOS_ECHOK;
+    pty->termios.control_characters[KYLEOS_VINTR] = 3;
+    pty->termios.control_characters[KYLEOS_VQUIT] = 28;
+    pty->termios.control_characters[KYLEOS_VERASE] = 127;
+    pty->termios.control_characters[KYLEOS_VKILL] = 21;
+    pty->termios.control_characters[KYLEOS_VEOF] = 4;
+    pty->termios.control_characters[KYLEOS_VSUSP] = 26;
     init_spinlock(&pty->lock);
 
     acquire_spinlock(&ftable.lock);

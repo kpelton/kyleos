@@ -6,6 +6,7 @@
 #include <fs/ramfs.h>
 #include <include/types.h>
 #include <include/uapi/poll.h>
+#include <include/uapi/termios.h>
 #include <locks/spinlock.h>
 
 #define VFS_MAX_DEVICES 10
@@ -23,6 +24,7 @@
 #define O_RDONLY 0x0
 #define O_WRONLY 0x1
 #define O_RDWR   0x2
+#define O_APPEND 0x0008
 #define O_TRUNC  0x0400
 #define MAX_FILE_FLAGS (O_RDONLY | O_WRONLY | O_RDWR)
 #define VFS_MAX_OPEN 1024
@@ -110,6 +112,9 @@ struct vfs_ops {
     int (*rename_file)(struct inode *i_node, struct inode *new_parent,
                        char *new_name);
     int (*stat_file)(struct file *rfile, struct stat *st);
+    /* Optional filesystem-specific filename comparison.  NULL means the
+     * VFS uses exact, case-sensitive matching. */
+    bool (*name_equal)(const char *left, const char *right);
 };
 
 void vfs_init();
@@ -133,6 +138,13 @@ int vfs_file_status(struct file *file, uint32_t *readable,
                     uint32_t *writable, uint32_t *hung_up);
 int vfs_file_poll(struct file *file, int16_t events, int16_t *revents);
 bool vfs_file_is_tty(struct file *file);
+int vfs_terminal_get_foreground_group(struct file *file);
+int vfs_terminal_set_foreground_group(struct file *file, int session,
+                                      int process_group);
+int vfs_terminal_get_attributes(struct file *file,
+                                struct kyleos_termios *termios);
+int vfs_terminal_set_attributes(struct file *file, int action,
+                                const struct kyleos_termios *termios);
 
 int vfs_create_dir(struct inode* parent, char *name);
 struct inode* vfs_create_file(struct inode* parent, char *name,uint32_t flags);

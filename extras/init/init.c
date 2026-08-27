@@ -45,13 +45,48 @@ static pid_t start_console(int console_index)
     return pid;
 }
 
+static pid_t start_serial_shell(void)
+{
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        perror("init: fork serial shell");
+        return -1;
+    }
+    if (pid == 0) {
+        char *argv[] = { "nushell", NULL };
+        int fd = open("/dev/ttyS0", O_RDWR);
+
+        if (fd < 0) {
+            perror("init: open serial tty");
+            _exit(126);
+        }
+        if (setsid() < 0 ||
+            dup2(fd, STDIN_FILENO) < 0 ||
+            dup2(fd, STDOUT_FILENO) < 0 ||
+            dup2(fd, STDERR_FILENO) < 0) {
+            perror("init: redirect serial tty");
+            _exit(126);
+        }
+        if (fd > STDERR_FILENO)
+            close(fd);
+        puts("KyleOS serial terminal COM1");
+        execve(CONSOLE_SHELL, argv, NULL);
+        perror("init: exec serial /bin/nushell");
+        _exit(127);
+    }
+    return pid;
+}
+
 int main(void)
 {
     pid_t consoles[CONSOLE_COUNT];
+    pid_t serial_shell;
 
     puts("KyleOS init: starting PID 1");
     for (int index = 0; index < CONSOLE_COUNT; index++)
         consoles[index] = start_console(index);
+    serial_shell = start_serial_shell();
 
     for (;;) {
         int status = 0;
@@ -67,6 +102,10 @@ int main(void)
             printf("KyleOS init: tty%d exited; restarting\n", index + 1);
             consoles[index] = start_console(index);
             break;
+        }
+        if (exited == serial_shell) {
+            puts("KyleOS serial terminal exited; restarting");
+            serial_shell = start_serial_shell();
         }
     }
 }

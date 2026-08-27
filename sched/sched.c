@@ -332,6 +332,8 @@ void kthread_add(void (*fptr)(), char *name)
     kstrcpy(t->name, name);
     t->context_switches = 0;
     t->parent = -1;
+    t->process_group = t->pid;
+    t->session = t->pid;
     signal_task_init(t);
     pid += 1;
 }
@@ -355,6 +357,125 @@ struct ktask *sched_get_process(int pid)
     release_spinlock(&sched_spinlock);
 
     return NULL;
+}
+
+int sched_get_process_group(int process_id)
+{
+    int group_id = -1;
+
+    if (process_id == 0)
+        process_id = get_current_process()->pid;
+    acquire_spinlock(&sched_spinlock);
+    for (int index = 0; index < SCHED_MAX_TASKS; index++)
+        if (ktasks[index].pid == process_id &&
+            ktasks[index].state != TASK_DONE) {
+            group_id = ktasks[index].process_group;
+            break;
+        }
+    release_spinlock(&sched_spinlock);
+    return group_id;
+}
+
+int sched_get_session(int process_id)
+{
+    int session_id = -1;
+
+    if (process_id == 0)
+        process_id = get_current_process()->pid;
+    acquire_spinlock(&sched_spinlock);
+    for (int index = 0; index < SCHED_MAX_TASKS; index++)
+        if (ktasks[index].pid == process_id &&
+            ktasks[index].state != TASK_DONE) {
+            session_id = ktasks[index].session;
+            break;
+        }
+    release_spinlock(&sched_spinlock);
+    return session_id;
+}
+
+int sched_set_process_group(int caller_pid, int target_pid, int group_id)
+{
+    struct ktask *caller = NULL;
+    struct ktask *target = NULL;
+    bool group_exists = false;
+    int result = -1;
+
+    if (target_pid == 0)
+        target_pid = caller_pid;
+    if (group_id == 0)
+        group_id = target_pid;
+    if (target_pid <= 0 || group_id <= 0)
+        return -1;
+    acquire_spinlock(&sched_spinlock);
+    for (int index = 0; index < SCHED_MAX_TASKS; index++) {
+        struct ktask *task = &ktasks[index];
+
+        if (task->pid == caller_pid && task->state != TASK_DONE)
+            caller = task;
+        if (task->pid == target_pid && task->state != TASK_DONE)
+            target = task;
+    }
+    if (caller == NULL || target == NULL ||
+        (target != caller && target->parent != caller_pid) ||
+        target->session != caller->session ||
+        target->session == target->pid)
+        goto done;
+    if (group_id == target_pid) {
+        group_exists = true;
+    } else {
+        for (int index = 0; index < SCHED_MAX_TASKS; index++)
+            if (ktasks[index].pid != -1 &&
+                ktasks[index].state != TASK_DONE &&
+                ktasks[index].process_group == group_id &&
+                ktasks[index].session == caller->session) {
+                group_exists = true;
+                break;
+            }
+    }
+    if (group_exists) {
+        target->process_group = group_id;
+        result = 0;
+    }
+done:
+    release_spinlock(&sched_spinlock);
+    return result;
+}
+
+int sched_create_session(int process_id)
+{
+    int result = -1;
+
+    acquire_spinlock(&sched_spinlock);
+    for (int index = 0; index < SCHED_MAX_TASKS; index++) {
+        struct ktask *task = &ktasks[index];
+
+        if (task->pid != process_id || task->state == TASK_DONE)
+            continue;
+        if (task->process_group != task->pid) {
+            task->session = task->pid;
+            task->process_group = task->pid;
+            result = task->session;
+        }
+        break;
+    }
+    release_spinlock(&sched_spinlock);
+    return result;
+}
+
+int sched_process_group_members(int group_id, int *pids, int maximum)
+{
+    int count = 0;
+
+    if (group_id <= 0 || pids == NULL || maximum <= 0)
+        return 0;
+    acquire_spinlock(&sched_spinlock);
+    for (int index = 0; index < SCHED_MAX_TASKS && count < maximum; index++)
+        if (ktasks[index].pid > 0 && ktasks[index].type == USER_PROCESS &&
+            ktasks[index].state != TASK_DONE &&
+            ktasks[index].process_group == group_id)
+            pids[count++] = ktasks[index].pid;
+    release_spinlock(&sched_spinlock);
+    return count;
 }
 
 int sched_proc_report(char *buffer, uint32_t size)
@@ -456,6 +577,8 @@ int user_process_fork()
     t->pid = pid;
     t->context_switches = 0;
     t->parent = curr->pid;
+    t->process_group = curr->process_group;
+    t->session = curr->session;
     signal_task_fork(t, curr);
     t->user_start_heap = (uint64_t *) USER_HEAP_VADDR;
     t->user_heap_loc = curr->user_heap_loc;
@@ -512,6 +635,8 @@ int user_process_fork()
 int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, struct vmm_map *mm,char *argv[],struct inode *cwd)
 {
     int c_pid = t->pid;
+    int process_group = t->process_group;
+    int session = t->session;
     //kprintf("%d\n",c_pid);
     // save old pid and parent pid since kill will clear them
     // Don't clear file descriptors
@@ -520,6 +645,8 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     signal_task_exec(t);
     user_process_add_exec(startaddr,name,mm,true,argv,t,cwd,false);
     t->pid = c_pid;
+    t->process_group = process_group;
+    t->session = session;
     t->cwd = cwd;
     int i=0;
     //Free kernel allocated argv passed in from userspace
@@ -593,6 +720,8 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     {
         t->context_switches = 0;
         t->pid = pid;
+        t->process_group = pid;
+        t->session = pid;
         pid_ret = pid;
         pid += 1;
     }

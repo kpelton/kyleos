@@ -7,6 +7,20 @@
 #include <locks/mutex.h>
 
 static void read_directory(struct dnode *dir, struct vfs_device *dev);
+
+static bool fat_name_equal(const char *left, const char *right)
+{
+    if (left == NULL || right == NULL)
+        return false;
+    while (*left != '\0' && *right != '\0') {
+        char a = *left++;
+        char b = *right++;
+        if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+        if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+        if (a != b) return false;
+    }
+    return *left == '\0' && *right == '\0';
+}
 static void read_file(uint32_t cluster, uint32_t first_fat_sector, uint32_t first_data_sector, uint32_t sectors_per_cluster);
 static inline uint32_t clust2sec(uint32_t cluster, struct fatFS *fs);
 static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector);
@@ -64,7 +78,7 @@ static uint32_t fat_cluster_size(struct fatFS *fs)
 
 static void read_fat_to_mem(struct fatFS *fs)
 {
-    kprintf("reading in 0x%x sectors\n", fs->fat_size);
+    klog("reading in 0x%x sectors\n", fs->fat_size);
     fs->fat_ptr = kmalloc(ATA_SECTOR_SIZE * fs->fat_size);
     for (uint32_t i = 0; i < fs->fat_size; ) {
         uint32_t sectors = fs->fat_size - i;
@@ -91,19 +105,19 @@ int fat_init(struct mbr_info mbr_entry)
 
     fs = kmalloc(sizeof(struct fatFS));
     vfs_ops = kmalloc(sizeof(struct vfs_ops));
-    kprintf("FAT driver init %x\n",vfs_ops);
+    klog("FAT driver init %x\n",vfs_ops);
     // Read sector and fill out fs info data st
     read_sec(mbr_entry.fs_start, bs_buf);
     fs->fat_boot = *(struct fat_BS *)bs_buf;
     fs->fat_boot_ext_32 = *(struct fat_extBS_32 *)fs->fat_boot.extended_section;
     fs->fat_size = fs->fat_boot_ext_32.table_size_32;
-    kprintf("Root cluster %x\n", fs->fat_boot_ext_32.root_cluster);
-    kprintf("Sectors per cluster %x\n", fs->fat_boot.sectors_per_cluster);
+    klog("Root cluster %x\n", fs->fat_boot_ext_32.root_cluster);
+    klog("Sectors per cluster %x\n", fs->fat_boot.sectors_per_cluster);
     fs->root_cluster = fs->fat_boot_ext_32.root_cluster;
     fs->first_data_sector = mbr_entry.fs_start + fs->fat_boot.reserved_sector_count + (fs->fat_boot.table_count * fs->fat_size);
     fs->first_fat_sector = mbr_entry.fs_start + fs->fat_boot.reserved_sector_count;
     fs->mbr_info = mbr_entry;
-    kprintf("fat Size %d\n", fs->fat_size);
+    klog("fat Size %d\n", fs->fat_size);
     read_fat_to_mem(fs);
     init_mutex(&fat_lock);
 
@@ -118,6 +132,7 @@ int fat_init(struct mbr_info mbr_entry)
 #endif
     // setup vfs device struct to be registered
     vfs_dev.fstype = FAT_FS;
+    vfs_ops->name_equal = fat_name_equal;
     vfs_ops->read_root_dir = &fat_read_root_dir;
     vfs_ops->read_inode_dir = &read_inode_dir;
     vfs_ops->cat_inode_file = &cat_inode_file;
@@ -336,7 +351,7 @@ static uint32_t read_fat_ptr(uint32_t cluster_num, uint32_t first_fat_sector)
                             FAT_table[ent_offset]) &
                            0x0FFFFFFF;
 
-    kprintf("Reading fat:%x %x\n", cluster_num, table_value);
+    klog("Reading fat:%x %x\n", cluster_num, table_value);
 
     return table_value;
 }

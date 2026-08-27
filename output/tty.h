@@ -4,12 +4,14 @@
 #include <include/types.h>
 
 #define TTY_CONSOLE_COUNT 4
+#define TTY_SERIAL_CONSOLE TTY_CONSOLE_COUNT
 #define TTY_ACTIVE_CONSOLE (-1)
 
 void tty_init(void);
 int tty_read(int console, void *buffer, uint32_t count);
 int tty_write(int console, const void *buffer, uint32_t count);
 void tty_receive_char(char character);
+void tty_receive_serial_char(char character);
 void tty_set_raw(int console, bool enabled);
 bool tty_is_raw(int console);
 int tty_active_console(void);

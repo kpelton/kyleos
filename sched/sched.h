@@ -34,6 +34,11 @@ void sched_io_notify(void);
 void sched_io_wait(uint32_t generation, int timeout_ms);
 struct ktask* get_current_process();
 struct ktask *sched_get_process(int pid);
+int sched_get_process_group(int pid);
+int sched_get_session(int pid);
+int sched_set_process_group(int caller_pid, int target_pid, int group_id);
+int sched_create_session(int pid);
+int sched_process_group_members(int group_id, int *pids, int maximum);
 int sched_proc_report(char *buffer, uint32_t size);
 int sched_reap_child(int parent_pid, int requested_pid, int *exit_code,
                      bool report_stopped);
@@ -67,6 +72,8 @@ enum process_types {
 struct ktask{
     int pid;
     int parent;
+    int process_group;
+    int session;
     int exit_code;
     int exit_signal;
     char name[SCHED_MAX_NAME];

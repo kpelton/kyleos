@@ -2,6 +2,7 @@
 #include <irq/irq.h>
 #include <output/output.h>
 #include <output/input.h>
+#include <output/tty.h>
 #include <locks/spinlock.h>
 #include <locks/mutex.h>
 static struct spinlock uart_spinlock;
@@ -59,7 +60,7 @@ void serial_irq()
     acquire_spinlock(&uart_spinlock);
     outb(PORT + 3, 0x00); //dlab = 0 
     in = inb(PORT);
-    input_add_char(in);
+    tty_receive_serial_char(in);
     PIC_sendEOI(1);
     release_spinlock(&uart_spinlock);
 }

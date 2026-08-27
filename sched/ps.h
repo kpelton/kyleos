@@ -12,6 +12,12 @@ int user_process_seek_fd(struct ktask *t, int fd, long offset, int whence);
 int user_process_fd_status(struct ktask *t, int fd, uint32_t *readable,
                            uint32_t *writable, uint32_t *hung_up);
 int user_process_isatty(struct ktask *t, int fd);
+int user_process_tcgetpgrp(struct ktask *t, int fd);
+int user_process_tcsetpgrp(struct ktask *t, int fd, int process_group);
+int user_process_tcgetattr(struct ktask *t, int fd,
+                           struct kyleos_termios *termios);
+int user_process_tcsetattr(struct ktask *t, int fd, int action,
+                           const struct kyleos_termios *termios);
 int user_process_poll(struct ktask *t, struct kyleos_pollfd *fds,
                       uint32_t count, int timeout_ms);
 int user_process_pipe(struct ktask *t, int pipefd[2]);

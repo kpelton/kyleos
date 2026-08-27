@@ -113,9 +113,9 @@ sequenceDiagram
     App-->>Shell: KUI_ACTION_FILE_SAVED
 ```
 
-Save operations use bounded overlap-safe path copies. The shell lifecycle log
-is written to `/SHELL.LOG` without using stdout, which is reserved for the KUI
-protocol.
+Save operations use bounded overlap-safe path copies. The shell appends
+lifecycle and protocol diagnostics to `/shell.log` without using stdout, which
+is reserved for the KUI protocol.
 
 ## Main source locations
 

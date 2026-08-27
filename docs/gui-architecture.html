@@ -70,7 +70,7 @@
 <div>User types filename and presses Enter</div><div>Dialog checks whether target exists</div>
 <div>If existing: overwrite confirmation</div><div>Dialog returns selected absolute path</div>
 <div>App writes the file</div><div>App returns <span class="tag">KUI_ACTION_FILE_SAVED</span></div>
-</div><p>Path updates use bounded overlap-safe copies. Shell lifecycle diagnostics are written to <span class="tag">/SHELL.LOG</span>; stdout remains reserved for KUI protocol traffic.</p></section>
+</div><p>Path updates use bounded overlap-safe copies. Shell lifecycle and protocol diagnostics are appended to <span class="tag">/shell.log</span>; stdout remains reserved for KUI protocol traffic.</p></section>
 
 <section class="panel"><h2>Main source locations</h2><table><tr><th>Layer</th><th>Source</th></tr>
 <tr><td>Desktop/window manager</td><td><code>extras/desktop/shell.c</code></td></tr><tr><td>Protocol</td><td><code>extras/kui/kui_protocol.h</code></td></tr><tr><td>Rendering/widgets</td><td><code>extras/kui/kui.c</code> and <code>extras/kui/*.c</code></td></tr><tr><td>File dialogs</td><td><code>extras/kui/kui_file_dialog.c</code></td></tr><tr><td>Applications</td><td><code>extras/ksheet</code>, <code>extras/editor</code>, <code>extras/terminal</code>, <code>extras/help</code></td></tr>

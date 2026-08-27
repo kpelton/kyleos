@@ -24,7 +24,7 @@ int main(void)
 {
     static const char *terminals[] = {
         "/dev/console", "/dev/tty0", "/dev/tty1",
-        "/dev/tty2", "/dev/tty3", "/dev/tty4",
+        "/dev/tty2", "/dev/tty3", "/dev/tty4", "/dev/ttyS0",
     };
     int null_fd;
     int pipe_fds[2];
@@ -50,6 +50,6 @@ int main(void)
     }
     close(pipe_fds[0]);
     close(pipe_fds[1]);
-    puts("ttytest: console terminal devices pass");
+    puts("ttytest: console and serial terminal devices pass");
     return 0;
 }

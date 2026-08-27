@@ -87,6 +87,44 @@ int user_process_isatty(struct ktask *task, int fd)
     return vfs_file_is_tty(task->open_fds[fd]) ? 1 : 0;
 }
 
+int user_process_tcgetpgrp(struct ktask *task, int fd)
+{
+    if (task == NULL || fd < 0 || fd >= MAX_TASK_OPEN_FILES ||
+        task->open_fds[fd] == NULL)
+        return -1;
+    return vfs_terminal_get_foreground_group(task->open_fds[fd]);
+}
+
+int user_process_tcsetpgrp(struct ktask *task, int fd, int process_group)
+{
+    if (task == NULL || fd < 0 || fd >= MAX_TASK_OPEN_FILES ||
+        task->open_fds[fd] == NULL || process_group <= 0 ||
+        sched_get_process_group(process_group) != process_group ||
+        sched_get_session(process_group) != task->session)
+        return -1;
+    return vfs_terminal_set_foreground_group(task->open_fds[fd],
+                                             task->session,
+                                             process_group);
+}
+
+int user_process_tcgetattr(struct ktask *task, int fd,
+                           struct kyleos_termios *termios)
+{
+    if (task == NULL || fd < 0 || fd >= MAX_TASK_OPEN_FILES ||
+        task->open_fds[fd] == NULL || termios == NULL)
+        return -1;
+    return vfs_terminal_get_attributes(task->open_fds[fd], termios);
+}
+
+int user_process_tcsetattr(struct ktask *task, int fd, int action,
+                           const struct kyleos_termios *termios)
+{
+    if (task == NULL || fd < 0 || fd >= MAX_TASK_OPEN_FILES ||
+        task->open_fds[fd] == NULL || termios == NULL)
+        return -1;
+    return vfs_terminal_set_attributes(task->open_fds[fd], action, termios);
+}
+
 static int user_process_poll_scan(struct ktask *task,
                                   struct kyleos_pollfd *fds,
                                   uint32_t count)

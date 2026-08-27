@@ -372,6 +372,8 @@ static int start_shell(struct terminal_state *state)
         char *environment[] = { "PATH=/bin:/usr/bin", NULL };
 
         close(master);
+        if (setsid() < 0)
+            _exit(126);
         dup2(slave, 0);
         dup2(slave, 1);
         dup2(slave, 2);
@@ -487,8 +489,10 @@ static int submit_child_input(struct terminal_state *state)
         state->output_fd = -1;
 #endif
     } else {
+#ifdef KYLEOS_HOST
         append_text(state, state->command, state->command_length);
         append_text(state, "\n", 1);
+#endif
     }
     state->command_length = 0;
     state->command_cursor = 0;
@@ -826,14 +830,42 @@ int main(void)
                 append_text(&state, "$ ", 2);
 #endif
             } else if (state.child_pid > 0) {
+#ifdef KYLEOS_HOST
                 append_text(&state, "^C\n", 3);
                 if (kill(state.child_pid, SIGINT) < 0)
                     append_text(&state,
                                 "terminal: cannot interrupt command\n", -1);
+#else
+                unsigned char interrupt = 3;
+
+                if (write(state.input_fd, &interrupt, 1) != 1)
+                    append_text(&state,
+                                "terminal: cannot interrupt command\n", -1);
+#endif
             }
             state.command_length = 0;
             state.command_cursor = 0;
             state.command[0] = '\0';
+        } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
+                   (event.modifiers & KUI_MOD_CTRL) &&
+                   !(event.modifiers & KUI_MOD_SHIFT) &&
+                   !event.key_extended &&
+                   (event.key_code == 44 || event.key_code == 43)) {
+            if (!terminal_editing_command(&state) && state.input_fd >= 0) {
+#ifdef KYLEOS_HOST
+                int signal_number = event.key_code == 44 ? SIGTSTP : SIGQUIT;
+
+                if (kill(state.child_pid, signal_number) < 0)
+                    append_text(&state,
+                                "terminal: cannot signal command\n", -1);
+#else
+                unsigned char control = event.key_code == 44 ? 26 : 28;
+
+                if (write(state.input_fd, &control, 1) != 1)
+                    append_text(&state,
+                                "terminal: cannot signal command\n", -1);
+#endif
+            }
         } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
                    (event.modifiers & KUI_MOD_CTRL) &&
                    !event.key_extended && event.key_code == 32 &&

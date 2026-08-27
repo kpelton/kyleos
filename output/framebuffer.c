@@ -176,13 +176,13 @@ void framebuffer_init(uint64_t mb_info)
          display->bus, display->slot, display->function, phys_base);
 
     bga_write(BGA_ENABLE, 0);
-    bga_write(BGA_XRES, 1280);
-    bga_write(BGA_YRES, 720);
+    bga_write(BGA_XRES, 1920);
+    bga_write(BGA_YRES, 1080);
     bga_write(BGA_BPP, 32);
     bga_write(BGA_ENABLE, BGA_ENABLE_ON | BGA_ENABLE_LFB);
 
-    fb_width = 1280;
-    fb_height = 720;
+    fb_width = 1920;
+    fb_height = 1080;
     fb_pitch = fb_width * 4;
     fb_size = fb_pitch * fb_height;
     if (!mtrr_set_write_combining(phys_base, fb_size))

@@ -159,7 +159,7 @@ static void shell_log(const char *format, ...)
     if (length <= 0) return;
     if (length >= (int)sizeof(buffer)) length = sizeof(buffer) - 1;
     if (shell_log_fd < 0)
-        shell_log_fd = open("/SHELL.LOG", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        shell_log_fd = open("/shell.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (shell_log_fd >= 0)
         write(shell_log_fd, buffer, (size_t)length);
 }

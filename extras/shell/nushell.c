@@ -42,71 +42,34 @@ struct shell_job {
 
 static struct shell_job jobs[MAX_JOBS];
 static int next_job_id = 1;
-static volatile sig_atomic_t foreground_pids[MAX_PIPE_COMMANDS];
-static volatile sig_atomic_t foreground_pid_count;
-static volatile sig_atomic_t foreground_interrupted;
+static int shell_terminal = -1;
+static pid_t shell_process_group;
 
 static int decode_wait_status(int status);
 
-static void set_foreground_processes(const pid_t *pids, int count)
+static void give_terminal_to(pid_t process_group)
 {
-    foreground_pid_count = 0;
-    if (count > MAX_PIPE_COMMANDS)
-        count = MAX_PIPE_COMMANDS;
-    for (int index = 0; index < count; index++)
-        foreground_pids[index] = (sig_atomic_t)pids[index];
-    foreground_pid_count = count;
-    if (foreground_interrupted) {
-        for (int index = 0; index < count; index++)
-            if (foreground_pids[index] > 0)
-                (void)kill((pid_t)foreground_pids[index], SIGINT);
-        foreground_interrupted = 0;
-    }
+    if (shell_terminal >= 0)
+        (void)tcsetpgrp(shell_terminal, process_group);
 }
 
-static void clear_foreground_processes(void)
+static void reclaim_terminal(void)
 {
-    foreground_pid_count = 0;
-    for (int index = 0; index < MAX_PIPE_COMMANDS; index++)
-        foreground_pids[index] = 0;
-    foreground_interrupted = 0;
+    give_terminal_to(shell_process_group);
 }
 
-static void handle_interrupt(int signal_number)
+static void reset_child_signals(void)
 {
-    int count = foreground_pid_count;
-
-    foreground_interrupted = 1;
-    for (int index = 0; index < count; index++)
-        if (foreground_pids[index] > 0)
-            (void)kill((pid_t)foreground_pids[index], signal_number);
+    (void)signal(SIGINT, SIG_DFL);
+    (void)signal(SIGQUIT, SIG_DFL);
+    (void)signal(SIGTSTP, SIG_DFL);
+    (void)signal(SIGTTIN, SIG_DFL);
+    (void)signal(SIGTTOU, SIG_DFL);
 }
 
-static pid_t wait_for_foreground(pid_t pid, int *status, int options)
+static pid_t wait_for_process(pid_t pid, int *status, int options)
 {
-    pid_t result;
-
-    do {
-        foreground_interrupted = 0;
-        result = waitpid(pid, status, options);
-    } while (result < 0 && foreground_interrupted);
-    return result;
-}
-
-static int block_interrupt(sigset_t *old_mask)
-{
-    sigset_t interrupt_mask;
-
-    if (sigemptyset(&interrupt_mask) < 0 ||
-        sigaddset(&interrupt_mask, SIGINT) < 0)
-        return -1;
-    return sigprocmask(SIG_BLOCK, &interrupt_mask, old_mask);
-}
-
-static void restore_signal_mask(const sigset_t *old_mask, int blocked)
-{
-    if (blocked)
-        (void)sigprocmask(SIG_SETMASK, old_mask, NULL);
+    return waitpid(pid, status, options);
 }
 
 static const char *job_state_name(enum job_state state)
@@ -248,14 +211,13 @@ static int wait_for_job(struct shell_job *job)
     int result_status = 0;
     int stopped = 0;
 
-    set_foreground_processes(job->pids, job->pid_count);
     for (int i = 0; i < job->pid_count; i++) {
         int status;
         pid_t result;
 
         if (job->pids[i] <= 0)
             continue;
-        result = wait_for_foreground(job->pids[i], &status, WUNTRACED);
+        result = wait_for_process(job->pids[i], &status, WUNTRACED);
         if (result < 0)
             continue;
         if (WIFSTOPPED(status)) {
@@ -268,7 +230,7 @@ static int wait_for_job(struct shell_job *job)
             result_status = decode_wait_status(status);
         }
     }
-    clear_foreground_processes();
+    reclaim_terminal();
     if (stopped) {
         printf("[%d] Stopped    %s\n", job->id, job->command);
         return result_status;
@@ -436,6 +398,7 @@ static int execute_fg_builtin(char **args)
         return 1;
     }
     printf("%s\n", job->command);
+    give_terminal_to(job->leader);
     signal_job(job, SIGCONT);
     job->state = JOB_RUNNING;
     return wait_for_job(job);
@@ -610,25 +573,32 @@ int execute_command(char **args, int background, char *in_file,
             fprintf(stderr, "Usage: sleep seconds\n");
             return 2;
         }
-        if (!background) {
-            if (foreground_interrupted) {
-                foreground_interrupted = 0;
-                return 128 + SIGINT;
-            }
-            sleep(seconds);
-            if (foreground_interrupted)
-                return 128 + SIGINT;
-            return 0;
-        }
         sleep_pid = fork();
         if (sleep_pid < 0) {
             perror("fork");
             return 1;
         }
         if (sleep_pid == 0) {
-            (void)signal(SIGINT, SIG_DFL);
+            (void)setpgid(0, 0);
+            reset_child_signals();
             sleep(seconds);
             exit(0);
+        }
+        (void)setpgid(sleep_pid, sleep_pid);
+        if (!background) {
+            int status;
+
+            give_terminal_to(sleep_pid);
+            if (wait_for_process(sleep_pid, &status, WUNTRACED) < 0) {
+                reclaim_terminal();
+                return 1;
+            }
+            reclaim_terminal();
+            if (WIFSTOPPED(status)) {
+                pid_t pids[1] = {sleep_pid};
+                (void)add_job(pids, 1, JOB_STOPPED, command_text);
+            }
+            return decode_wait_status(status);
         }
         {
             pid_t pids[1] = {sleep_pid};
@@ -637,19 +607,16 @@ int execute_command(char **args, int background, char *in_file,
         return 0;
     }
 
-    sigset_t old_mask;
-    int interrupt_blocked = !background && block_interrupt(&old_mask) == 0;
     pid_t pid = fork();
 
     if (pid == -1) {
-        restore_signal_mask(&old_mask, interrupt_blocked);
         perror("fork");
         return 1;
     }
 
     if (pid == 0) {
-        (void)signal(SIGINT, SIG_DFL);
-        restore_signal_mask(&old_mask, interrupt_blocked);
+        (void)setpgid(0, 0);
+        reset_child_signals();
 
         if (out_file) {
             fd = open(out_file, O_WRONLY | O_TRUNC, 0666);
@@ -679,24 +646,22 @@ int execute_command(char **args, int background, char *in_file,
 
     } else {
         // Parent process
+        (void)setpgid(pid, pid);
         if (!background) {
             int status;
-            pid_t foreground[1] = {pid};
 
-            set_foreground_processes(foreground, 1);
-            restore_signal_mask(&old_mask, interrupt_blocked);
-            if (wait_for_foreground(pid, &status, WUNTRACED) < 0) {
-                clear_foreground_processes();
+            give_terminal_to(pid);
+            if (wait_for_process(pid, &status, WUNTRACED) < 0) {
+                reclaim_terminal();
                 return 1;
             }
-            clear_foreground_processes();
+            reclaim_terminal();
             if (WIFSTOPPED(status)) {
                 pid_t pids[1] = {pid};
                 (void)add_job(pids, 1, JOB_STOPPED, command_text);
             }
             return decode_wait_status(status);
         }
-        restore_signal_mask(&old_mask, interrupt_blocked);
         {
             pid_t pids[1] = {pid};
             (void)add_job(pids, 1, JOB_RUNNING, command_text);
@@ -713,8 +678,7 @@ static int execute_pipeline(char *commands[][MAX_ARGS], int command_count,
     int pids[MAX_PIPE_COMMANDS] = {0};
     int status;
     int pipeline_status = 1;
-    sigset_t old_mask;
-    int interrupt_blocked = !background && block_interrupt(&old_mask) == 0;
+    pid_t pipeline_group = 0;
 
     for (int i = 0; i < command_count; i++) {
         int next_pipe[2] = {-1, -1};
@@ -724,8 +688,9 @@ static int execute_pipeline(char *commands[][MAX_ARGS], int command_count,
         }
         pids[i] = fork();
         if (pids[i] == 0) {
-            (void)signal(SIGINT, SIG_DFL);
-            restore_signal_mask(&old_mask, interrupt_blocked);
+            (void)setpgid(0, pipeline_group == 0 ? getpid() :
+                                                   pipeline_group);
+            reset_child_signals();
             if (previous_read >= 0) dup2(previous_read, 0);
             if (next_pipe[1] >= 0) dup2(next_pipe[1], 1);
             if (previous_read >= 0) close(previous_read);
@@ -747,21 +712,22 @@ static int execute_pipeline(char *commands[][MAX_ARGS], int command_count,
             if (next_pipe[1] >= 0) close(next_pipe[1]);
             break;
         }
+        if (pipeline_group == 0)
+            pipeline_group = pids[i];
+        (void)setpgid(pids[i], pipeline_group);
         if (previous_read >= 0) close(previous_read);
         if (next_pipe[1] >= 0) close(next_pipe[1]);
         previous_read = next_pipe[0];
     }
     if (previous_read >= 0) close(previous_read);
     if (background) {
-        restore_signal_mask(&old_mask, interrupt_blocked);
         (void)add_job(pids, command_count, JOB_RUNNING, command_text);
         return 0;
     }
-    set_foreground_processes(pids, command_count);
-    restore_signal_mask(&old_mask, interrupt_blocked);
+    give_terminal_to(pipeline_group);
     for (int i = 0; i < command_count; i++) {
         if (pids[i] > 0 &&
-            wait_for_foreground(pids[i], &status, WUNTRACED) > 0) {
+            wait_for_process(pids[i], &status, WUNTRACED) > 0) {
             if (WIFSTOPPED(status)) {
                 for (int process = 0; process < command_count; process++)
                     if (pids[process] > 0 && process != i)
@@ -774,7 +740,7 @@ static int execute_pipeline(char *commands[][MAX_ARGS], int command_count,
             }
         }
     }
-    clear_foreground_processes();
+    reclaim_terminal();
     for (int i = 0; i < command_count; i++)
         if (pids[i] > 0) {
             (void)add_job(pids, command_count, JOB_STOPPED, command_text);
@@ -790,19 +756,24 @@ int main() {
                       input_status.st_mode == I_DEV;
 
     setbuf(stdout,0);
-    if (signal(SIGINT, handle_interrupt) == SIG_ERR) {
-        perror("signal");
-        return 1;
+    if (interactive) {
+        shell_process_group = getpid();
+        if (getpgrp() != shell_process_group)
+            (void)setpgid(0, shell_process_group);
+        shell_terminal = STDIN_FILENO;
+        if (tcsetpgrp(shell_terminal, shell_process_group) < 0)
+            shell_terminal = -1;
+        (void)signal(SIGINT, SIG_IGN);
+        (void)signal(SIGQUIT, SIG_IGN);
+        (void)signal(SIGTSTP, SIG_IGN);
+        (void)signal(SIGTTIN, SIG_IGN);
+        (void)signal(SIGTTOU, SIG_IGN);
     }
     while (1) {
         reap_jobs(interactive);
         if (interactive)
             printf("$ ");
         if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL) {
-            if (foreground_interrupted) {
-                clearerr(stdin);
-                continue;
-            }
             break;
         }
 

@@ -3,6 +3,7 @@
 #include <poll.h>
 #include <pty.h>
 #include <signal.h>
+#include <termios.h>
 #include <reent.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -23,6 +24,13 @@ struct dirent;
 #define KYLEOS_SYS_SIGRETURN 41
 #define KYLEOS_SYS_ISATTY 42
 #define KYLEOS_SYS_OPENPTY 43
+#define KYLEOS_SYS_GETPGID 44
+#define KYLEOS_SYS_SETPGID 45
+#define KYLEOS_SYS_SETSID 46
+#define KYLEOS_SYS_TCGETPGRP 47
+#define KYLEOS_SYS_TCSETPGRP 48
+#define KYLEOS_SYS_TCGETATTR 49
+#define KYLEOS_SYS_TCSETATTR 50
 
 struct kyleos_sigaction {
     uintptr_t handler;
@@ -294,6 +302,41 @@ int getpid()
 {
     return (int)sys_signal_call3(KYLEOS_SYS_GETPID, 0, 0, 0);
 };
+pid_t getpgid(pid_t pid)
+{
+    return (pid_t)sys_signal_call3(KYLEOS_SYS_GETPGID, pid, 0, 0);
+}
+pid_t getpgrp(void)
+{
+    return getpgid(0);
+}
+int setpgid(pid_t pid, pid_t process_group)
+{
+    return (int)sys_signal_call3(KYLEOS_SYS_SETPGID, pid, process_group, 0);
+}
+pid_t setsid(void)
+{
+    return (pid_t)sys_signal_call3(KYLEOS_SYS_SETSID, 0, 0, 0);
+}
+pid_t tcgetpgrp(int fd)
+{
+    return (pid_t)sys_signal_call3(KYLEOS_SYS_TCGETPGRP, fd, 0, 0);
+}
+int tcsetpgrp(int fd, pid_t process_group)
+{
+    return (int)sys_signal_call3(KYLEOS_SYS_TCSETPGRP, fd,
+                                 process_group, 0);
+}
+int tcgetattr(int fd, struct termios *termios_pointer)
+{
+    return (int)sys_signal_call3(KYLEOS_SYS_TCGETATTR, fd,
+                                 (long)termios_pointer, 0);
+}
+int tcsetattr(int fd, int action, const struct termios *termios_pointer)
+{
+    return (int)sys_signal_call3(KYLEOS_SYS_TCSETATTR, fd, action,
+                                 (long)termios_pointer);
+}
 int isatty(int file)
 {
     long result = sys_signal_call3(KYLEOS_SYS_ISATTY, file, 0, 0);
@@ -482,7 +525,6 @@ int openpty(int *master, int *slave, char *name,
 {
     int descriptors[2];
 
-    (void)termios_pointer;
     (void)window_size;
     if (master == NULL || slave == NULL) {
         errno = EINVAL;
@@ -490,6 +532,13 @@ int openpty(int *master, int *slave, char *name,
     }
     if (sys_openpty(descriptors) < 0) {
         errno = EMFILE;
+        return -1;
+    }
+    if (termios_pointer != NULL &&
+        tcsetattr(descriptors[1], TCSANOW, termios_pointer) < 0) {
+        close(descriptors[0]);
+        close(descriptors[1]);
+        errno = EINVAL;
         return -1;
     }
     *master = descriptors[0];

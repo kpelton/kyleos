@@ -34,6 +34,8 @@ void signal_task_init(struct ktask *task);
 void signal_task_fork(struct ktask *child, const struct ktask *parent);
 void signal_task_exec(struct ktask *task);
 int signal_send(int pid, int signal);
+int signal_send_group(int process_group, int signal);
+int signal_kill(int pid, int signal);
 int signal_action(int signal, const struct kyleos_sigaction *action,
                   struct kyleos_sigaction *old_action);
 int signal_set_mask(int how, const uint64_t *set, uint64_t *old_set);

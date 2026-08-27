@@ -80,6 +80,31 @@ int main(void)
         !WIFSIGNALED(status) || WTERMSIG(status) != SIGTERM)
         return fail("continue and terminate child");
 
-    puts("PASS signals handlers masks pending sigreturn stop continue");
+    if (getpgrp() <= 0 || getpgid(0) != getpgrp())
+        return fail("get process group");
+    child = fork();
+    if (child < 0)
+        return fail("process group child fork");
+    if (child == 0) {
+        for (;;)
+            (void)getpid();
+    }
+    if (setpgid(child, child) < 0 || getpgid(child) != child)
+        return fail("create child process group");
+    if (kill(-child, SIGTERM) < 0 ||
+        waitpid(child, &status, 0) != child ||
+        !WIFSIGNALED(status) || WTERMSIG(status) != SIGTERM)
+        return fail("signal process group");
+
+    child = fork();
+    if (child < 0)
+        return fail("session child fork");
+    if (child == 0)
+        _exit(setsid() == getpid() && getpgrp() == getpid() ? 0 : 30);
+    if (waitpid(child, &status, 0) != child ||
+        !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        return fail("create session");
+
+    puts("PASS signals handlers masks groups sessions stop continue");
     return 0;
 }
