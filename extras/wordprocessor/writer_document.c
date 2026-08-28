@@ -1,7 +1,9 @@
 #include "extras/wordprocessor/writer_document.h"
 
 #include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -24,12 +26,46 @@ void writer_document_init(struct writer_document *document)
 {
     memset(document, 0, sizeof(*document));
     document->font_scale = 1;
+    writer_document_reserve(document, WRITER_TEXT_INITIAL_CAPACITY);
+}
+
+void writer_document_destroy(struct writer_document *document)
+{
+    if (document == NULL) return;
+    free(document->text);
+    memset(document, 0, sizeof(*document));
+}
+
+int writer_document_reserve(struct writer_document *document, int capacity)
+{
+    char *grown;
+    int new_capacity;
+
+    if (document == NULL || capacity <= 0) return -1;
+    if (capacity <= document->text_capacity) return 0;
+    new_capacity = document->text_capacity > 0 ? document->text_capacity :
+                                                WRITER_TEXT_INITIAL_CAPACITY;
+    while (new_capacity < capacity) {
+        if (new_capacity > INT_MAX / 2) {
+            new_capacity = capacity;
+            break;
+        }
+        new_capacity *= 2;
+    }
+    grown = realloc(document->text, (size_t)new_capacity);
+    if (grown == NULL) return -1;
+    document->text = grown;
+    document->text_capacity = new_capacity;
+    if (document->text_length == 0) document->text[0] = '\0';
+    return 0;
 }
 
 int writer_document_load(struct writer_document *document, const char *path)
 {
     struct writer_document loaded;
-    char input[WRITER_TEXT_MAX + WRITER_HEADER_MAX];
+    char *input = NULL;
+    int input_capacity = 0;
+    int input_length = 0;
     int fd;
     int count;
     int scale;
@@ -37,12 +73,51 @@ int writer_document_load(struct writer_document *document, const char *path)
     char *body;
 
     writer_document_init(&loaded);
+    if (loaded.text == NULL) return -1;
     fd = open(path, O_RDONLY);
-    if (fd < 0) return -1;
-    count = read(fd, input, sizeof(input) - 1);
+    if (fd < 0) {
+        writer_document_destroy(&loaded);
+        return -1;
+    }
+    input_capacity = WRITER_TEXT_INITIAL_CAPACITY;
+    input = malloc((size_t)input_capacity);
+    if (input == NULL) {
+        close(fd);
+        writer_document_destroy(&loaded);
+        return -1;
+    }
+    for (;;) {
+        char *grown;
+
+        if (input_length == input_capacity - 1) {
+            if (input_capacity > INT_MAX / 2) {
+                free(input);
+                close(fd);
+                writer_document_destroy(&loaded);
+                return -1;
+            }
+            input_capacity *= 2;
+            grown = realloc(input, (size_t)input_capacity);
+            if (grown == NULL) {
+                free(input);
+                close(fd);
+                writer_document_destroy(&loaded);
+                return -1;
+            }
+            input = grown;
+        }
+        count = read(fd, input + input_length,
+                     (size_t)(input_capacity - input_length - 1));
+        if (count <= 0) break;
+        input_length += count;
+    }
     close(fd);
-    if (count < 0) return -1;
-    input[count] = '\0';
+    if (count < 0) {
+        free(input);
+        writer_document_destroy(&loaded);
+        return -1;
+    }
+    input[input_length] = '\0';
 
     body = strchr(input, '\n');
     if (body != NULL && sscanf(input, "KWP1 size=%d bold=%d", &scale,
@@ -55,11 +130,16 @@ int writer_document_load(struct writer_document *document, const char *path)
     } else {
         body = input;
     }
-    loaded.text_length = (int)strlen(body);
-    if (loaded.text_length >= WRITER_TEXT_MAX)
-        loaded.text_length = WRITER_TEXT_MAX - 1;
+    loaded.text_length = input_length - (int)(body - input);
+    if (writer_document_reserve(&loaded, loaded.text_length + 1) < 0) {
+        free(input);
+        writer_document_destroy(&loaded);
+        return -1;
+    }
     memcpy(loaded.text, body, (size_t)loaded.text_length);
     loaded.text[loaded.text_length] = '\0';
+    free(input);
+    writer_document_destroy(document);
     *document = loaded;
     return 0;
 }
@@ -76,8 +156,8 @@ int writer_document_save(const struct writer_document *document,
         document->font_scale < WRITER_FONT_MIN ||
         document->font_scale > WRITER_FONT_MAX ||
         (document->bold != 0 && document->bold != 1) ||
-        document->text_length < 0 ||
-        document->text_length >= WRITER_TEXT_MAX)
+        document->text == NULL || document->text_length < 0 ||
+        document->text_length >= document->text_capacity)
         return -1;
     header_length = snprintf(header, sizeof(header),
                              "KWP1 size=%d bold=%d\n",

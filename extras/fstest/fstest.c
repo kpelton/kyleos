@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 static int checks;
@@ -42,6 +44,60 @@ static int file_contains(const char *path, const char *expected, int length)
     return count == length && memcmp(buffer, expected, length) == 0;
 }
 
+static int copy_file(const char *source, const char *destination)
+{
+    char buffer[4096];
+    int input = open(source, O_RDONLY);
+    int output = -1;
+    int result = -1;
+
+    if (input < 0)
+        return -1;
+    output = open(destination, O_WRONLY | O_TRUNC);
+    if (output < 0)
+        goto out;
+    for (;;) {
+        int count = read(input, buffer, sizeof(buffer));
+        int written = 0;
+
+        if (count < 0)
+            goto out;
+        if (count == 0)
+            break;
+        while (written < count) {
+            int amount = write(output, buffer + written, count - written);
+
+            if (amount <= 0)
+                goto out;
+            written += amount;
+        }
+    }
+    result = 0;
+
+out:
+    close(input);
+    if (output >= 0)
+        close(output);
+    return result;
+}
+
+static int run_relative(const char *path)
+{
+    pid_t child = fork();
+    int status = 0;
+
+    if (child < 0)
+        return 0;
+    if (child == 0) {
+        char *arguments[] = { (char *)path, "relative-path", NULL };
+
+        execve(path, arguments, NULL);
+        _exit(127);
+    }
+    return waitpid(child, &status, 0) == child && WIFEXITED(status) &&
+           WEXITSTATUS(status) == 0;
+}
+
 int main(void)
 {
     const char *fat_file = "/fstest";
@@ -55,6 +111,7 @@ int main(void)
     const char *tmp_empty = "/tmp/fstest/empty";
     const char *tmp_full = "/tmp/fstest/full";
     const char *tmp_child = "/tmp/fstest/full/child";
+    const char *tmp_runner = "/tmp/fstest/runner";
     struct stat st;
     char zeros[16];
     int fd;
@@ -68,6 +125,7 @@ int main(void)
     kyleos_rmdir(fat_full);
     unlink(tmp_file);
     unlink(tmp_moved);
+    unlink(tmp_runner);
     kyleos_rmdir(tmp_empty);
     kyleos_rmdir(tmp_child);
     kyleos_rmdir(tmp_full);
@@ -122,19 +180,31 @@ int main(void)
     check("tmp chdir", chdir(tmp_dir) == 0);
     check("tmp relative rename", rename("data", "moved") == 0);
     check("tmp relative rename source gone", stat("data", &st) < 0);
+    check("tmp relative stat destination",
+          stat("moved", &st) == 0 && st.st_size == 3);
     check("tmp relative rename destination", file_contains("moved", "ram", 3));
+    check("tmp relative executable copy", copy_file("/bin/echo", "runner") == 0);
+    check("tmp relative executable stat",
+          stat("runner", &st) == 0 && st.st_size > 0);
+    check("tmp bare relative exec", run_relative("runner"));
+    check("tmp dot-slash relative exec", run_relative("./runner"));
+    check("tmp relative executable unlink", unlink("runner") == 0);
+    check("tmp relative executable gone", stat("runner", &st) < 0);
+    check("tmp relative empty mkdir", mkdir("empty", 0) == 0);
+    check("tmp relative empty stat", stat("empty", &st) == 0);
+    check("tmp relative empty rmdir", kyleos_rmdir("empty") == 0);
+    check("tmp relative empty gone", stat("empty", &st) < 0);
+    check("tmp relative parent mkdir", mkdir("full", 0) == 0);
+    check("tmp relative child mkdir", mkdir("full/child", 0) == 0);
+    check("tmp relative non-empty refused", kyleos_rmdir("full") < 0);
+    check("tmp relative child stat", stat("full/child", &st) == 0);
+    check("tmp relative chdir", chdir("full") == 0);
+    check("tmp absolute chdir restore", chdir(tmp_dir) == 0);
+    check("tmp relative child rmdir", kyleos_rmdir("full/child") == 0);
+    check("tmp relative parent rmdir", kyleos_rmdir("full") == 0);
+    check("tmp relative unlink", unlink("moved") == 0);
+    check("tmp relative unlink gone", stat("moved", &st) < 0);
     check("root chdir", chdir("/") == 0);
-    check("tmp unlink", unlink(tmp_moved) == 0);
-
-    check("empty directory mkdir", mkdir(tmp_empty, 0) == 0);
-    check("empty directory rmdir", kyleos_rmdir(tmp_empty) == 0);
-    check("empty directory gone", stat(tmp_empty, &st) < 0);
-    check("non-empty parent mkdir", mkdir(tmp_full, 0) == 0);
-    check("non-empty child mkdir", mkdir(tmp_child, 0) == 0);
-    check("non-empty directory refused", kyleos_rmdir(tmp_full) < 0);
-    check("non-empty child remains", stat(tmp_child, &st) == 0);
-    check("nested child rmdir", kyleos_rmdir(tmp_child) == 0);
-    check("nested parent rmdir", kyleos_rmdir(tmp_full) == 0);
     check("tmp base rmdir", kyleos_rmdir(tmp_dir) == 0);
 
     fd = open("/dev/zero", O_RDONLY);

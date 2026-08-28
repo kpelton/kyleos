@@ -1,5 +1,7 @@
 #include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -17,6 +19,7 @@
 #include "extras/kui/kui_text_selection.h"
 
 #define CIDE_BINARY_PATH "/tmp/cide.out"
+#define EDITOR_TEXT_INITIAL_CAPACITY 8192
 
 #ifdef NOTES_APP
 #define EDITOR_DEFAULT_PATH "/NOTES.TXT"
@@ -99,7 +102,8 @@ static const struct kui_menu editor_menus[] = {
 
 struct editor_state {
     char path[EDITOR_PATH_MAX];
-    char text[EDITOR_TEXT_MAX];
+    char *text;
+    int text_capacity;
     int text_length;
     int text_cursor;
     struct kui_text_selection selection;
@@ -113,6 +117,30 @@ struct editor_state {
     char build_status[128];
 #endif
 };
+
+static int editor_reserve(struct editor_state *state, int capacity)
+{
+    char *grown;
+    int new_capacity;
+
+    if (capacity <= 0) return -1;
+    if (capacity <= state->text_capacity) return 0;
+    new_capacity = state->text_capacity > 0 ? state->text_capacity :
+                                              EDITOR_TEXT_INITIAL_CAPACITY;
+    while (new_capacity < capacity) {
+        if (new_capacity > INT_MAX / 2) {
+            new_capacity = capacity;
+            break;
+        }
+        new_capacity *= 2;
+    }
+    grown = realloc(state->text, (size_t)new_capacity);
+    if (grown == NULL) return -1;
+    state->text = grown;
+    state->text_capacity = new_capacity;
+    if (state->text_length == 0) state->text[0] = '\0';
+    return 0;
+}
 
 static void update_edit_items(const struct editor_state *state,
                               const struct kui_event *event)
@@ -128,7 +156,29 @@ static void update_edit_items(const struct editor_state *state,
 }
 
 #ifdef C_IDE
-static unsigned char syntax_classes[EDITOR_TEXT_MAX];
+static unsigned char *syntax_classes;
+static int syntax_capacity;
+
+static int syntax_reserve(int capacity)
+{
+    unsigned char *grown;
+    int new_capacity = syntax_capacity > 0 ? syntax_capacity :
+                                             EDITOR_TEXT_INITIAL_CAPACITY;
+
+    if (capacity <= syntax_capacity) return 0;
+    while (new_capacity < capacity) {
+        if (new_capacity > INT_MAX / 2) {
+            new_capacity = capacity;
+            break;
+        }
+        new_capacity *= 2;
+    }
+    grown = realloc(syntax_classes, (size_t)new_capacity);
+    if (grown == NULL) return -1;
+    syntax_classes = grown;
+    syntax_capacity = new_capacity;
+    return 0;
+}
 #endif
 
 static int move_vertical(const struct editor_state *state, int direction)
@@ -175,8 +225,12 @@ static int delete_selection(struct editor_state *state)
 
 static void insert_character(struct editor_state *state, char ch)
 {
+    if (state->text_length == INT_MAX - 1 ||
+        editor_reserve(state, state->text_length + 2) < 0)
+        return;
     if (!kui_text_selection_replace(&state->selection, state->text,
-                                    &state->text_length, EDITOR_TEXT_MAX,
+                                    &state->text_length,
+                                    state->text_capacity,
                                     &state->text_cursor, &ch, 1))
         return;
     state->dirty = 1;
@@ -186,8 +240,12 @@ static void insert_character(struct editor_state *state, char ch)
 static int replace_selection(struct editor_state *state,
                              const char *text, int length)
 {
+    if (length < 0 || state->text_length > INT_MAX - length - 1 ||
+        editor_reserve(state, state->text_length + length + 1) < 0)
+        return 0;
     if (!kui_text_selection_replace(&state->selection, state->text,
-                                    &state->text_length, EDITOR_TEXT_MAX,
+                                    &state->text_length,
+                                    state->text_capacity,
                                     &state->text_cursor, text, length))
         return 0;
     state->dirty = 1;
@@ -225,29 +283,78 @@ static int editor_edit_action(struct editor_state *state, int action,
 
 static int load_document(struct editor_state *state, const char *path)
 {
-    struct editor_state loaded;
+    char *text = NULL;
+    int capacity = EDITOR_TEXT_INITIAL_CAPACITY;
+    int length = 0;
     int fd;
     int count;
 
-    memset(&loaded, 0, sizeof(loaded));
-    strncpy(loaded.path, path, sizeof(loaded.path) - 1);
-    fd = open(loaded.path, O_RDONLY);
+    fd = open(path, O_RDONLY);
     if (fd < 0) return -1;
-    count = read(fd, loaded.text, EDITOR_TEXT_MAX - 1);
+    text = malloc((size_t)capacity);
+    if (text == NULL) {
+        close(fd);
+        return -1;
+    }
+    for (;;) {
+        char *grown;
+
+        if (length == capacity - 1) {
+            if (capacity > INT_MAX / 2) {
+                free(text);
+                close(fd);
+                return -1;
+            }
+            capacity *= 2;
+            grown = realloc(text, (size_t)capacity);
+            if (grown == NULL) {
+                free(text);
+                close(fd);
+                return -1;
+            }
+            text = grown;
+        }
+        count = read(fd, text + length, (size_t)(capacity - length - 1));
+        if (count <= 0) break;
+        length += count;
+    }
     close(fd);
-    if (count < 0) return -1;
-    loaded.text_length = count;
-    loaded.text[loaded.text_length] = '\0';
-    *state = loaded;
+    if (count < 0) {
+        free(text);
+        return -1;
+    }
+    text[length] = '\0';
+    free(state->text);
+    state->text = text;
+    state->text_capacity = capacity;
+    state->text_length = length;
+    state->text_cursor = 0;
+    kui_text_selection_init(&state->selection);
+    strncpy(state->path, path, sizeof(state->path) - 1);
+    state->path[sizeof(state->path) - 1] = '\0';
+    state->dirty = 0;
+    state->save_failed = 0;
+#ifdef C_IDE
+    state->build_ok = 0;
+    state->build_pid = 0;
+    state->build_queued = 0;
+    state->run_after_build = 0;
+    state->build_status[0] = '\0';
+#endif
     return 0;
 }
 
 static void open_document(struct editor_state *state, const char *path)
 {
     if (load_document(state, path) == 0) return;
-    memset(state, 0, sizeof(*state));
+    state->text_length = 0;
+    state->text_cursor = 0;
+    state->text[0] = '\0';
+    kui_text_selection_init(&state->selection);
     strncpy(state->path, path, sizeof(state->path) - 1);
+    state->path[sizeof(state->path) - 1] = '\0';
     state->dirty = 1;
+    state->save_failed = 0;
 }
 
 static int save_document_to(struct editor_state *state, const char *path)
@@ -577,7 +684,11 @@ static void editor_render(struct kui_client *client,
     kui_fill_rect(&client->surface, 0, 0, event->width, event->height,
                   KUI_WHITE);
 #ifdef C_IDE
-    c_syntax_highlight(state->text, state->text_length, syntax_classes);
+    int syntax_ready = syntax_reserve(state->text_length > 0 ?
+                                      state->text_length : 1) == 0;
+
+    if (syntax_ready)
+        c_syntax_highlight(state->text, state->text_length, syntax_classes);
     kui_fill_rect(&client->surface, 0, KUI_MENU_BAR_HEIGHT,
                   event->width, EDITOR_TOOLBAR_HEIGHT, KUI_FACE);
     kui_fill_rect(&client->surface, 0,
@@ -644,7 +755,8 @@ static void editor_render(struct kui_client *client,
                                (unsigned char)state->text[i],
 #ifdef C_IDE
                           selected ? KUI_WHITE :
-                          cide_syntax_color(syntax_classes[i]),
+                          cide_syntax_color(syntax_ready ?
+                                            syntax_classes[i] : 0),
 #else
                           selected ? KUI_WHITE : KUI_BLACK,
 #endif
@@ -707,6 +819,7 @@ int main(void)
     int scroll_row = 0;
 
     memset(&state, 0, sizeof(state));
+    if (editor_reserve(&state, EDITOR_TEXT_INITIAL_CAPACITY) < 0) return 1;
     memset(&file_dialog, 0, sizeof(file_dialog));
     memset(&discard_dialog, 0, sizeof(discard_dialog));
     memset(&scrollbar, 0, sizeof(scrollbar));
@@ -1058,6 +1171,10 @@ int main(void)
             kui_client_set_action(&client, KUI_ACTION_FILE_SAVED, state.path);
         if (kui_client_send(&client) < 0) break;
     }
+    free(state.text);
+#ifdef C_IDE
+    free(syntax_classes);
+#endif
     kui_client_free(&client);
     return 0;
 }

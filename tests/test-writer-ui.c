@@ -11,6 +11,7 @@
 #include "extras/wordprocessor/writer_document.h"
 
 #define WRITER_TEST_PATH "/tmp/os3-writer-ui.kwp"
+#define WRITER_LARGE_LENGTH 20000
 
 struct display_result {
     struct kui_response response;
@@ -166,6 +167,7 @@ int main(int argc, char **argv)
 
     memset(&event, 0, sizeof(event));
     memset(&result, 0, sizeof(result));
+    writer_document_init(&loaded);
     event.magic = KUI_PROTOCOL_MAGIC;
     event.version = KUI_PROTOCOL_VERSION;
     event.type = KUI_EVENT_INIT;
@@ -191,6 +193,32 @@ int main(int argc, char **argv)
     failures += strcmp(loaded.text, "a") != 0 ||
                 loaded.font_scale != 2 || loaded.bold != 1;
 
+    failures += writer_document_reserve(
+        &loaded, WRITER_LARGE_LENGTH + 1) < 0;
+    if (loaded.text_capacity > WRITER_LARGE_LENGTH) {
+        for (int index = 0; index < WRITER_LARGE_LENGTH; index++)
+            loaded.text[index] = (char)('a' + index % 26);
+        loaded.text[WRITER_LARGE_LENGTH] = '\0';
+        loaded.text_length = WRITER_LARGE_LENGTH;
+        failures += writer_document_save(&loaded, WRITER_TEST_PATH) < 0;
+
+        event.type = KUI_EVENT_INIT;
+        event.serial++;
+        strncpy(event.argument, WRITER_TEST_PATH,
+                sizeof(event.argument) - 1);
+        event.argument[sizeof(event.argument) - 1] = '\0';
+        failures += exchange(to_child[1], from_child[0], &event, &result) < 0;
+        failures += send_key(to_child[1], from_child[0], &event, &result,
+                             44, 0, 'Z') < 0;
+        failures += send_key(to_child[1], from_child[0], &event, &result,
+                             31, KUI_MOD_CTRL, 0) < 0;
+        failures += writer_document_load(&loaded, WRITER_TEST_PATH) < 0;
+        failures += loaded.text_length != WRITER_LARGE_LENGTH + 1 ||
+                    loaded.text[0] != 'Z' ||
+                    memcmp(loaded.text + 1, "abcdefghijklmnopqrstuvwxyz", 26)
+                        != 0;
+    }
+
     event.type = KUI_EVENT_CLOSE;
     event.serial++;
     write_all(to_child[1], &event, sizeof(event));
@@ -198,6 +226,7 @@ int main(int argc, char **argv)
     close(from_child[0]);
     waitpid(child, &status, 0);
     free(result.display);
+    writer_document_destroy(&loaded);
     unlink(WRITER_TEST_PATH);
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) failures++;
     if (failures != 0) {

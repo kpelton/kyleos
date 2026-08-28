@@ -107,10 +107,39 @@ static int file_equals(const char *path, const char *expected)
     return strcmp(buffer, expected) == 0;
 }
 
+static int write_large_file(const char *path, int length)
+{
+    FILE *file = fopen(path, "wb");
+
+    if (file == NULL) return -1;
+    for (int index = 0; index < length; index++)
+        if (fputc('a' + index % 26, file) == EOF) {
+            fclose(file);
+            return -1;
+        }
+    return fclose(file);
+}
+
+static int large_file_was_edited(const char *path, int original_length)
+{
+    FILE *file = fopen(path, "rb");
+    int valid = 1;
+
+    if (file == NULL) return 0;
+    if (fgetc(file) != 'Z') valid = 0;
+    for (int index = 0; valid && index < original_length; index++)
+        if (fgetc(file) != 'a' + index % 26) valid = 0;
+    if (fgetc(file) != EOF) valid = 0;
+    fclose(file);
+    return valid;
+}
+
 int main(int argc, char **argv)
 {
     const char *path = "/tmp/os3edui.txt";
     const char *save_as_path = "/tmp/os3edui-saveas.txt";
+    const char *large_path = "/tmp/os3edui-large.txt";
+    const int large_length = 20000;
     int to_child[2];
     int from_child[2];
     pid_t child;
@@ -214,6 +243,18 @@ int main(int argc, char **argv)
                          31, 0, KUI_MOD_CTRL, 0) < 0;
     if (!file_equals(save_as_path, "")) failures++;
 
+    failures += write_large_file(large_path, large_length) < 0;
+    event.type = KUI_EVENT_INIT;
+    event.serial++;
+    strncpy(event.argument, large_path, sizeof(event.argument) - 1);
+    event.argument[sizeof(event.argument) - 1] = '\0';
+    failures += exchange(to_child[1], from_child[0], &event, &response) < 0;
+    failures += send_key(to_child[1], from_child[0], &event, &response,
+                         44, 0, 0, 'Z') < 0;
+    failures += send_key(to_child[1], from_child[0], &event, &response,
+                         31, 0, KUI_MOD_CTRL, 0) < 0;
+    if (!large_file_was_edited(large_path, large_length)) failures++;
+
     event.type = KUI_EVENT_CLOSE;
     event.serial++;
     write_all(to_child[1], &event, sizeof(event));
@@ -222,6 +263,7 @@ int main(int argc, char **argv)
     waitpid(child, &status, 0);
     remove(path);
     remove(save_as_path);
+    remove(large_path);
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) failures++;
 
     if (failures != 0) {

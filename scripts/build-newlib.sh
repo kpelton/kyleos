@@ -10,7 +10,7 @@ if [[ ! -f "$build_dir/Makefile" ]]; then
     mkdir -p "$build_dir"
     (
         cd "$build_dir"
-        CC=gcc CFLAGS="-O2 -msse4.2 -mno-mmx -D_LDBL_EQ_DBL" \
+        CC=gcc CFLAGS="-O2 -mno-mmx -D_LDBL_EQ_DBL" \
             "$source_dir/configure" --build=kyleos --prefix="$sysroot" \
                 --disable-dependency-tracking
     )
@@ -21,8 +21,8 @@ fi
 # libm/*, so materialize the expected aliases before the archive rule runs.
 make -C "$build_dir" prefix="$sysroot" exec_prefix="$sysroot" \
     CPPFLAGS="-DSIGNAL_PROVIDED -I$build_dir/targ-include -I$source_dir/libc/include" \
-    CFLAGS="-O2 -msse4.2 -mno-mmx -D_LDBL_EQ_DBL -DSIGNAL_PROVIDED -Wno-error -Wno-implicit-function-declaration" \
-    CCASFLAGS="-O2 -msse4.2 -mno-mmx" \
+    CFLAGS="-O2 -mno-mmx -D_LDBL_EQ_DBL -DSIGNAL_PROVIDED -Wno-error -Wno-implicit-function-declaration" \
+    CCASFLAGS="-O2 -mno-mmx" \
     am__disable_dependency_tracking=yes libm.a
 while IFS= read -r object; do
     name=${object##*/}
@@ -39,7 +39,7 @@ done < <(find "$build_dir/libc" -mindepth 2 -type f -name 'a-*.o')
 # inherit the kernel's freestanding -mno-sse flags through exported CFLAGS.
 make -C "$build_dir" prefix="$sysroot" exec_prefix="$sysroot" \
     CPPFLAGS="-DSIGNAL_PROVIDED -I$build_dir/targ-include -I$source_dir/libc/include" \
-    CFLAGS="-O2 -msse4.2 -mno-mmx -D_LDBL_EQ_DBL -DSIGNAL_PROVIDED -Wno-error -Wno-implicit-function-declaration" \
-    CCASFLAGS="-O2 -msse4.2 -mno-mmx" \
+    CFLAGS="-O2 -mno-mmx -D_LDBL_EQ_DBL -DSIGNAL_PROVIDED -Wno-error -Wno-implicit-function-declaration" \
+    CCASFLAGS="-O2 -mno-mmx" \
     am__disable_dependency_tracking=yes all
 make -C "$build_dir" prefix="$sysroot" exec_prefix="$sysroot" install

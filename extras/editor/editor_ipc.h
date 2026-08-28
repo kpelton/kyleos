@@ -1,7 +1,7 @@
 #ifndef KYLEOS_EDITOR_IPC_H
 #define KYLEOS_EDITOR_IPC_H
 
-#define EDITOR_TEXT_MAX 8192
+#define EDITOR_IPC_TEXT_MAX 8192
 #define EDITOR_PATH_MAX 128
 
 enum editor_command {
@@ -33,7 +33,7 @@ struct editor_response {
     int text_cursor;
     int dirty;
     int save_failed;
-    char text[EDITOR_TEXT_MAX];
+    char text[EDITOR_IPC_TEXT_MAX];
 };
 
 #endif

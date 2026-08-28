@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -49,6 +50,7 @@ static void writer_reset_view(struct writer_state *state)
 
 static void writer_new_at(struct writer_state *state, const char *path)
 {
+    writer_document_destroy(&state->document);
     writer_document_init(&state->document);
     strncpy(state->path, path, sizeof(state->path) - 1);
     state->path[sizeof(state->path) - 1] = '\0';
@@ -60,7 +62,12 @@ static int writer_load(struct writer_state *state, const char *path)
 {
     struct writer_document loaded;
 
-    if (writer_document_load(&loaded, path) < 0) return -1;
+    writer_document_init(&loaded);
+    if (writer_document_load(&loaded, path) < 0) {
+        writer_document_destroy(&loaded);
+        return -1;
+    }
+    writer_document_destroy(&state->document);
     state->document = loaded;
     strncpy(state->path, path, sizeof(state->path) - 1);
     state->path[sizeof(state->path) - 1] = '\0';
@@ -96,10 +103,16 @@ static int writer_delete_selection(struct writer_state *state)
 static int writer_replace(struct writer_state *state,
                           const char *text, int length)
 {
+    int required;
+
+    if (length < 0 || state->document.text_length > INT_MAX - length - 1)
+        return 0;
+    required = state->document.text_length + length + 1;
+    if (writer_document_reserve(&state->document, required) < 0) return 0;
     if (!kui_text_selection_replace(
             &state->selection, state->document.text,
-            &state->document.text_length, WRITER_TEXT_MAX, &state->cursor,
-            text, length))
+            &state->document.text_length, state->document.text_capacity,
+            &state->cursor, text, length))
         return 0;
     state->dirty = 1;
     state->save_failed = 0;
@@ -649,5 +662,6 @@ int main(void)
         if (kui_client_send(&client) < 0) break;
     }
     kui_client_free(&client);
+    writer_document_destroy(&state.document);
     return 0;
 }

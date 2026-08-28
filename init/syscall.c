@@ -564,8 +564,17 @@ static void debug_read_input(char *dst)
 static int exec(char *path)
 {
     int retval = -1;
-    struct dnode *dptr = vfs_read_root_dir(ROOT);
-    struct inode *iptr = vfs_walk_path(path, dptr);
+    struct ktask *task = get_current_process();
+    struct dnode *dptr;
+    struct inode *iptr;
+
+    if (path == NULL || path[0] == '\0' || task == NULL || task->cwd == NULL)
+        return -1;
+    dptr = path[0] == DELIM ? vfs_read_root_dir(ROOT) :
+                              vfs_read_inode_dir(task->cwd);
+    if (dptr == NULL)
+        return -1;
+    iptr = vfs_walk_path(path, dptr);
     if (iptr != NULL && iptr->i_type == I_FILE)
     {
         retval = exec_from_inode(iptr, true, NULL);
@@ -578,13 +587,21 @@ static int exec(char *path)
 static int exec_args(char *path, char *argv[])
 {
     int retval = -1;
-    if (!path)
-        return -1;
-    struct dnode *dptr = vfs_read_root_dir(ROOT);
-    struct inode *iptr = vfs_walk_path(path, dptr);
+    struct ktask *task = get_current_process();
+    struct dnode *dptr;
+    struct inode *iptr;
     char **user_argv = NULL;
     int i;
     int j;
+
+    if (path == NULL || path[0] == '\0' || argv == NULL || task == NULL ||
+        task->cwd == NULL)
+        return -1;
+    dptr = path[0] == DELIM ? vfs_read_root_dir(ROOT) :
+                              vfs_read_inode_dir(task->cwd);
+    if (dptr == NULL)
+        return -1;
+    iptr = vfs_walk_path(path, dptr);
     if (iptr != NULL)
     {
         for (i = 0; i < MAX_ARGS && argv[i]; i++)
@@ -612,8 +629,18 @@ static int exec_args(char *path, char *argv[])
 
 static int stat(const char *file, struct stat *st)
 {
-    struct dnode *dptr = vfs_read_root_dir(ROOT);
-    struct inode *iptr = vfs_walk_path(file, dptr);
+    struct ktask *task = get_current_process();
+    struct dnode *dptr;
+    struct inode *iptr;
+
+    if (file == NULL || file[0] == '\0' || st == NULL || task == NULL ||
+        task->cwd == NULL)
+        return -1;
+    dptr = file[0] == DELIM ? vfs_read_root_dir(ROOT) :
+                              vfs_read_inode_dir(task->cwd);
+    if (dptr == NULL)
+        return -1;
+    iptr = vfs_walk_path(file, dptr);
     if (iptr != NULL) {
 	
     	struct file *fptr = vfs_open_file(iptr, O_RDONLY);

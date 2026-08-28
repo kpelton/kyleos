@@ -7,6 +7,7 @@
 
 #define DOCUMENT_PATH "/tmp/os3-writer-document.kwp"
 #define PLAIN_PATH "/tmp/os3-writer-plain.txt"
+#define LARGE_TEXT_LENGTH 20000
 
 static int check(int condition, const char *message)
 {
@@ -35,6 +36,7 @@ int main(void)
     int failures = 0;
 
     writer_document_init(&saved);
+    writer_document_init(&loaded);
     failures += check(saved.font_scale == 1 && saved.bold == 0 &&
                       saved.text_length == 0,
                       "new document defaults");
@@ -60,6 +62,29 @@ int main(void)
     failures += check(strcmp(loaded.text, "plain text\nsecond line") == 0,
                       "plain-text contents");
 
+    failures += check(
+        writer_document_reserve(&saved, LARGE_TEXT_LENGTH + 1) == 0,
+        "grow document beyond initial capacity");
+    if (saved.text_capacity > LARGE_TEXT_LENGTH) {
+        for (int index = 0; index < LARGE_TEXT_LENGTH; index++)
+            saved.text[index] = (char)('a' + index % 26);
+        saved.text[LARGE_TEXT_LENGTH] = '\0';
+        saved.text_length = LARGE_TEXT_LENGTH;
+        saved.font_scale = 2;
+        saved.bold = 0;
+        failures += check(writer_document_save(&saved, DOCUMENT_PATH) == 0,
+                          "save large document");
+        failures += check(writer_document_load(&loaded, DOCUMENT_PATH) == 0,
+                          "load large document");
+        failures += check(loaded.text_length == LARGE_TEXT_LENGTH &&
+                          loaded.text_capacity > LARGE_TEXT_LENGTH &&
+                          memcmp(loaded.text, saved.text,
+                                 LARGE_TEXT_LENGTH) == 0,
+                          "large document round trip without truncation");
+    }
+
+    writer_document_destroy(&saved);
+    writer_document_destroy(&loaded);
     unlink(DOCUMENT_PATH);
     unlink(PLAIN_PATH);
     if (failures == 0) puts("Writer document tests passed");

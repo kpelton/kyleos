@@ -11,8 +11,7 @@ TEST_IMAGE_MOUNT ?= $(KERNEL_ROOT)/build/image/test-suite-mnt
 TEST_TIMEOUT ?= 180
 QEMU ?= qemu-system-x86_64
 # Extra options are intentionally overridable: e.g. `make test QEMU_OPTS="-cpu host -enable-kvm"`.
-# GUI userspace is built with SSE4.2, which QEMU's generic qemu64 CPU omits.
-QEMU_OPTS ?= -cpu max -rtc base=localtime
+QEMU_OPTS ?= -rtc base=localtime
 USERLAND_STAGE ?= $(KERNEL_ROOT)/build/userland
 KUI_LIBRARY ?= $(USERLAND_STAGE)/libkui.a
 KUI_OBJECT ?= $(USERLAND_STAGE)/kui.o
@@ -54,7 +53,7 @@ ifneq (,$(wildcard config.mk))
 include config.mk
 endif
 CFLAGS	= -m64 $(OPT) -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2  -I $(KERNEL_ROOT)  -g 
-USER_CFLAGS = $(filter-out -mno-mmx -mno-sse -mno-sse2,$(CFLAGS)) -msse4.2
+USER_CFLAGS = $(filter-out -mno-mmx -mno-sse -mno-sse2,$(CFLAGS))
 GUI_CFLAGS = $(filter-out -O%,$(USER_CFLAGS)) -O2
 KSHEET_CFLAGS = $(GUI_CFLAGS)
 ifeq ($(SERIAL_OUTPUT),0)
