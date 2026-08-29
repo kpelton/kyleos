@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <string.h>
+#include <time.h>
 
 #include "extras/kui/kui.h"
 #include "extras/kuid/shell_protocol.h"
@@ -13,6 +14,11 @@ static int zoom_level;
 static int dock_menu_rank = -1;
 static int dock_menu_window = -1;
 static int dock_menu_hover = -1;
+static int calendar_open;
+static int calendar_month_offset;
+static int calendar_selected_day;
+static int calendar_date_menu_open;
+static int calendar_date_menu_hover = -1;
 
 #define DOCK_HEIGHT 74
 #define DOCK_BOTTOM_GAP 0
@@ -20,6 +26,199 @@ static int dock_menu_hover = -1;
 #define DOCK_ITEM_STEP 62
 #define DOCK_ZOOM_SIZE 88
 #define DOCK_NEIGHBOR_SIZE 72
+#define CALENDAR_WIDTH 252
+#define CALENDAR_HEIGHT 190
+
+static int leap_year(int year)
+{
+    return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+}
+
+static int days_in_month(int year, int month)
+{
+    static const unsigned char days[] = {
+        31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+    };
+
+    return month == 1 && leap_year(year) ? 29 : days[month];
+}
+
+static int weekday(int year, int month, int day)
+{
+    static const int offsets[] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
+
+    if (month < 2) year--;
+    return (year + year / 4 - year / 100 + year / 400 +
+            offsets[month] + day) % 7;
+}
+
+static void calendar_month(const struct tm *today, int offset,
+                           int *year, int *month)
+{
+    int absolute = today->tm_year + 1900;
+
+    absolute = absolute * 12 + today->tm_mon + offset;
+    *year = absolute / 12;
+    *month = absolute % 12;
+    if (*month < 0) {
+        *month += 12;
+        (*year)--;
+    }
+}
+
+static void draw_calendar(struct kui_surface *surface,
+                          const struct kui_shell_request *request,
+                          const struct tm *today)
+{
+    static const char *months[] = {
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    };
+    static const char *weekdays[] = { "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa" };
+    int x = request->screen_width - CALENDAR_WIDTH - 8;
+    int y = 24;
+    int year;
+    int month;
+    int first;
+    int count;
+    char title[32];
+    char number[12];
+
+    calendar_month(today, calendar_month_offset, &year, &month);
+    first = weekday(year, month, 1);
+    count = days_in_month(year, month);
+    kui_fill_rect_alpha(surface, x + 4, y + 5, CALENDAR_WIDTH,
+                        CALENDAR_HEIGHT, 0x50000000U);
+    kui_fill_rect_alpha(surface, x, y, CALENDAR_WIDTH, CALENDAR_HEIGHT,
+                        0xf4f7f8faU);
+    kui_outline_rect(surface, x, y, CALENDAR_WIDTH, CALENDAR_HEIGHT,
+                     0x00636b74U);
+    kui_fill_rect(surface, x + 1, y + 1, CALENDAR_WIDTH - 2, 34,
+                  0x00dfe8f1U);
+    kui_draw_text(surface, x + 12, y + 10, "<", KUI_BLACK,
+                  0x00dfe8f1U, 0);
+    kui_draw_text(surface, x + CALENDAR_WIDTH - 20, y + 10, ">", KUI_BLACK,
+                  0x00dfe8f1U, 0);
+    snprintf(title, sizeof(title), "%s %d", months[month], year);
+    kui_draw_text(surface, x + (CALENDAR_WIDTH - kui_text_width(title)) / 2,
+                  y + 10, title, KUI_BLACK, 0x00dfe8f1U, 0);
+    for (int column = 0; column < 7; column++)
+        kui_draw_text(surface, x + 12 + column * 34, y + 43,
+                      weekdays[column], 0x004c5965U, 0x00f7f8faU, 0);
+    kui_fill_rect(surface, x + 8, y + 61, CALENDAR_WIDTH - 16, 1,
+                  0x00c5ccd3U);
+    for (int day = 1; day <= count; day++) {
+        int cell = first + day - 1;
+        int column = cell % 7;
+        int row = cell / 7;
+        int cell_x = x + 8 + column * 34;
+        int cell_y = y + 66 + row * 19;
+        int is_today = calendar_month_offset == 0 &&
+                       day == today->tm_mday;
+        int is_selected = day == calendar_selected_day;
+        uint32_t background = is_today ? 0x00366fc4U :
+                              is_selected ? 0x00b9cce0U : 0x00f7f8faU;
+
+        if (is_today || is_selected)
+            kui_fill_rect(surface, cell_x, cell_y - 2, 30, 18, background);
+        snprintf(number, sizeof(number), "%d", day);
+        kui_draw_text(surface, cell_x + (30 - kui_text_width(number)) / 2,
+                      cell_y, number, is_today ? KUI_WHITE : KUI_BLACK,
+                      background, 0);
+    }
+    if (calendar_date_menu_open && calendar_selected_day > 0) {
+        static const char *items[] = {
+            "Copy date", "Copy ISO date", "Copy long date", "Go to today"
+        };
+        int cell = first + calendar_selected_day - 1;
+        int menu_x = x - 210;
+        int menu_y = y + 62 + (cell / 7) * 19;
+
+        if (menu_x < 4) menu_x = x + 20;
+        if (menu_y + 104 > request->screen_height)
+            menu_y = request->screen_height - 104;
+        kui_fill_rect_alpha(surface, menu_x + 3, menu_y + 4, 204, 104,
+                            0x50000000U);
+        kui_fill_rect_alpha(surface, menu_x, menu_y, 204, 104,
+                            0xf4f7f8faU);
+        kui_outline_rect(surface, menu_x, menu_y, 204, 104, 0x00636b74U);
+        for (int item = 0; item < 4; item++) {
+            uint32_t background = item == calendar_date_menu_hover ?
+                                  0x00366fc4U : 0x00f7f8faU;
+
+            if (item == calendar_date_menu_hover)
+                kui_fill_rect(surface, menu_x + 2, menu_y + 2 + item * 25,
+                              200, 25, background);
+            kui_draw_text(surface, menu_x + 12, menu_y + 8 + item * 25,
+                          items[item], item == calendar_date_menu_hover ?
+                          KUI_WHITE : KUI_BLACK, background, 0);
+        }
+    }
+}
+
+static void calendar_menu_rect(const struct kui_shell_request *request,
+                               const struct tm *today,
+                               int *x, int *y)
+{
+    int year;
+    int month;
+    int first;
+    int calendar_x = request->screen_width - CALENDAR_WIDTH - 8;
+
+    calendar_month(today, calendar_month_offset, &year, &month);
+    first = weekday(year, month, 1);
+    *x = calendar_x - 210;
+    *y = 24 + 62 + ((first + calendar_selected_day - 1) / 7) * 19;
+    if (*x < 4) *x = calendar_x + 20;
+    if (*y + 104 > request->screen_height)
+        *y = request->screen_height - 104;
+}
+
+static int calendar_day_at(const struct kui_shell_request *request,
+                           const struct tm *today, int x, int y)
+{
+    int calendar_x = request->screen_width - CALENDAR_WIDTH - 8;
+    int year;
+    int month;
+    int first;
+    int cell;
+    int day;
+
+    if (!kui_in_rect(x, y, calendar_x + 8, 24 + 64, 238, 114))
+        return 0;
+    calendar_month(today, calendar_month_offset, &year, &month);
+    first = weekday(year, month, 1);
+    cell = ((y - 24 - 64) / 19) * 7 + (x - calendar_x - 8) / 34;
+    day = cell - first + 1;
+    return day >= 1 && day <= days_in_month(year, month) ? day : 0;
+}
+
+static void copy_selected_date(const struct tm *today, int item,
+                               struct kui_shell_response *response)
+{
+    static const char *months[] = {
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    };
+    static const char *weekdays[] = {
+        "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+    };
+    int year;
+    int month;
+    int day = calendar_selected_day;
+
+    calendar_month(today, calendar_month_offset, &year, &month);
+    response->action = KUI_SHELL_ACTION_COPY_TEXT;
+    if (item == 0)
+        snprintf(response->text, sizeof(response->text), "%02d/%02d/%04d",
+                 month + 1, day, year);
+    else if (item == 1)
+        snprintf(response->text, sizeof(response->text), "%04d-%02d-%02d",
+                 year, month + 1, day);
+    else
+        snprintf(response->text, sizeof(response->text), "%s, %s %d, %d",
+                 weekdays[weekday(year, month, day)], months[month], day, year);
+}
 
 static int menu_is_game(const char *title)
 {
@@ -254,7 +453,7 @@ static void draw_menu_bar(struct kui_surface *surface,
     kui_draw_text(surface, 17, 4, "K", KUI_WHITE, 0x00246ac1U, 0);
     kui_draw_text(surface, 38, 4, request->active_application,
                   KUI_BLACK, 0x00fbfcfdU, 0);
-    kui_draw_text(surface, request->screen_width - 68, 4, clock, KUI_BLACK,
+    kui_draw_text(surface, request->screen_width - 52, 4, clock, KUI_BLACK,
                   0x00fbfcfdU, 0);
 }
 
@@ -271,9 +470,13 @@ static void render(struct kui_surface *surface,
     int hovered = hovered_dock_item(request, dock_x, dock_y, items);
     char clock[16];
     struct timeval now;
+    struct tm today;
+    time_t seconds;
     uint32_t minutes;
 
     gettimeofday(&now, NULL);
+    seconds = (time_t)now.tv_sec;
+    gmtime_r(&seconds, &today);
     minutes = (uint32_t)((now.tv_sec / 60) % (24 * 60));
     if (hovered >= 0) {
         if (zoom_level < 60) zoom_level++;
@@ -428,6 +631,8 @@ static void render(struct kui_surface *surface,
                           0x00366fc4U : 0x00f5f5f5U, 0);
         }
     }
+    if (calendar_open)
+        draw_calendar(surface, request, &today);
 }
 
 static void pointer(const struct kui_shell_request *request,
@@ -439,11 +644,45 @@ static void pointer(const struct kui_shell_request *request,
     int items = dock_item_count(request);
     int dock_width = 20 + items * DOCK_ITEM_STEP;
     int dock_x = (request->screen_width - dock_width) / 2;
+    int calendar_x = request->screen_width - CALENDAR_WIDTH - 8;
+    struct timeval now;
+    struct tm today;
+    time_t seconds;
+
+    gettimeofday(&now, NULL);
+    seconds = (time_t)now.tv_sec;
+    gmtime_r(&seconds, &today);
 
     if (request->button == 0) {
         int hovered = -1;
         int child_hovered = -1;
         int dock_hovered = -1;
+
+        if (calendar_open) {
+            int date_hovered = -1;
+
+            if (calendar_date_menu_open) {
+                int menu_x;
+                int menu_y;
+
+                calendar_menu_rect(request, &today, &menu_x, &menu_y);
+                if (kui_in_rect(request->x, request->y,
+                                menu_x, menu_y, 204, 104))
+                    date_hovered = (request->y - menu_y - 2) / 25;
+                if (date_hovered < 0 || date_hovered > 3)
+                    date_hovered = -1;
+            }
+            if (date_hovered != calendar_date_menu_hover) {
+                calendar_date_menu_hover = date_hovered;
+                response->consumed = 1;
+            }
+            if (kui_in_rect(request->x, request->y, calendar_x, 24,
+                            CALENDAR_WIDTH, CALENDAR_HEIGHT) ||
+                date_hovered >= 0)
+                response->consumed = 1;
+            if (response->consumed)
+                return;
+        }
 
         if (menu_open && dock_menu_rank >= 0 && dock_menu_rank < apps) {
             int menu_x = dock_x + dock_menu_rank * DOCK_ITEM_STEP;
@@ -480,6 +719,69 @@ static void pointer(const struct kui_shell_request *request,
             response->consumed = 1;
         }
         if (menu_open) response->consumed = 1;
+        return;
+    }
+    if (request->y < 24 && request->x >= request->screen_width - 80) {
+        response->consumed = 1;
+        calendar_open = !calendar_open;
+        calendar_month_offset = 0;
+        calendar_selected_day = 0;
+        calendar_date_menu_open = 0;
+        calendar_date_menu_hover = -1;
+        menu_open = 0;
+        menu_submenu = -1;
+        return;
+    }
+    if (calendar_open) {
+        int menu_x;
+        int menu_y;
+        int day;
+
+        response->consumed = 1;
+        if (calendar_date_menu_open) {
+            calendar_menu_rect(request, &today, &menu_x, &menu_y);
+            if (kui_in_rect(request->x, request->y,
+                            menu_x, menu_y, 204, 104)) {
+                int item = (request->y - menu_y - 2) / 25;
+
+                if (item >= 0 && item < 3)
+                    copy_selected_date(&today, item, response);
+                else if (item == 3) {
+                    calendar_month_offset = 0;
+                    calendar_selected_day = today.tm_mday;
+                }
+                calendar_date_menu_open = 0;
+                calendar_date_menu_hover = -1;
+                return;
+            }
+        }
+        if (kui_in_rect(request->x, request->y, calendar_x, 24,
+                        CALENDAR_WIDTH, CALENDAR_HEIGHT)) {
+            if (request->y < 58 && request->x < calendar_x + 40) {
+                calendar_month_offset--;
+                calendar_selected_day = 0;
+                calendar_date_menu_open = 0;
+            } else if (request->y < 58 &&
+                     request->x >= calendar_x + CALENDAR_WIDTH - 40) {
+                calendar_month_offset++;
+                calendar_selected_day = 0;
+                calendar_date_menu_open = 0;
+            } else if ((day = calendar_day_at(request, &today,
+                                               request->x, request->y)) > 0) {
+                calendar_selected_day = day;
+                calendar_date_menu_open = 1;
+                calendar_date_menu_hover = -1;
+            } else {
+                calendar_date_menu_open = 0;
+                calendar_date_menu_hover = -1;
+            }
+            return;
+        }
+        calendar_open = 0;
+        calendar_month_offset = 0;
+        calendar_selected_day = 0;
+        calendar_date_menu_open = 0;
+        calendar_date_menu_hover = -1;
         return;
     }
     if (menu_open) {

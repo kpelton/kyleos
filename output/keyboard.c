@@ -7,17 +7,27 @@
 
 #define ESCAPE 0x01
 #define BACKSPACE 0x0E
+#define TAB 0x0F
 #define CTRL 0x1D
 #define ENTER 0x1C
 #define LEFT_SHIFT 0x2A
 #define RIGHT_SHIFT 0x36
 #define ALT 0x38
+#define CAPS_LOCK 0x3A
 #define F1 0x3B
 #define F4 0x3E
+#define F10 0x44
+#define F11 0x57
+#define F12 0x58
+#define KEY_HOME 0x47
+#define KEY_PAGE_UP 0x49
 #define KEY_LEFT 0x4B
 #define KEY_RIGHT 0x4D
+#define KEY_END 0x4F
 #define KEY_UP 0x48
 #define KEY_DOWN 0x50
+#define KEY_PAGE_DOWN 0x51
+#define KEY_INSERT 0x52
 #define KEY_DELETE 0x53
 #define SC_MAX 57
 
@@ -27,6 +37,12 @@ static bool left_shift;
 static bool right_shift;
 static bool alt;
 static bool ctrl;
+static bool caps_lock;
+
+static void input_add_sequence(const char *sequence)
+{
+    while (*sequence != '\0') input_add_char(*sequence++);
+}
 
 static char shifted_char(char ch)
 {
@@ -87,6 +103,11 @@ static void keyboard_callback()
         input_add_key(scancode, extended, pressed);
         return;
     }
+    if (!extended && scancode == CAPS_LOCK) {
+        if (pressed) caps_lock = !caps_lock;
+        input_add_key(scancode, extended, pressed);
+        return;
+    }
     if (!extended && alt && scancode >= F1 && scancode <= F4) {
         if (pressed)
             tty_switch_console(scancode - F1);
@@ -99,16 +120,30 @@ static void keyboard_callback()
         return;
     }
     if (pressed && extended && input_is_raw()) {
-        if (scancode == KEY_LEFT || scancode == KEY_RIGHT || scancode == KEY_UP ||
-            scancode == KEY_DOWN || scancode == KEY_DELETE) {
-            input_add_char(27);
-            input_add_char('[');
-            if (scancode == KEY_LEFT) input_add_char('D');
-            if (scancode == KEY_RIGHT) input_add_char('C');
-            if (scancode == KEY_UP) input_add_char('A');
-            if (scancode == KEY_DOWN) input_add_char('B');
-            if (scancode == KEY_DELETE) { input_add_char('3'); input_add_char('~'); }
-        }
+        if (scancode == KEY_LEFT) input_add_sequence("\033[D");
+        else if (scancode == KEY_RIGHT) input_add_sequence("\033[C");
+        else if (scancode == KEY_UP) input_add_sequence("\033[A");
+        else if (scancode == KEY_DOWN) input_add_sequence("\033[B");
+        else if (scancode == KEY_HOME) input_add_sequence("\033[H");
+        else if (scancode == KEY_END) input_add_sequence("\033[F");
+        else if (scancode == KEY_PAGE_UP) input_add_sequence("\033[5~");
+        else if (scancode == KEY_PAGE_DOWN) input_add_sequence("\033[6~");
+        else if (scancode == KEY_INSERT) input_add_sequence("\033[2~");
+        else if (scancode == KEY_DELETE) input_add_sequence("\033[3~");
+        return;
+    }
+    if (pressed && !extended && input_is_raw() &&
+        ((scancode >= F1 && scancode <= F10) ||
+         scancode == F11 || scancode == F12)) {
+        static const char *function_sequences[] = {
+            "\033OP", "\033OQ", "\033OR", "\033OS", "\033[15~",
+            "\033[17~", "\033[18~", "\033[19~", "\033[20~",
+            "\033[21~", "\033[23~", "\033[24~"
+        };
+        int index = scancode <= F10 ? scancode - F1 :
+                    scancode == F11 ? 10 : 11;
+
+        input_add_sequence(function_sequences[index]);
         return;
     }
     if (!pressed || scancode > SC_MAX){
@@ -119,13 +154,23 @@ static void keyboard_callback()
         /* Keep the hardware keyboard consistent with serial, whose
          * backspace byte is handled by input_add_char(). */
         letter = 127;
+    } else if (scancode == TAB) {
+        if ((left_shift || right_shift) && input_is_raw()) {
+            input_add_sequence("\033[Z");
+            return;
+        }
+        letter = '\t';
     } else if (scancode == ENTER) {
         letter = '\r';
     }
     else {
         letter = sc_ascii[(int)scancode];
-        if (left_shift || right_shift)
+        if (letter >= 'a' && letter <= 'z') {
+            if (caps_lock != (left_shift || right_shift))
+                letter = letter - 'a' + 'A';
+        } else if (left_shift || right_shift) {
             letter = shifted_char(letter);
+        }
         if (ctrl) {
             if (letter >= 'a' && letter <= 'z')
                 letter = letter - 'a' + 1;

@@ -167,7 +167,25 @@ static const char *terminal_key_sequence(const struct kui_event *event,
     char final = '\0';
     int modifier = 1;
 
-    if (event->key_code == 72) { plain = "\033[A"; final = 'A'; }
+    if (!event->key_extended && event->key_code == 15 &&
+        (event->modifiers & KUI_MOD_SHIFT))
+        plain = "\033[Z";
+    else if (!event->key_extended && event->key_code >= 59 &&
+             event->key_code <= 62)
+        plain = event->key_code == 59 ? "\033OP" :
+                event->key_code == 60 ? "\033OQ" :
+                event->key_code == 61 ? "\033OR" : "\033OS";
+    else if (!event->key_extended &&
+             ((event->key_code >= 63 && event->key_code <= 68) ||
+              event->key_code == 87 || event->key_code == 88))
+        plain = event->key_code == 63 ? "\033[15~" :
+                event->key_code == 64 ? "\033[17~" :
+                event->key_code == 65 ? "\033[18~" :
+                event->key_code == 66 ? "\033[19~" :
+                event->key_code == 67 ? "\033[20~" :
+                event->key_code == 68 ? "\033[21~" :
+                event->key_code == 87 ? "\033[23~" : "\033[24~";
+    else if (event->key_code == 72) { plain = "\033[A"; final = 'A'; }
     else if (event->key_code == 80) { plain = "\033[B"; final = 'B'; }
     else if (event->key_code == 77) { plain = "\033[C"; final = 'C'; }
     else if (event->key_code == 75) { plain = "\033[D"; final = 'D'; }
@@ -179,6 +197,8 @@ static const char *terminal_key_sequence(const struct kui_event *event,
     else if (event->key_code == 83) plain = "\033[3~";
     if (plain == NULL)
         return NULL;
+    if (!event->key_extended)
+        return plain;
     if (event->modifiers == 0)
         return plain;
     if (event->modifiers & KUI_MOD_SHIFT) modifier += 1;
@@ -193,6 +213,16 @@ static const char *terminal_key_sequence(const struct kui_event *event,
                  event->key_code == 82 ? 2 : 3,
                  modifier);
     return sequence;
+}
+
+static int terminal_is_special_key(const struct kui_event *event)
+{
+    return event->key_extended ||
+           (!event->key_extended && event->key_code == 15 &&
+            (event->modifiers & KUI_MOD_SHIFT)) ||
+           (!event->key_extended &&
+            ((event->key_code >= 59 && event->key_code <= 68) ||
+             event->key_code == 87 || event->key_code == 88));
 }
 
 #ifdef KYLEOS_HOST
@@ -936,7 +966,7 @@ int main(void)
             state.command_cursor = 0;
             state.command[0] = '\0';
         } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
-                   event.key_extended &&
+                   terminal_is_special_key(&event) &&
                    (state.child_pid <= 0 || state.input_fd >= 0)) {
             if (terminal_editing_command(&state)) {
                 if (event.key_code == 75 && state.command_cursor > 0) {

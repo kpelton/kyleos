@@ -6,7 +6,7 @@
 #include "extras/kui/kui_style.h"
 
 #define KUI_SHELL_MAGIC 0x314c4853U
-#define KUI_SHELL_VERSION 6U
+#define KUI_SHELL_VERSION 7U
 #define KUI_SHELL_MAX_APPS 32
 #define KUI_SHELL_MAX_WINDOWS 10
 #define KUI_SHELL_TITLE_MAX 32
@@ -25,6 +25,7 @@ enum kui_shell_action_type {
     KUI_SHELL_ACTION_CLOSE_ACTIVE,
     KUI_SHELL_ACTION_QUIT,
     KUI_SHELL_ACTION_TOGGLE_PIN,
+    KUI_SHELL_ACTION_COPY_TEXT,
     /* Index into request.menu_apps/the compositor application catalog. */
     KUI_SHELL_ACTION_OPEN_MENU_APP
 };
@@ -76,6 +77,7 @@ struct kui_shell_response {
     uint32_t consumed;
     uint32_t action;
     int index;
+    char text[64];
     uint32_t display_bytes;
 };
 

@@ -54,8 +54,9 @@ ifneq (,$(wildcard config.mk))
 include config.mk
 endif
 CFLAGS	= -m64 $(OPT) -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2  -I $(KERNEL_ROOT)  -g 
-USER_CFLAGS = $(filter-out -mno-mmx -mno-sse -mno-sse2,$(CFLAGS))
-GUI_CFLAGS = $(filter-out -O%,$(USER_CFLAGS)) -O2
+USER_CFLAGS = -m64 $(OPT) -Wall -Wextra -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -O3  -I $(KERNEL_ROOT)   -msse4.2
+GUI_CFLAGS = $(filter-out -O%,$(USER_CFLAGS)) -O3 -msse4.2
+
 KSHEET_CFLAGS = $(GUI_CFLAGS)
 ifeq ($(SERIAL_OUTPUT),0)
 CFLAGS += -DKYLEOS_DISABLE_SERIAL_OUTPUT
@@ -134,7 +135,17 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit nushell ps kill kui gui-assets desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest ttytest ptytest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-desktop-config test-controlcenter-ui test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-vt100 test-terminal-async test-help-ui test-suite test-busybox busybox busybox-image doom doom-image doom-aqua doom-aqua-image quake quake-image quake-aqua quake-aqua-image refresh-kui-extras duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
+.PHONY: toolchain userland userinit nushell ps kill kui gui-assets desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest ttytest ptytest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-desktop-config test-controlcenter-ui test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-vt100 test-terminal-async test-help-ui test-unit test-e2e-run test-e2e test-suite test-busybox-run test-busybox busybox busybox-image doom doom-image doom-aqua doom-aqua-image quake quake-image quake-aqua quake-aqua-image refresh-kui-extras duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
+
+HOST_TEST_TARGETS = \
+	test-alltest-runner test-c-syntax test-city-sim \
+	test-desktop-config test-controlcenter-ui \
+	test-writer-document test-writer-ui test-kui-scaled-text \
+	test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui \
+	test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui \
+	test-kui-styles test-kui-text-selection test-kui-context-menu \
+	test-editor-clipboard test-terminal-vt100 test-terminal-async \
+	test-help-ui test-kui-shells
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
@@ -771,10 +782,21 @@ iso-test: iso
 		-cdrom bootable.iso \
 		-serial stdio
 
-test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-vt100 test-terminal-async test-help-ui test-kui-shells
+test-unit: $(HOST_TEST_TARGETS)
+
+test-e2e: kernel32.bin
 	$(MAKE) image-reset IMAGE=$(TEST_IMAGE) IMAGE_MOUNT=$(TEST_IMAGE_MOUNT)
+	$(MAKE) test-e2e-run
+
+test-e2e-run: kernel32.bin
 	QEMU=$(QEMU) QEMU_OPTS='$(QEMU_OPTS)' TEST_KERNEL=$(KERNEL_ROOT)/kernel32.bin TEST_IMAGE=$(TEST_IMAGE) TEST_TIMEOUT=$(TEST_TIMEOUT) bash tests/e2e/all-tests.sh
+
+test-suite: test-unit
+	$(MAKE) test-e2e
 
 test-busybox: kernel32.bin busybox
 	$(MAKE) image-reset IMAGE=$(TEST_IMAGE) IMAGE_MOUNT=$(TEST_IMAGE_MOUNT)
+	$(MAKE) test-busybox-run
+
+test-busybox-run: kernel32.bin
 	QEMU=$(QEMU) QEMU_OPTS='$(QEMU_OPTS)' TEST_KERNEL=$(KERNEL_ROOT)/kernel32.bin TEST_IMAGE=$(TEST_IMAGE) bash tests/e2e/busybox-test.sh

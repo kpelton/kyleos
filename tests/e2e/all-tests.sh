@@ -1,106 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-kernel=${TEST_KERNEL:-"$repo_root/kernel32.bin"}
-image=${TEST_IMAGE:-"$repo_root/build/image/test-suite.img"}
-qemu=${QEMU:-qemu-system-x86_64}
-qemu_opts=()
-if [[ -n ${QEMU_OPTS:-} ]]; then
-    read -r -a qemu_opts <<< "$QEMU_OPTS"
-fi
-timeout_seconds=${TEST_TIMEOUT:-180}
-log=${TEST_LOG:-"$repo_root/build/test/all-tests.log"}
-runtime=$(mktemp -d /tmp/os3-qemu-test.XXXXXX)
-serial_input="$runtime/serial.in"
-qemu_pid=""
+source "$(dirname -- "$0")/testlib.sh"
+e2e_init all-tests 180
+e2e_start_qemu
 
-cleanup() {
-    exec 3>&- || true
-    if [[ -n $qemu_pid ]] && kill -0 "$qemu_pid" 2>/dev/null; then
-        kill "$qemu_pid" 2>/dev/null || true
-        wait "$qemu_pid" 2>/dev/null || true
-    fi
-    rm -rf -- "$runtime"
-}
-trap cleanup EXIT
+e2e_wait_for_text "Kyle OS has booted" 30 ||
+    e2e_fail "kernel did not boot within 30 seconds"
+e2e_send 'nushell < /tests/jobs.sh'
+e2e_wait_for_text "JOB-CONTROL-COMPLETE" 30 ||
+    e2e_fail "shell job-control test did not complete"
+grep -Eq '^\[1\] Running +[0-9]+ sleep 1$' "$E2E_LOG" ||
+    e2e_fail "background job was not listed"
+grep -Eq '^\[2\] Stopped +[0-9]+ sleep 20$' "$E2E_LOG" ||
+    e2e_fail "stopped job was not reported"
+grep -Eq '^\[2\] Running +sleep 20$' "$E2E_LOG" ||
+    e2e_fail "bg did not resume the stopped job"
+grep -Fq "KILL-COMMAND-STATUS 0" "$E2E_LOG" ||
+    e2e_fail "standalone kill command failed"
+grep -Fq "PID  STATE     TYPE    NAME" "$E2E_LOG" ||
+    e2e_fail "ps did not print the process table"
+e2e_send 'nushell < /tests/all.sh'
 
-fail() {
-    echo "QEMU test suite failed: $1" >&2
-    if [[ -f $log ]]; then
-        echo "Last serial output ($log):" >&2
-        tail -80 "$log" >&2
-    fi
-    exit 1
-}
-
-wait_for_text() {
-    local text=$1
-    local seconds=$2
-    local deadline=$((SECONDS + seconds))
-
-    while (( SECONDS < deadline )); do
-        grep -Fq "$text" "$log" && return 0
-        if ! kill -0 "$qemu_pid" 2>/dev/null; then
-            return 1
-        fi
-        sleep 0.1
-    done
-    return 1
-}
-
-[[ -f $kernel ]] || fail "missing kernel: $kernel"
-[[ -f $image ]] || fail "missing test image: $image"
-[[ $timeout_seconds =~ ^[1-9][0-9]*$ ]] || fail "invalid TEST_TIMEOUT: $timeout_seconds"
-command -v qemu-system-x86_64 >/dev/null || fail "qemu-system-x86_64 not found"
-
-mkdir -p "$(dirname -- "$log")"
-: > "$log"
-mkfifo "$serial_input"
-exec 3<> "$serial_input"
-
-"$qemu" "${qemu_opts[@]}" \
-    -snapshot \
-    -no-reboot \
-    -display none \
-    -monitor none \
-    -m 64M \
-    -kernel "$kernel" \
-    -hda "$image" \
-    -serial stdio \
-    < "$serial_input" > "$log" 2>&1 &
-qemu_pid=$!
-
-wait_for_text "Kyle OS has booted" 30 || fail "kernel did not boot within 30 seconds"
-printf 'nushell < /tests/jobs.sh\n' >&3
-wait_for_text "JOB-CONTROL-COMPLETE" 30 || fail "shell job-control test did not complete"
-grep -Eq '^\[1\] Running +[0-9]+ sleep 1$' "$log" ||
-    fail "background job was not listed"
-grep -Eq '^\[2\] Stopped +[0-9]+ sleep 20$' "$log" ||
-    fail "stopped job was not reported"
-grep -Eq '^\[2\] Running +sleep 20$' "$log" ||
-    fail "bg did not resume the stopped job"
-grep -Fq "KILL-COMMAND-STATUS 0" "$log" ||
-    fail "standalone kill command failed"
-grep -Fq "PID  STATE     TYPE    NAME" "$log" ||
-    fail "ps did not print the process table"
-printf 'nushell < /tests/all.sh\n' >&3
-
-deadline=$((SECONDS + timeout_seconds))
+deadline=$((SECONDS + E2E_TIMEOUT))
 while (( SECONDS < deadline )); do
-    if grep -Fq "ALL-TESTS-FAILED" "$log"; then
-        fail "the in-image runner reported a failure"
+    if grep -Fq "ALL-TESTS-FAILED" "$E2E_LOG"; then
+        e2e_fail "the in-image runner reported a failure"
     fi
-    if grep -Fq "ALL-TESTS-COMPLETE count=13" "$log"; then
-        marker_count=$(grep -Fc "ALL-TESTS-COMPLETE count=13" "$log")
-        [[ $marker_count -eq 1 ]] || fail "completion marker appeared $marker_count times"
-        echo "QEMU test suite passed; serial log: $log"
+    if grep -Fq "ALL-TESTS-COMPLETE count=13" "$E2E_LOG"; then
+        marker_count=$(grep -Fc "ALL-TESTS-COMPLETE count=13" "$E2E_LOG")
+        [[ $marker_count -eq 1 ]] ||
+            e2e_fail "completion marker appeared $marker_count times"
+        echo "QEMU test suite passed; serial log: $E2E_LOG"
         exit 0
     fi
-    if ! kill -0 "$qemu_pid" 2>/dev/null; then
-        fail "QEMU exited before the suite completed"
-    fi
+    kill -0 "$E2E_QEMU_PID" 2>/dev/null ||
+        e2e_fail "QEMU exited before the suite completed"
     sleep 0.1
 done
 
-fail "no completion marker within $timeout_seconds seconds"
+e2e_fail "no completion marker within $E2E_TIMEOUT seconds"

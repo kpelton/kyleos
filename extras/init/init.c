@@ -137,6 +137,7 @@ int main(void)
         }
         if (exited == serial_shell) {
             puts("KyleOS serial terminal exited; restarting");
+            sleep(1);
             serial_shell = start_serial_shell();
         }
     }

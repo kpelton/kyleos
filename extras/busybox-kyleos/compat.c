@@ -334,7 +334,7 @@ int fcntl(int fd, int command, ...)
             errno = EINVAL;
             return -1;
         }
-        return (int)kyleos_syscall3(20, fd, minimum, 0);
+        return (int)kyleos_syscall3(51, fd, minimum, 0);
     case F_GETFD:
         return 0;
     case F_SETFD:

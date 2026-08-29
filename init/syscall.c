@@ -963,6 +963,26 @@ static int dup(const int oldfd)
     return newfd;
 }
 
+/* fcntl(F_DUPFD) differs from dup2: minimum is a lower bound and an existing
+ * descriptor at that number must not be replaced. */
+static int dupfd(const int oldfd, const int minimum)
+{
+    struct ktask *t = get_current_process();
+    int newfd;
+
+    if (oldfd < 0 || oldfd >= MAX_TASK_OPEN_FILES || minimum < 0 ||
+        minimum >= MAX_TASK_OPEN_FILES || t->open_fds[oldfd] == NULL)
+        return -1;
+    for (newfd = minimum; newfd < MAX_TASK_OPEN_FILES; newfd++)
+        if (t->open_fds[newfd] == NULL)
+            break;
+    if (newfd == MAX_TASK_OPEN_FILES)
+        return -1;
+    t->open_fds[newfd] = t->open_fds[oldfd];
+    t->open_fds[newfd]->refcount++;
+    return newfd;
+}
+
 static int dup2(const int oldfd,const int newfd)
 {
 
@@ -1053,7 +1073,8 @@ void *syscall_tbl[] = {
     (void *)&tcgetpgrp_syscall,                 // 47
     (void *)&tcsetpgrp_syscall,                 // 48
     (void *)&tcgetattr_syscall,                 // 49
-    (void *)&tcsetattr_syscall                  // 50
+    (void *)&tcsetattr_syscall,                 // 50
+    (void *)&dupfd                              // 51
 };
 
 const int NR_syscall = sizeof(syscall_tbl) / sizeof(syscall_tbl[0]);

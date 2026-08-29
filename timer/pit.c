@@ -14,7 +14,9 @@
 static uint32_t jiffies=0;
 static struct spinlock spinlock_time;
 uint64_t HZ=100;
-uint64_t TICK_HZ=100;
+/* Keep normal task scheduling at 100 Hz, but provide 5 ms timer resolution
+ * so the compositor can consume the PS/2 mouse's 200 Hz event stream. */
+uint64_t TICK_HZ=200;
 void pit_init(void) {
     init_spinlock(&spinlock_time);
 

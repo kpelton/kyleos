@@ -56,7 +56,8 @@ protocol over pipes.
 
 - `desktop`: classic taskbar and Start-menu shell.
 - `aqua`: Aqua-inspired menu bar, Dock, traffic-light controls, and glass-style
-  scrollbars.
+  scrollbars. Clicking its clock opens a month calendar; selected dates can be
+  copied in short, ISO, or long form through the date context menu.
 - Shared KUI menus, text selection, file dialogs, Save As confirmation, wheel
   scrolling, repeating scrollbar arrows, and window resize handling.
 - Applications include Finder, Notes, Writer, Text Editor, C IDE, Terminal,
@@ -120,6 +121,9 @@ are built and installed by their respective image targets.
 - PTY line discipline with canonical input, echo, configurable control
   characters, foreground-process-group ownership, and terminal-generated
   Ctrl+C, Ctrl+\, and Ctrl+Z signals.
+- Consistent console and PTY key handling for Tab/Shift+Tab, Caps Lock,
+  Home/End, Insert/Delete, Page Up/Down, arrows, and F1 through F12. The KUI
+  terminal emits the corresponding VT100/xterm sequences for applications.
 - Native `poll(2)` through Newlib for up to 64 descriptors, with event-driven
   pipe wakeups, finite or infinite timeouts, and regular-file readiness.
 - In-image filesystem, heap, and user-fault regression suites, plus a single
@@ -127,7 +131,7 @@ are built and installed by their respective image targets.
 - User-mode page and general-protection faults terminate only the offending
   process; kernel-mode faults retain the register-dump panic path.
 - Four virtual consoles selected with Alt+F1 through Alt+F4, a separate COM1
-  login at `/dev/ttyS0`, keyboard input, raw-console mode, and a 1920x1080
+  login at `/dev/ttyS0`, keyboard input, raw-console mode, and a 1280x720
   framebuffer on the supported BGA display path.
 - PS/2 mouse input and a shared userspace compositor at `/bin/kuid`. Launch
   `/bin/desktop` for the classic taskbar/Start environment or `/bin/aqua` for
@@ -323,7 +327,9 @@ them, `fg %1` or `bg %1` to resume a job, and `kill -STOP %1`, `kill -CONT %1`,
 or `kill %1` to signal every process in that job. Pipelines and jobs use real
 process groups. The shell transfers PTY foreground ownership to foreground
 jobs, so Ctrl+C, Ctrl+\, and Ctrl+Z are delivered by the terminal line
-discipline to the complete foreground process group.
+discipline to the complete foreground process group. Descriptor duplication
+implements the `F_DUPFD` lower-bound rule, so repeated command redirection
+does not overwrite ash's controlling-terminal descriptor.
 
 ## Init and userspace boot
 
@@ -508,20 +514,25 @@ nushell < /tests/all.sh
 ```
 
 The integrated runner stops at the first failure and exits nonzero. It prints
-`ALL-TESTS-COMPLETE count=10` exactly once only after checking every child exit
+`ALL-TESTS-COMPLETE count=13` exactly once only after checking every child exit
 status, pipe polling and timeouts, copy integrity and cleanup, isolated fault
 status, and all 200 exec iterations. The copy phase uses `/bin/nushell`, so it
 has no optional fixture.
 
-Run the host control-flow check and the complete snapshot-based QEMU suite with:
+Run the host checks, the snapshot-based QEMU suite, or both with:
 
 ```sh
-make test-alltest-runner
-make test-suite
+make test-unit       # all host-side unit and integration tests
+make test-e2e        # rebuild the dedicated image, then run QEMU tests
+make test-e2e-run    # reuse an existing dedicated test image
+make test-suite      # test-unit followed by test-e2e
+make test-busybox    # rebuild and exercise ash, redirection, globbing, and vi
 ```
 
 `make test-suite` rebuilds a dedicated `build/image/test-suite.img`; it does not
-modify the normal persistent development image.
+modify the normal persistent development image. The QEMU launchers share
+`tests/e2e/testlib.sh`, use snapshot mode, validate their inputs, and preserve
+serial logs under `build/test/` on failure.
 
 ## Native C compiler and bootstrap
 

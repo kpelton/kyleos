@@ -1537,6 +1537,9 @@ static int dispatch_shell_pointer(int x, int y, int button)
             windows[index].minimized = 0;
             raise_window(index);
         }
+    } else if (response.action == KUI_SHELL_ACTION_COPY_TEXT) {
+        copy_text(clipboard_data, sizeof(clipboard_data), response.text);
+        clipboard_kind = KUI_CLIPBOARD_TEXT;
     } else if (response.action == KUI_SHELL_ACTION_CLOSE_ACTIVE) {
         close_window_index(top_window());
     } else if (response.action == KUI_SHELL_ACTION_QUIT) {
@@ -2230,7 +2233,9 @@ int desktop_shell_run(const char *shell_path)
             changed = 1;
         }
         if (changed) render();
-        else kui_sleep_ms(10);
+        /* The PS/2 mouse reports at up to 200 Hz. Match that cadence while
+         * idle so cursor motion is not artificially capped at 100 Hz. */
+        else kui_sleep_ms(5);
     }
     for (int i = 0; i < MAX_WINDOWS; i++)
         if (windows[i].visible) close_window_index(i);

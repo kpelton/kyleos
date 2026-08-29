@@ -21,6 +21,7 @@ struct tty_console {
     uint32_t raw_tail;
     bool eof_pending;
     bool raw;
+    bool key_event_mode;
     int foreground_group;
     int session;
     struct kyleos_termios termios;
@@ -178,6 +179,12 @@ static void tty_receive_char_on(int console, char character, bool echo_input)
         return;
     }
     tty = &consoles[console];
+    /* Aqua consumes the separate scan-key queue and routes characters to the
+     * focused window itself. Do not duplicate them into the launcher tty. */
+    if (tty->key_event_mode) {
+        release_spinlock(&tty_lock);
+        return;
+    }
     if ((tty->termios.local_flags & KYLEOS_ISIG) != 0) {
         if ((uint8_t)character ==
             tty->termios.control_characters[KYLEOS_VINTR])
@@ -242,14 +249,11 @@ static void tty_receive_char_on(int console, char character, bool echo_input)
         sched_io_notify();
         return;
     }
-    if (character == '\t') {
-        release_spinlock(&tty_lock);
-        return;
-    }
     if (character == '\r')
         character = '\n';
     if ((uint8_t)character ==
-        tty->termios.control_characters[KYLEOS_VERASE]) {
+            tty->termios.control_characters[KYLEOS_VERASE] ||
+        character == '\b') {
         if (tty->editing_length != 0) {
             tty->editing_length--;
             tty->editing[tty->editing_length] = '\0';
@@ -317,6 +321,7 @@ void tty_set_raw(int console, bool enabled)
         return;
     }
     tty = &consoles[console];
+    tty->key_event_mode = enabled;
     tty->raw = enabled;
     if (enabled)
         tty->termios.local_flags &= ~(KYLEOS_ICANON | KYLEOS_ECHO);
@@ -363,12 +368,24 @@ int tty_get_foreground_group(int console)
 int tty_set_foreground_group(int console, int session, int process_group)
 {
     int result = -1;
+    int previous_group = 0;
+    int member;
 
     acquire_spinlock(&tty_lock);
     console = resolve_console(console);
+    if (console >= 0)
+        previous_group = consoles[console].foreground_group;
+    release_spinlock(&tty_lock);
+
+    /* A real console outlives the session using it. Permit a new session to
+     * claim it after the previous foreground process group has disappeared. */
+    bool previous_group_alive = previous_group > 0 &&
+        sched_process_group_members(previous_group, &member, 1) > 0;
+
+    acquire_spinlock(&tty_lock);
     if (console >= 0 && session > 0 && process_group > 0 &&
         (consoles[console].session == 0 ||
-         consoles[console].session == session)) {
+         consoles[console].session == session || !previous_group_alive)) {
         consoles[console].session = session;
         consoles[console].foreground_group = process_group;
         result = 0;

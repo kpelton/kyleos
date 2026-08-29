@@ -365,6 +365,50 @@ static int run_shell(const char *path, int aqua)
                              &response, NULL) < 0;
         failures += response.action != KUI_SHELL_ACTION_OPEN_MENU_APP ||
                     response.index != request.menu_app_count - 2;
+        /* The Aqua clock toggles a calendar below the menu bar. */
+        request.serial++;
+        request.type = KUI_SHELL_POINTER;
+        request.button = 1;
+        request.x = 760;
+        request.y = 10;
+        failures += exchange(to_shell[1], from_shell[0], &request,
+                             &response, NULL) < 0;
+        failures += !response.consumed;
+        memset(pixels, 0, 800U * 600U * sizeof(*pixels));
+        request.serial++;
+        request.type = KUI_SHELL_RENDER;
+        failures += exchange(to_shell[1], from_shell[0], &request,
+                             &response, &surface) < 0;
+        failures += pixels[30 * 800 + 550] == 0;
+        request.serial++;
+        request.type = KUI_SHELL_POINTER;
+        request.button = 1;
+        request.x = 550;
+        request.y = 145;
+        failures += exchange(to_shell[1], from_shell[0], &request,
+                             &response, NULL) < 0;
+        failures += !response.consumed;
+        request.serial++;
+        request.x = 340;
+        request.y = 180;
+        failures += exchange(to_shell[1], from_shell[0], &request,
+                             &response, NULL) < 0;
+        failures += response.action != KUI_SHELL_ACTION_COPY_TEXT ||
+                    strchr(response.text, '-') == NULL;
+        request.serial++;
+        request.type = KUI_SHELL_POINTER;
+        request.button = 1;
+        request.x = 780;
+        request.y = 40;
+        failures += exchange(to_shell[1], from_shell[0], &request,
+                             &response, NULL) < 0;
+        failures += !response.consumed;
+        request.serial++;
+        request.x = 400;
+        request.y = 300;
+        failures += exchange(to_shell[1], from_shell[0], &request,
+                             &response, NULL) < 0;
+        failures += !response.consumed;
     } else {
         int height = 12 + (request.app_count + 2) * 26;
 

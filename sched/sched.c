@@ -367,8 +367,7 @@ int sched_get_process_group(int process_id)
         process_id = get_current_process()->pid;
     acquire_spinlock(&sched_spinlock);
     for (int index = 0; index < SCHED_MAX_TASKS; index++)
-        if (ktasks[index].pid == process_id &&
-            ktasks[index].state != TASK_DONE) {
+        if (ktasks[index].pid == process_id) {
             group_id = ktasks[index].process_group;
             break;
         }
@@ -384,8 +383,7 @@ int sched_get_session(int process_id)
         process_id = get_current_process()->pid;
     acquire_spinlock(&sched_spinlock);
     for (int index = 0; index < SCHED_MAX_TASKS; index++)
-        if (ktasks[index].pid == process_id &&
-            ktasks[index].state != TASK_DONE) {
+        if (ktasks[index].pid == process_id) {
             session_id = ktasks[index].session;
             break;
         }
