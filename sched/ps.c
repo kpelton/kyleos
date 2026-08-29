@@ -99,7 +99,6 @@ int user_process_tcsetpgrp(struct ktask *task, int fd, int process_group)
 {
     if (task == NULL || fd < 0 || fd >= MAX_TASK_OPEN_FILES ||
         task->open_fds[fd] == NULL || process_group <= 0 ||
-        sched_get_process_group(process_group) != process_group ||
         sched_get_session(process_group) != task->session)
         return -1;
     return vfs_terminal_set_foreground_group(task->open_fds[fd],
@@ -305,15 +304,14 @@ int process_wait(int pid, int *status, int options)
                    : sched_wait_child(current->pid, pid, &exit_code,
                                       report_stopped);
 
-        if (result != 0)
-            {
-                if (result > 0 && status != NULL)
-                    *status = exit_code;
-                return result;
-            }
+        if (result != 0) {
+            if (result > 0 && status != NULL)
+                *status = exit_code;
+            return result;
+        }
         if (options & 1)
             return 0;
-        if (signal_has_unmasked_pending(current))
-            return -1;
+        /* A blocking wait returning zero was woken by child or signal state.
+         * Loop and rescan children before treating SIGCHLD as an interrupt. */
     }
 }

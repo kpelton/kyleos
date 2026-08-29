@@ -267,6 +267,46 @@ static void delete_characters(struct vt100_terminal *terminal, int amount)
         blank_cell(terminal, &line[index]);
 }
 
+static void alternate_screen(struct vt100_terminal *terminal, int enabled)
+{
+    size_t bytes = (size_t)VT100_MAX_LINES * VT100_MAX_COLUMNS *
+                   sizeof(struct vt100_cell);
+
+    if (enabled && !terminal->alternate_active) {
+        memcpy(terminal->saved_cells, terminal->cells, bytes);
+        terminal->primary_line_count = terminal->line_count;
+        terminal->primary_screen_top = terminal->screen_top;
+        terminal->primary_cursor_line = terminal->cursor_line;
+        terminal->primary_cursor_column = terminal->cursor_column;
+        terminal->primary_saved_row = terminal->saved_row;
+        terminal->primary_saved_column = terminal->saved_column;
+        terminal->primary_foreground = terminal->foreground;
+        terminal->primary_background = terminal->background;
+        terminal->primary_attributes = terminal->attributes;
+        terminal->primary_inverse = terminal->inverse;
+        terminal->primary_cursor_visible = terminal->cursor_visible;
+        terminal->primary_autowrap = terminal->autowrap;
+        terminal->alternate_active = 1;
+        vt100_reset(terminal);
+    } else if (!enabled && terminal->alternate_active) {
+        memcpy(terminal->cells, terminal->saved_cells, bytes);
+        terminal->line_count = terminal->primary_line_count;
+        terminal->screen_top = terminal->primary_screen_top;
+        terminal->cursor_line = terminal->primary_cursor_line;
+        terminal->cursor_column = terminal->primary_cursor_column;
+        terminal->saved_row = terminal->primary_saved_row;
+        terminal->saved_column = terminal->primary_saved_column;
+        terminal->foreground = terminal->primary_foreground;
+        terminal->background = terminal->primary_background;
+        terminal->attributes = terminal->primary_attributes;
+        terminal->inverse = terminal->primary_inverse;
+        terminal->cursor_visible = terminal->primary_cursor_visible;
+        terminal->autowrap = terminal->primary_autowrap;
+        terminal->wrap_pending = 0;
+        terminal->alternate_active = 0;
+    }
+}
+
 static void csi_execute(struct vt100_terminal *terminal, unsigned char command)
 {
     int amount = parameter(terminal, 0, 1);
@@ -356,6 +396,8 @@ static void csi_execute(struct vt100_terminal *terminal, unsigned char command)
             terminal->cursor_visible = (uint8_t)enabled;
         else if (parameter(terminal, 0, 0) == 7)
             terminal->autowrap = (uint8_t)enabled;
+        else if (parameter(terminal, 0, 0) == 1049)
+            alternate_screen(terminal, enabled);
     }
     terminal->wrap_pending = 0;
 }
@@ -510,8 +552,15 @@ int vt100_init(struct vt100_terminal *terminal, int columns, int rows)
     memset(terminal, 0, sizeof(*terminal));
     terminal->cells = calloc((size_t)VT100_MAX_LINES * VT100_MAX_COLUMNS,
                              sizeof(struct vt100_cell));
-    if (terminal->cells == NULL)
+    terminal->saved_cells = calloc(
+        (size_t)VT100_MAX_LINES * VT100_MAX_COLUMNS,
+        sizeof(struct vt100_cell));
+    if (terminal->cells == NULL || terminal->saved_cells == NULL) {
+        free(terminal->cells);
+        free(terminal->saved_cells);
+        memset(terminal, 0, sizeof(*terminal));
         return -1;
+    }
     terminal->columns = clamp(columns, 1, VT100_MAX_COLUMNS);
     terminal->screen_rows = clamp(rows, 1, VT100_MAX_SCREEN_ROWS);
     vt100_reset(terminal);
@@ -523,6 +572,7 @@ void vt100_free(struct vt100_terminal *terminal)
     if (terminal == NULL)
         return;
     free(terminal->cells);
+    free(terminal->saved_cells);
     memset(terminal, 0, sizeof(*terminal));
 }
 

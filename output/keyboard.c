@@ -5,7 +5,9 @@
 #include <output/tty.h>
 #include <locks/spinlock.h>
 
+#define ESCAPE 0x01
 #define BACKSPACE 0x0E
+#define CTRL 0x1D
 #define ENTER 0x1C
 #define LEFT_SHIFT 0x2A
 #define RIGHT_SHIFT 0x36
@@ -24,6 +26,7 @@ static bool extended_prefix;
 static bool left_shift;
 static bool right_shift;
 static bool alt;
+static bool ctrl;
 
 static char shifted_char(char ch)
 {
@@ -79,6 +82,11 @@ static void keyboard_callback()
         input_add_key(scancode, extended, pressed);
         return;
     }
+    if (scancode == CTRL) {
+        ctrl = pressed;
+        input_add_key(scancode, extended, pressed);
+        return;
+    }
     if (!extended && alt && scancode >= F1 && scancode <= F4) {
         if (pressed)
             tty_switch_console(scancode - F1);
@@ -105,6 +113,8 @@ static void keyboard_callback()
     }
     if (!pressed || scancode > SC_MAX){
         return;
+    } else if (scancode == ESCAPE) {
+        letter = 27;
     } else if (scancode == BACKSPACE) {
         /* Keep the hardware keyboard consistent with serial, whose
          * backspace byte is handled by input_add_char(). */
@@ -116,6 +126,12 @@ static void keyboard_callback()
         letter = sc_ascii[(int)scancode];
         if (left_shift || right_shift)
             letter = shifted_char(letter);
+        if (ctrl) {
+            if (letter >= 'a' && letter <= 'z')
+                letter = letter - 'a' + 1;
+            else if (letter >= '@' && letter <= '_')
+                letter &= 0x1f;
+        }
     }
     input_add_char(letter);
 }

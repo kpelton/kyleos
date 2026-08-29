@@ -204,13 +204,14 @@ static int sys_wait(int pid, int *status, int options)
     return (int)result;
 }
 
-static int sys_exec(char *path, char **argv)
+static int sys_exec(char *path, char **argv, char **env)
 {
-    long val = 0;
-    (void)path;
-    (void)argv;
-    asm volatile("mov $11, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
-    return val;
+    register long result asm("rax") = 11;
+
+    asm volatile("int $0x80" : "+a"(result)
+                 : "D"(path), "S"(argv), "d"(env)
+                 : "memory");
+    return (int)result;
 }
 
 static int sys_dup2(int oldfd, int newfd)
@@ -220,6 +221,14 @@ static int sys_dup2(int oldfd, int newfd)
     (void)newfd;
     asm volatile("mov $20, %%rax; int $0x80\n movq %%rax ,%0" : "=g"(val));
     return val;
+}
+
+static int sys_dup(int oldfd)
+{
+    long val = 0;
+    asm volatile("mov $19, %%rax; int $0x80; movq %%rax, %0"
+                 : "=g"(val) : "D"((long)oldfd));
+    return (int)val;
 }
 
 
@@ -284,10 +293,13 @@ void _exit(int status)
 {
     sys_exit(status);
 }
-char **environ; /* pointer to array of char * strings that define the current environment variables */
 int execve(char *name, char **argv, char **env)
 {
-    return sys_exec(name, argv);
+    int result = sys_exec(name, argv, env);
+
+    if (result < 0)
+        errno = ENOENT;
+    return result;
 };
 int fork()
 {
@@ -354,18 +366,9 @@ int kill(int pid, int sig)
     return (int)sys_signal_call3(KYLEOS_SYS_KILL, pid, sig, 0);
 };
 
-int _raise_r(struct _reent *reent, int signal_number)
+int raise(int sig)
 {
-    int result = kill(getpid(), signal_number);
-
-    if (result < 0 && reent != NULL)
-        _REENT_ERRNO(reent) = EINVAL;
-    return result;
-}
-
-int raise(int signal_number)
-{
-    return _raise_r(_REENT, signal_number);
+    return kill(getpid(), sig);
 }
 
 int sigaction(int signal_number, const struct sigaction *action,
@@ -443,9 +446,10 @@ int _init_signal(void)
 }
 int link(char *old, char *new)
 {
-    for (;;)
-        ;
-    return 0;
+    (void)old;
+    (void)new;
+    errno = ENOSYS;
+    return -1;
 };
 int lseek(int file, int ptr, int dir)
 {
@@ -461,13 +465,22 @@ int stat(const char *file, struct stat *st)
 };
 clock_t times(struct tms *buf)
 {
-    for (;;)
-        ;
-    return 0;
+    (void)buf;
+    errno = ENOSYS;
+    return (clock_t)-1;
 };
 int unlink(char *name)
 {
-    return sys_unlink(name);
+    int result = sys_unlink(name);
+
+    /* KyleOS currently reports syscall failures as -1 without carrying an
+     * errno value back to userspace.  A missing path is the normal failure
+     * for callers such as tar replacing an archive member, so make that
+     * condition explicit instead of leaking a stale errno from a previous
+     * operation. */
+    if (result < 0)
+        errno = ENOENT;
+    return result;
 };
 int _rename(const char *old_path, const char *new_path)
 {
@@ -476,12 +489,24 @@ int _rename(const char *old_path, const char *new_path)
 
 int wait(int *status)
 {
-    return sys_wait(-1, status, 0);
+    int result = sys_wait(-1, status, 0);
+
+    if (result < 0) {
+        errno = result == -2 ? EINTR : ECHILD;
+        return -1;
+    }
+    return result;
 };
 
 int waitpid(int pid, int *status, int options)
 {
-    return sys_wait(pid, status, options);
+    int result = sys_wait(pid, status, options);
+
+    if (result < 0) {
+        errno = result == -2 ? EINTR : ECHILD;
+        return -1;
+    }
+    return result;
 }
 int sleep(int sec)
 {
@@ -491,7 +516,13 @@ int sleep(int sec)
 
 int read(int file, char *ptr, int len)
 {
-    return sys_read(file, ptr, len);
+    int result = sys_read(file, ptr, len);
+
+    /* Blocking pipe, PTY, and TTY reads return -1 when a signal wakes the
+     * caller.  POSIX shells rely on EINTR to retry after handling SIGCHLD. */
+    if (result < 0)
+        errno = EINTR;
+    return result;
 }
 
 int close(int file)
@@ -512,6 +543,11 @@ int chdir(const char *path)
 int dup2(int oldfd, int newfd)
 {
     return sys_dup2(oldfd,newfd);
+}
+
+int dup(int oldfd)
+{
+    return sys_dup(oldfd);
 }
 
 int pipe(int pipefd[2])

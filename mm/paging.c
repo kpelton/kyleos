@@ -474,8 +474,11 @@ void pagefault(uint64_t *addr, uint64_t error_code) {
         vmm_handle_page_fault(proc->mm, cr2, error_code))
         return;
     if (proc == NULL || proc->type != USER_PROCESS ||
-        (error_code & PF_USER) == 0)
+        (error_code & PF_USER) == 0) {
+        kprintf("kernel page fault on addr 0x%x at rip 0x%x error 0x%x\n",
+                cr2, addr, error_code);
         panic("kernel page fault");
+    }
     kprintf("Segfault %d on addr 0x%x at rip 0x%x error 0x%x\n",
             proc->pid, cr2, addr, error_code);
     proc->exit_code = 128 + 11;

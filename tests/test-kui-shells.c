@@ -245,7 +245,7 @@ static int run_shell(const char *path, int aqua)
     request.ticks_ms = 3720000;
     strcpy(request.active_application, "Finder");
     request.app_count = aqua ? 9 : 2;
-    request.menu_app_count = aqua ? 26 : request.app_count;
+    request.menu_app_count = aqua ? 26 : 4;
     request.window_count = 1;
     strcpy(request.windows[0].title, "Documents");
     for (int app = 0; app < request.menu_app_count; app++) {
@@ -259,6 +259,13 @@ static int run_shell(const char *path, int aqua)
                      sizeof(request.menu_apps[app].title), "Menu App %d", app);
         strcpy(request.menu_apps[app].icon_path,
                "image/rootfs/usr/share/gui/editor.kimg");
+    }
+    if (!aqua) {
+        /* Start entries are a filtered view of the application catalog.
+         * Keep their ranks deliberately different from catalog indexes so
+         * the test catches accidental Dock-rank or identity mapping. */
+        request.app_indices[0] = 1;
+        request.app_indices[1] = 3;
     }
     if (aqua) {
         strcpy(request.menu_apps[request.menu_app_count - 2].title,
@@ -306,8 +313,17 @@ static int run_shell(const char *path, int aqua)
     if (aqua) {
         request.serial++;
         request.type = KUI_SHELL_POINTER;
+        request.button = 1;
         request.x = 10;
         request.y = 10;
+        failures += exchange(to_shell[1], from_shell[0], &request,
+                             &response, NULL) < 0;
+        failures += !response.consumed;
+        request.serial++;
+        request.button = 0;
+        request.type = KUI_SHELL_POINTER;
+        request.x = 20;
+        request.y = 62;
         failures += exchange(to_shell[1], from_shell[0], &request,
                              &response, NULL) < 0;
         failures += !response.consumed;
@@ -316,8 +332,10 @@ static int run_shell(const char *path, int aqua)
         failures += exchange(to_shell[1], from_shell[0], &request,
                              &response, &surface) < 0;
         failures += response.display_bytes == 0;
+        failures += pixels[54 * 800 + 8] != 0x00366fc4U;
         request.serial++;
         request.type = KUI_SHELL_POINTER;
+        request.button = 1;
         request.x = 20;
         request.y = 62;
         failures += exchange(to_shell[1], from_shell[0], &request,
@@ -325,12 +343,22 @@ static int run_shell(const char *path, int aqua)
         failures += !response.consumed ||
                     response.action != KUI_SHELL_ACTION_NONE;
         request.serial++;
+        request.button = 0;
+        request.type = KUI_SHELL_POINTER;
+        request.x = 280;
+        request.y = 36;
+        failures += exchange(to_shell[1], from_shell[0], &request,
+                             &response, NULL) < 0;
+        failures += !response.consumed;
+        request.serial++;
         request.type = KUI_SHELL_RENDER;
         failures += exchange(to_shell[1], from_shell[0], &request,
                              &response, &surface) < 0;
         failures += response.display_bytes == 0;
+        failures += pixels[28 * 800 + 262] != 0x00366fc4U;
         request.serial++;
         request.type = KUI_SHELL_POINTER;
+        request.button = 1;
         request.x = 280;
         request.y = 36;
         failures += exchange(to_shell[1], from_shell[0], &request,
@@ -342,8 +370,17 @@ static int run_shell(const char *path, int aqua)
 
         request.serial++;
         request.type = KUI_SHELL_POINTER;
+        request.button = 1;
         request.x = 10;
         request.y = 590;
+        failures += exchange(to_shell[1], from_shell[0], &request,
+                             &response, NULL) < 0;
+        failures += !response.consumed;
+        request.serial++;
+        request.button = 0;
+        request.type = KUI_SHELL_POINTER;
+        request.x = 20;
+        request.y = 600 - 32 - height + 10;
         failures += exchange(to_shell[1], from_shell[0], &request,
                              &response, NULL) < 0;
         failures += !response.consumed;
@@ -352,14 +389,17 @@ static int run_shell(const char *path, int aqua)
         failures += exchange(to_shell[1], from_shell[0], &request,
                              &response, &surface) < 0;
         failures += response.display_bytes == 0;
+        failures += pixels[(600 - 32 - height + 4) * 800 + 6] !=
+                    profile.style.title_active;
         request.serial++;
         request.type = KUI_SHELL_POINTER;
+        request.button = 1;
         request.x = 20;
         request.y = 600 - 32 - height + 10;
         failures += exchange(to_shell[1], from_shell[0], &request,
                              &response, NULL) < 0;
-        failures += response.action != KUI_SHELL_ACTION_OPEN_APP ||
-                    response.index != 0;
+        failures += response.action != KUI_SHELL_ACTION_OPEN_MENU_APP ||
+                    response.index != request.app_indices[0];
     }
     close(to_shell[1]);
     close(from_shell[0]);

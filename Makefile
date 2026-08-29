@@ -41,6 +41,7 @@ DUKE3D_GRP ?= $(KERNEL_ROOT)/assets/duke3d/duke3d.grp
 LUA_SOURCE ?= $(KERNEL_ROOT)/extras/lua/src
 LUA_BINARY ?= $(KERNEL_ROOT)/build/extras/lua/lua
 LUA_INPUTS := $(wildcard $(LUA_SOURCE)/*.[ch]) $(LUA_SOURCE)/Makefile
+BUSYBOX_BINARY ?= $(KERNEL_ROOT)/build/userland/busybox
 BIBLE_TEXT ?= $(KERNEL_ROOT)/assets/bible.txt
 SERIAL_OUTPUT ?= 1
 GRUB_ISO_DIR := $(KERNEL_ROOT)/build/grub-iso
@@ -75,7 +76,7 @@ OBJ_FILES = asm/asm.o asm/asm_calls.o \
 	irq/irq.o \
 	locks/spinlock.o locks/mutex.o \
 	mm/paging.o mm/mm.o mm/pmem.o mm/vmm.o mm/mtrr.o \
-	output/keyboard.o output/uart.o output/vga.o output/framebuffer.o \
+	output/keyboard.o output/uart.o output/vga.o output/vt100.o output/framebuffer.o \
 	output/output.o output/input.o output/tty.o output/mouse.o \
 	sched/sched.o sched/ps.o sched/exec.o sched/signal.o \
 	timer/timer.o timer/rtc.o timer/pit.o \
@@ -121,7 +122,7 @@ mm: mm/mm.o mm/paging.o mm/pmem.o mm/vmm.o
 sched: sched/sched.o sched/exec.o sched/ps.o sched/signal.o
 	$(MAKE) -C sched
 
-output: output/output.o output/vga.o output/uart.o output/keyboard.o output/input.o output/tty.o output/framebuffer.o output/mouse.o
+output: output/output.o output/vga.o output/vt100.o output/uart.o output/keyboard.o output/input.o output/tty.o output/framebuffer.o output/mouse.o
 	$(MAKE) -C output
 
 timer: timer/pit.o timer/timer.o timer/rtc.o
@@ -133,7 +134,7 @@ locks: locks/spinlock.o locks/mutex.o
 user:kernel.img
 	$(MAKE) -C user
 
-.PHONY: toolchain userland userinit nushell ps kill kui gui-assets desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest ttytest ptytest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-desktop-config test-controlcenter-ui test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-vt100 test-terminal-async test-help-ui test-suite doom doom-image doom-aqua doom-aqua-image quake quake-image quake-aqua quake-aqua-image refresh-kui-extras duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
+.PHONY: toolchain userland userinit nushell ps kill kui gui-assets desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest ttytest ptytest demandtest oomtest breakout cc bootstrap-cc test-alltest-runner test-c-syntax test-city-sim test-desktop-config test-controlcenter-ui test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-shells test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-vt100 test-terminal-async test-help-ui test-suite test-busybox busybox busybox-image doom doom-image doom-aqua doom-aqua-image quake quake-image quake-aqua quake-aqua-image refresh-kui-extras duke3d duke3d-image image image-reset image-mount image-unmount image-copy iso iso-test
 
 toolchain:
 	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
@@ -143,9 +144,11 @@ toolchain:
 
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
-	@test -x $(PROGS_SRC)/progs/mv || $(MAKE) -C $(PROGS_SRC) mv
+	$(MAKE) -C $(PROGS_SRC) NEWLIB_INSTALL=$(SYSROOT) cp mv
 	$(MAKE) userinit nushell ps kill desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest ttytest ptytest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
+	cp $(PROGS_SRC)/progs/cp $(USERLAND_STAGE)/cp
+	cp $(PROGS_SRC)/progs/mv $(USERLAND_STAGE)/mv
 	while IFS= read -r program; do \
 		case "$$program" in ''|'#'*) continue;; esac; \
 		if [ -f $(USERLAND_STAGE)/$$program ]; then :; \
@@ -685,6 +688,12 @@ duke3d-image:
 	$(MAKE) duke3d
 	$(MAKE) image-reset
 
+busybox:
+	SYSROOT=$(SYSROOT) BUSYBOX_BINARY=$(BUSYBOX_BINARY) scripts/build-busybox.sh
+
+busybox-image: busybox
+	$(MAKE) image-reset
+
 lua: $(LUA_BINARY)
 
 $(LUA_BINARY): $(LUA_INPUTS)
@@ -693,13 +702,13 @@ $(LUA_BINARY): $(LUA_INPUTS)
 	mkdir -p $(dir $(LUA_BINARY))
 	cp $(LUA_SOURCE)/lua $(LUA_BINARY)
 
-image: userland lua
+image: userland lua busybox
 	$(MAKE) refresh-kui-extras
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_AQUA_BINARY=$(DOOM_AQUA_BINARY) DOOM_WAD=$(DOOM_WAD) QUAKE_BINARY=$(QUAKE_BINARY) QUAKE_AQUA_BINARY=$(QUAKE_AQUA_BINARY) QUAKE_DATA_DIR=$(QUAKE_DATA_DIR) DUKE3D_BINARY=$(DUKE3D_BINARY) DUKE3D_GRP=$(DUKE3D_GRP) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) BUSYBOX_BINARY=$(BUSYBOX_BINARY) DOOM_BINARY=$(DOOM_BINARY) DOOM_AQUA_BINARY=$(DOOM_AQUA_BINARY) DOOM_WAD=$(DOOM_WAD) QUAKE_BINARY=$(QUAKE_BINARY) QUAKE_AQUA_BINARY=$(QUAKE_AQUA_BINARY) QUAKE_DATA_DIR=$(QUAKE_DATA_DIR) DUKE3D_BINARY=$(DUKE3D_BINARY) DUKE3D_GRP=$(DUKE3D_GRP) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh
 
-image-reset: userland lua
+image-reset: userland lua busybox
 	$(MAKE) refresh-kui-extras
-	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) DOOM_BINARY=$(DOOM_BINARY) DOOM_AQUA_BINARY=$(DOOM_AQUA_BINARY) DOOM_WAD=$(DOOM_WAD) QUAKE_BINARY=$(QUAKE_BINARY) QUAKE_AQUA_BINARY=$(QUAKE_AQUA_BINARY) QUAKE_DATA_DIR=$(QUAKE_DATA_DIR) DUKE3D_BINARY=$(DUKE3D_BINARY) DUKE3D_GRP=$(DUKE3D_GRP) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh --reset
+	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) USERLAND_STAGE=$(USERLAND_STAGE) CORE_SRC=$(CORE_SRC) PROGS_SRC=$(PROGS_SRC) BUSYBOX_BINARY=$(BUSYBOX_BINARY) DOOM_BINARY=$(DOOM_BINARY) DOOM_AQUA_BINARY=$(DOOM_AQUA_BINARY) DOOM_WAD=$(DOOM_WAD) QUAKE_BINARY=$(QUAKE_BINARY) QUAKE_AQUA_BINARY=$(QUAKE_AQUA_BINARY) QUAKE_DATA_DIR=$(QUAKE_DATA_DIR) DUKE3D_BINARY=$(DUKE3D_BINARY) DUKE3D_GRP=$(DUKE3D_GRP) LUA_BINARY=$(LUA_BINARY) BIBLE_TEXT=$(BIBLE_TEXT) TCC_RUNTIME=$(KERNEL_ROOT)/build/extras/tinycc/root scripts/image-create.sh --reset
 
 image-mount:
 	IMAGE_PATH=$(IMAGE) IMAGE_MOUNT=$(IMAGE_MOUNT) scripts/image-mount.sh
@@ -765,3 +774,7 @@ iso-test: iso
 test-suite: kernel32.bin test-alltest-runner test-c-syntax test-city-sim test-writer-document test-writer-ui test-kui-scaled-text test-paint-brush test-tetris test-tetris-ui test-fps test-fps-ui test-doom-aqua test-quake-aqua test-ksheet test-ksheet-ui test-kui-styles test-kui-text-selection test-kui-context-menu test-editor-clipboard test-terminal-vt100 test-terminal-async test-help-ui test-kui-shells
 	$(MAKE) image-reset IMAGE=$(TEST_IMAGE) IMAGE_MOUNT=$(TEST_IMAGE_MOUNT)
 	QEMU=$(QEMU) QEMU_OPTS='$(QEMU_OPTS)' TEST_KERNEL=$(KERNEL_ROOT)/kernel32.bin TEST_IMAGE=$(TEST_IMAGE) TEST_TIMEOUT=$(TEST_TIMEOUT) bash tests/e2e/all-tests.sh
+
+test-busybox: kernel32.bin busybox
+	$(MAKE) image-reset IMAGE=$(TEST_IMAGE) IMAGE_MOUNT=$(TEST_IMAGE_MOUNT)
+	QEMU=$(QEMU) QEMU_OPTS='$(QEMU_OPTS)' TEST_KERNEL=$(KERNEL_ROOT)/kernel32.bin TEST_IMAGE=$(TEST_IMAGE) bash tests/e2e/busybox-test.sh

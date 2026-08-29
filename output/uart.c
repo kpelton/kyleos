@@ -10,6 +10,18 @@ static struct mutex uart_print_mutex;
 #define PORT 0x3f8   /* COM1 */
 #define MAX_CHARS 512
 
+static void serial_write_byte(uint8_t byte)
+{
+    /* Do not overwrite the transmit holding register during large VT100
+     * redraws.  The bounded loop also keeps early panic output from hanging
+     * forever if COM1 is unavailable. */
+    for (uint32_t attempt = 0; attempt < 100000; attempt++)
+        if ((inb(PORT + 5) & 0x20) != 0) {
+            outb(PORT, byte);
+            return;
+        }
+}
+
 void serial_kprintf(char* str)
 {
    //cquire_mutex(&uart_print_mutex);
@@ -17,7 +29,7 @@ void serial_kprintf(char* str)
     char* strp = str;
     while (*strp != '\0')  {
 
-        outb(PORT,*strp);
+        serial_write_byte((uint8_t)*strp);
 
         strp++;
         
@@ -31,7 +43,7 @@ void serial_write(const void *buffer, uint32_t count)
     const char *bytes = buffer;
 
     for (uint32_t index = 0; index < count; index++)
-        outb(PORT, bytes[index]);
+        serial_write_byte((uint8_t)bytes[index]);
 }
 
 void serial_init()
@@ -44,8 +56,11 @@ void serial_init()
    outb(PORT + 0, 0x01);    // Set divisor to 3 (lo byte) 38400 baud
    outb(PORT + 1, 0x00);    //                  (hi byte)
    outb(PORT + 3, 0x03);    // 8 bits, no parity, one stop bit
-   outb(PORT + 2, 0xC7);    // Enable FIFO, clear them, with 14-byte threshold
-   outb(PORT + 1, 0x1);    // IRQs enabled, RTS/DSR set
+   /* Interrupt as soon as one byte arrives. Interactive commands are often
+    * shorter than the UART's 14-byte trigger and must not remain buffered. */
+   outb(PORT + 2, 0x07);    // Enable FIFO, clear both FIFOs, 1-byte threshold
+   outb(PORT + 4, 0x0b);   // DTR, RTS, and OUT2 (route UART IRQ)
+   outb(PORT + 1, 0x01);   // Enable received-data interrupt
       release_spinlock(&uart_spinlock);
 
 #ifndef KYLEOS_DISABLE_SERIAL_OUTPUT
@@ -55,12 +70,13 @@ void serial_init()
 
 void serial_irq()
 {
-
-    char in;
     acquire_spinlock(&uart_spinlock);
-    outb(PORT + 3, 0x00); //dlab = 0 
-    in = inb(PORT);
-    tty_receive_serial_char(in);
+    /* Keep DLAB clear without changing the configured 8-N-1 format, then
+     * drain the FIFO. Reading only one byte strands burst input because the
+     * UART's receive interrupt is edge-triggered through the legacy PIC. */
+    outb(PORT + 3, 0x03);
+    while ((inb(PORT + 5) & 0x01) != 0)
+        tty_receive_serial_char((char)inb(PORT));
     PIC_sendEOI(1);
     release_spinlock(&uart_spinlock);
 }

@@ -649,10 +649,13 @@ int user_process_replace_exec(struct ktask *t, uint64_t startaddr, char *name, s
     t->session = session;
     t->cwd = cwd;
     int i=0;
-    //Free kernel allocated argv passed in from userspace
-    for(i=0; i<MAX_ARGS && argv[i]; i++);
+    // Free the kernel copy made by exec_args().
+    if (argv != NULL) {
+        for (i = 0; i < MAX_ARGS && argv[i]; i++)
+            ;
+    }
 
-    if (i > 0) {
+    if (argv != NULL && i > 0) {
             for (int j=0; j<i; j++){
                 kfree(argv[j]);
             }
@@ -729,23 +732,17 @@ int user_process_add_exec(uint64_t startaddr, char *name,struct vmm_map *mm,bool
     // max argument length and total size
     // Switch to new page able in order to copy in arguments into stack pages
     sp = (uint64_t *)((uint64_t)USER_STACK_VADDR + (PAGE_SIZE * USER_STACK_SIZE) - 8);
-    if( argv) {
+    if (argv != NULL) {
+        /* execve() must preserve the caller's argv[0].  Multi-call programs
+         * such as BusyBox use it to select the requested applet (for example
+         * "ls" while executing /bin/busybox). */
+        for (argc = 0; argv[argc] && argc < MAX_ARGS; argc++) {
+            int len = kstrlen(argv[argc]) + 1;
 
-        //Copy name of prog in argv[0]
-       
-        int len = kstrlen(name);
-        sp = (uint64_t *) ((uint64_t) (((char*)sp) - len) & 0xffffffffffffff00);
-        ustack[argc] = sp;
-        kstrncpy((char *) sp,name,len);
-        for(argc = 1; argv[argc] && argc < MAX_ARGS; argc++) 
-        {
-            //kprintf(" %d %s\n",argc, argv[argc]);
-            int len = kstrlen(argv[argc]);
-            sp = (uint64_t *) ((uint64_t) (((char*)sp) - len) & 0xffffffffffffff00);
-            // track where argument is placed for later use
+            sp = (uint64_t *)((uint64_t)(((char *)sp) - len) &
+                                        0xffffffffffffff00);
             ustack[argc] = sp;
-            kstrncpy((char *)sp,argv[argc],len);
-            //kprintf("ustack %x %x\n", argc,sp);
+            kstrncpy((char *)sp, argv[argc], len);
         }
     }
     
@@ -937,6 +934,12 @@ int sched_wait_child(int parent_pid, int requested_pid, int *exit_code,
     if (!found) {
         release_spinlock(&sched_spinlock);
         return -1;
+    }
+    /* A non-child signal may have arrived after the child scan but before
+     * this task published its wait state.  Do not sleep through it. */
+    if (signal_has_unmasked_pending(parent)) {
+        release_spinlock(&sched_spinlock);
+        return -2;
     }
     parent->wait_channel = parent;
     parent->state = TASK_BLOCKED;

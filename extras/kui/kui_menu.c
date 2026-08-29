@@ -78,11 +78,13 @@ void kui_menu_init(struct kui_menu_state *state)
 {
     state->open = 0;
     state->menu_index = 0;
+    state->hovered_item = -1;
 }
 
 void kui_menu_close(struct kui_menu_state *state)
 {
     state->open = 0;
+    state->hovered_item = -1;
 }
 
 int kui_menu_handle(struct kui_menu_state *state,
@@ -102,8 +104,10 @@ int kui_menu_handle(struct kui_menu_state *state,
                     state->open = 1;
                     state->menu_index = selected;
                 }
+                state->hovered_item = -1;
             } else {
                 state->open = 0;
+                state->hovered_item = -1;
             }
             if (consumed != NULL) *consumed = 1;
             return 0;
@@ -122,6 +126,7 @@ int kui_menu_handle(struct kui_menu_state *state,
                               menu->item_count * KUI_MENU_ROW_HEIGHT) ?
                   (event->y - KUI_MENU_BAR_HEIGHT) / KUI_MENU_ROW_HEIGHT : -1;
             state->open = 0;
+            state->hovered_item = -1;
             if (consumed != NULL) *consumed = 1;
             if (row >= 0 && row < menu->item_count &&
                 menu->items[row].enabled)
@@ -130,13 +135,40 @@ int kui_menu_handle(struct kui_menu_state *state,
         }
     }
     if (state->open && event->type == KUI_EVENT_POINTER &&
+        event->button == 0 && event->wheel == 0) {
+        if (event->y < KUI_MENU_BAR_HEIGHT) {
+            int selected = menu_at(menus, menu_count, event->x);
+
+            if (selected >= 0 && selected != state->menu_index) {
+                state->menu_index = selected;
+                state->hovered_item = -1;
+            }
+        } else if (state->menu_index >= 0 &&
+                   state->menu_index < menu_count) {
+            const struct kui_menu *menu = &menus[state->menu_index];
+            int left = menu_x(menus, state->menu_index);
+            int width = dropdown_width(menu);
+
+            if (left + width > event->width) left = event->width - width;
+            if (left < 0) left = 0;
+            state->hovered_item = kui_in_rect(
+                event->x, event->y, left, KUI_MENU_BAR_HEIGHT, width,
+                menu->item_count * KUI_MENU_ROW_HEIGHT) ?
+                (event->y - KUI_MENU_BAR_HEIGHT) / KUI_MENU_ROW_HEIGHT : -1;
+        }
+        if (consumed != NULL) *consumed = 1;
+        return 0;
+    }
+    if (state->open && event->type == KUI_EVENT_POINTER &&
         (event->button != 0 || event->wheel != 0)) {
         state->open = 0;
+        state->hovered_item = -1;
         if (consumed != NULL) *consumed = 1;
     } else if (state->open && event->type == KUI_EVENT_KEY &&
                event->key_pressed) {
         if (!event->key_extended && event->key_code == 1)
             state->open = 0;
+        state->hovered_item = -1;
         if (consumed != NULL) *consumed = 1;
     }
     return 0;
@@ -208,17 +240,28 @@ void kui_menu_render(struct kui_surface *surface,
                                                         KUI_BLACK);
         for (int row = 0; row < menu->item_count; row++) {
             const struct kui_menu_item *item = &menu->items[row];
-            uint32_t color = item->enabled ? KUI_BLACK : 0x00909090U;
+            int hovered = row == state->hovered_item && item->enabled;
+            uint32_t background = hovered ? style->selection :
+                (style->flags & KUI_STYLE_AQUA ?
+                 (row & 1 ? 0x00e0e5e9U : 0x00f9fafbU) : KUI_FACE);
+            uint32_t color = hovered ? KUI_WHITE :
+                             (item->enabled ? style->text : 0x00909090U);
             int y = KUI_MENU_BAR_HEIGHT + 8 + row * KUI_MENU_ROW_HEIGHT;
 
+            if (hovered)
+                kui_fill_rect(surface, x + 2,
+                              KUI_MENU_BAR_HEIGHT + 2 +
+                              row * KUI_MENU_ROW_HEIGHT,
+                              width - 4, KUI_MENU_ROW_HEIGHT,
+                              background);
             kui_draw_text(surface, x + 12, y, item->label, color,
-                          style->flags & KUI_STYLE_AQUA ?
-                          (row & 1 ? 0x00e0e5e9U : 0x00f9fafbU) :
-                          KUI_FACE, 0);
+                          background, 0);
             if (item->shortcut != NULL)
                 kui_draw_text(surface,
                               x + width - 10 - kui_text_width(item->shortcut),
-                              y, item->shortcut, KUI_SHADOW, KUI_FACE, 0);
+                              y, item->shortcut,
+                              hovered ? KUI_WHITE : KUI_SHADOW,
+                              background, 0);
         }
     }
 }
@@ -228,6 +271,7 @@ void kui_context_menu_init(struct kui_context_menu_state *state)
     state->open = 0;
     state->x = 0;
     state->y = 0;
+    state->hovered_item = -1;
 }
 
 void kui_context_menu_open(struct kui_context_menu_state *state,
@@ -236,11 +280,13 @@ void kui_context_menu_open(struct kui_context_menu_state *state,
     state->open = 1;
     state->x = x;
     state->y = y;
+    state->hovered_item = -1;
 }
 
 void kui_context_menu_close(struct kui_context_menu_state *state)
 {
     state->open = 0;
+    state->hovered_item = -1;
 }
 
 int kui_context_menu_handle(struct kui_context_menu_state *state,
@@ -256,6 +302,20 @@ int kui_context_menu_handle(struct kui_context_menu_state *state,
 
     if (consumed != NULL) *consumed = 0;
     if (!state->open) return 0;
+    if (event->type == KUI_EVENT_POINTER && event->button == 0 &&
+        event->wheel == 0) {
+        context_menu_layout(state, event->width, event->height,
+                            items, item_count, &x, &y, &width, &height);
+        state->hovered_item = kui_in_rect(event->x, event->y,
+                                          x + 1, y + 1,
+                                          width - 2, height - 2) ?
+            (event->y - y - 2) / KUI_MENU_ROW_HEIGHT : -1;
+        if (state->hovered_item < 0 ||
+            state->hovered_item >= item_count)
+            state->hovered_item = -1;
+        if (consumed != NULL) *consumed = 1;
+        return 0;
+    }
     if (event->type == KUI_EVENT_POINTER && event->button == 1) {
         context_menu_layout(state, event->width, event->height,
                             items, item_count, &x, &y, &width, &height);
@@ -263,6 +323,7 @@ int kui_context_menu_handle(struct kui_context_menu_state *state,
                           width - 2, height - 2) ?
               (event->y - y - 2) / KUI_MENU_ROW_HEIGHT : -1;
         state->open = 0;
+        state->hovered_item = -1;
         if (consumed != NULL) *consumed = 1;
         if (row >= 0 && row < item_count && items[row].enabled)
             return items[row].action;
@@ -271,9 +332,11 @@ int kui_context_menu_handle(struct kui_context_menu_state *state,
     if (event->type == KUI_EVENT_POINTER &&
         (event->button != 0 || event->wheel != 0)) {
         state->open = 0;
+        state->hovered_item = -1;
         if (consumed != NULL) *consumed = 1;
     } else if (event->type == KUI_EVENT_KEY && event->key_pressed) {
         state->open = 0;
+        state->hovered_item = -1;
         if (consumed != NULL) *consumed = 1;
     }
     return 0;
@@ -310,18 +373,27 @@ void kui_context_menu_render(struct kui_surface *surface,
                      style->flags & KUI_STYLE_AQUA ? 0x006d747bU : KUI_BLACK);
     for (int row = 0; row < item_count; row++) {
         const struct kui_menu_item *item = &items[row];
-        uint32_t color = item->enabled ? style->text : 0x00909090U;
+        int hovered = row == state->hovered_item && item->enabled;
+        uint32_t background = hovered ? style->selection :
+            (style->flags & KUI_STYLE_AQUA ?
+             (row & 1 ? 0x00e0e5e9U : 0x00f9fafbU) : KUI_FACE);
+        uint32_t color = hovered ? KUI_WHITE :
+                         (item->enabled ? style->text : 0x00909090U);
         int item_y = y + 8 + row * KUI_MENU_ROW_HEIGHT;
 
+        if (hovered)
+            kui_fill_rect(surface, x + 2,
+                          y + 2 + row * KUI_MENU_ROW_HEIGHT,
+                          width - 4, KUI_MENU_ROW_HEIGHT,
+                          background);
         kui_draw_text(surface, x + 12, item_y, item->label, color,
-                      style->flags & KUI_STYLE_AQUA ?
-                      (row & 1 ? 0x00e0e5e9U : 0x00f9fafbU) : KUI_FACE,
-                      0);
+                      background, 0);
         if (item->shortcut != NULL)
             kui_draw_text(surface,
                           x + width - 10 - kui_text_width(item->shortcut),
                           item_y, item->shortcut,
-                          item->enabled ? KUI_SHADOW : 0x00909090U,
-                          KUI_FACE, 0);
+                          hovered ? KUI_WHITE :
+                          (item->enabled ? KUI_SHADOW : 0x00909090U),
+                          background, 0);
     }
 }

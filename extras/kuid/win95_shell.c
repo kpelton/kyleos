@@ -7,6 +7,7 @@
 #include "extras/kuid/shell_protocol.h"
 
 static int menu_open;
+static int menu_hover = -1;
 
 static const struct kui_shell_app *start_app(
     const struct kui_shell_request *request, int rank)
@@ -75,16 +76,38 @@ static void render(struct kui_surface *surface,
         kui_outline_rect(surface, 3, top, 250, height, KUI_TITLE_BLUE);
         for (int rank = 0; rank < request->app_count; rank++) {
             const struct kui_shell_app *entry = start_app(request, rank);
+            uint32_t background = rank == menu_hover ?
+                                  KUI_TITLE_BLUE : 0x00f5f5f5U;
 
+            if (rank == menu_hover)
+                kui_fill_rect(surface, 5, top + 3 + rank * 26,
+                              246, 26, background);
             kui_draw_text(surface, 17, top + 8 + rank * 26,
-                          entry != NULL ? entry->title : "", KUI_BLACK,
-                          0x00f5f5f5U, 0);
+                          entry != NULL ? entry->title : "",
+                          rank == menu_hover ? KUI_WHITE : KUI_BLACK,
+                          background, 0);
         }
+        if (menu_hover == request->app_count)
+            kui_fill_rect(surface, 5,
+                          top + 3 + request->app_count * 26,
+                          246, 26, KUI_TITLE_BLUE);
         kui_draw_text(surface, 17, top + 8 + request->app_count * 26,
-                      "Close Window", KUI_BLACK, 0x00f5f5f5U, 0);
+                      "Close Window",
+                      menu_hover == request->app_count ?
+                      KUI_WHITE : KUI_BLACK,
+                      menu_hover == request->app_count ?
+                      KUI_TITLE_BLUE : 0x00f5f5f5U, 0);
+        if (menu_hover == request->app_count + 1)
+            kui_fill_rect(surface, 5,
+                          top + 3 + (request->app_count + 1) * 26,
+                          246, 26, KUI_TITLE_BLUE);
         kui_draw_text(surface, 17, top + 8 +
                       (request->app_count + 1) * 26,
-                      "Quit to Shell", KUI_BLACK, 0x00f5f5f5U, 0);
+                      "Quit to Shell",
+                      menu_hover == request->app_count + 1 ?
+                      KUI_WHITE : KUI_BLACK,
+                      menu_hover == request->app_count + 1 ?
+                      KUI_TITLE_BLUE : 0x00f5f5f5U, 0);
     }
 }
 
@@ -93,6 +116,27 @@ static void pointer(const struct kui_shell_request *request,
 {
     int panel_y = request->screen_height - 32;
 
+    if (request->button == 0) {
+        int hovered = -1;
+
+        if (menu_open) {
+            int height = 12 + (request->app_count + 2) * 26;
+            int top = panel_y - height;
+
+            if (kui_in_rect(request->x, request->y,
+                            3, top, 250, height)) {
+                hovered = (request->y - top - 5) / 26;
+                if (hovered < 0 || hovered >= request->app_count + 2)
+                    hovered = -1;
+            }
+        }
+        if (hovered != menu_hover) {
+            menu_hover = hovered;
+            response->consumed = 1;
+        }
+        if (menu_open) response->consumed = 1;
+        return;
+    }
     if (menu_open) {
         int height = 12 + (request->app_count + 2) * 26;
         int top = panel_y - height;
@@ -102,9 +146,10 @@ static void pointer(const struct kui_shell_request *request,
 
             response->consumed = 1;
             menu_open = 0;
+            menu_hover = -1;
             if (rank < request->app_count) {
-                response->action = KUI_SHELL_ACTION_OPEN_APP;
-                response->index = rank;
+                response->action = KUI_SHELL_ACTION_OPEN_MENU_APP;
+                response->index = request->app_indices[rank];
             } else if (rank == request->app_count)
                 response->action = KUI_SHELL_ACTION_CLOSE_ACTIVE;
             else
@@ -112,6 +157,7 @@ static void pointer(const struct kui_shell_request *request,
             return;
         }
         menu_open = 0;
+        menu_hover = -1;
         response->consumed = 1;
         return;
     }
@@ -120,6 +166,7 @@ static void pointer(const struct kui_shell_request *request,
     response->consumed = 1;
     if (request->x < 100) {
         menu_open = !menu_open;
+        menu_hover = -1;
     } else {
         int width = window_button_width(request);
         int rank = width > 0 ? (request->x - 102) / width : -1;

@@ -10,3 +10,6 @@
 [submodule "extras/duke3d"]
 	path = extras/duke3d
 	url = https://github.com/fabiensanglard/chocolate_duke3D.git
+[submodule "extras/busybox"]
+	path = extras/busybox
+	url = https://git.busybox.net/busybox

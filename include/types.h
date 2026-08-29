@@ -17,7 +17,9 @@ typedef unsigned short nlink_t;
 typedef unsigned int mode_t;
 typedef unsigned short gid_t;
 typedef unsigned short uid_t;
-typedef unsigned short off_t;
+/* Keep the kernel/user ABI layout of struct stat identical to Newlib's
+ * x86_64 definition. */
+typedef long off_t;
 typedef long blksize_t;
 typedef long blkcnt_t;
 typedef long time_t;

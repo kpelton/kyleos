@@ -236,7 +236,7 @@
       </div>
       <div class="grid" style="margin-top:1rem">
         <article class="card half"><h3>Link and address layout</h3><ul><li>Linker entry: <code>kernel_bootstrap</code>.</li><li>Physical load begins at <code>0x00100000</code>.</li><li>Higher-half kernel base: <code>0xffffffff80000000</code>.</li><li>Direct physical map base: <code>0xffff888000000000</code>.</li><li>The loader enters in 32-bit mode, constructs bootstrap tables, then jumps through a 64-bit GDT into <code>Realm64</code> and finally the higher-half <code>kmain</code>.</li></ul></article>
-        <article class="card half"><h3>PID 1 contract</h3><p><code>/sbin/init</code> is a small userspace supervisor. It starts <code>/bin/nushell</code>, waits for it, and restarts it if it exits. Kernel process management reserves PID 0 for idle and PID 1 for init; orphaned processes are reparented so they remain reapable.</p><p>Fallbacks in the kernel allow development images without a fully installed init to enter <code>/bin/nushell</code> or a root-level <code>nushell</code>.</p></article>
+        <article class="card half"><h3>PID 1 contract</h3><p><code>/sbin/init</code> is a small userspace supervisor. It starts BusyBox <code>/bin/sh</code>, waits for it, and restarts it if it exits. Kernel process management reserves PID 0 for idle and PID 1 for init; orphaned processes are reparented so they remain reapable.</p><p>Fallbacks in the kernel allow development images without a fully installed init to enter <code>/bin/sh</code>, <code>/bin/nushell</code>, or a root-level <code>nushell</code>.</p></article>
       </div>
     </section>
 

@@ -21,6 +21,7 @@ struct vt100_cell {
 
 struct vt100_terminal {
     struct vt100_cell *cells;
+    struct vt100_cell *saved_cells;
     int columns;
     int screen_rows;
     int line_count;
@@ -40,6 +41,19 @@ struct vt100_terminal {
     uint8_t private_sequence;
     int parameters[16];
     int parameter_count;
+    int alternate_active;
+    int primary_line_count;
+    int primary_screen_top;
+    int primary_cursor_line;
+    int primary_cursor_column;
+    int primary_saved_row;
+    int primary_saved_column;
+    uint8_t primary_foreground;
+    uint8_t primary_background;
+    uint8_t primary_attributes;
+    uint8_t primary_inverse;
+    uint8_t primary_cursor_visible;
+    uint8_t primary_autowrap;
 };
 
 int vt100_init(struct vt100_terminal *terminal, int columns, int rows);

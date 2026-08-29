@@ -21,7 +21,9 @@
 //#define DSHELL_EN
 #define INIT "/sbin/init"
 #define SHELL "/bin/aqua"
-#define LEGACY_SHELL "nushell"
+#define FALLBACK_SHELL "/bin/sh"
+#define LEGACY_SHELL "/bin/nushell"
+#define ROOT_LEGACY_SHELL "nushell"
 
 //copy before switching paging mode
 static multiboot_info_t boot_info;
@@ -50,7 +52,15 @@ static void kernel(void)
     }
     if (iptr == NULL) {
         dptr = vfs_read_root_dir("/");
+        iptr = vfs_walk_path(FALLBACK_SHELL, dptr);
+    }
+    if (iptr == NULL) {
+        dptr = vfs_read_root_dir("/");
         iptr = vfs_walk_path(LEGACY_SHELL, dptr);
+    }
+    if (iptr == NULL) {
+        dptr = vfs_read_root_dir("/");
+        iptr = vfs_walk_path(ROOT_LEGACY_SHELL, dptr);
     }
 
     if (iptr != NULL)

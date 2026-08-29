@@ -22,12 +22,14 @@ struct kui_menu {
 struct kui_menu_state {
     int open;
     int menu_index;
+    int hovered_item;
 };
 
 struct kui_context_menu_state {
     int open;
     int x;
     int y;
+    int hovered_item;
 };
 
 void kui_menu_init(struct kui_menu_state *state);

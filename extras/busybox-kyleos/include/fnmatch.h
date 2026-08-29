@@ -1,0 +1,13 @@
+#ifndef KYLEOS_BUSYBOX_FNMATCH_WRAPPER_H
+#define KYLEOS_BUSYBOX_FNMATCH_WRAPPER_H
+
+#include_next <fnmatch.h>
+
+#ifndef FNM_LEADING_DIR
+# define FNM_LEADING_DIR 0x08
+# define FNM_CASEFOLD 0x10
+# define FNM_IGNORECASE FNM_CASEFOLD
+# define FNM_FILE_NAME FNM_PATHNAME
+#endif
+
+#endif

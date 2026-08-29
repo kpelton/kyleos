@@ -283,8 +283,11 @@ New generated images use this layout:
     └── src/             # TinyCC and its KyleOS port overlay
 ```
 
-`nushell` searches `/bin` and then `/usr/bin` for bare command names.  This
-is currently fixed lookup behavior, not a configurable environment `PATH`.
+BusyBox `ash` is the default interactive shell and is installed as both
+`/bin/sh` and `/bin/ash`. It uses `PATH=/bin:/usr/bin`; the native `nushell`
+remains available as `/bin/nushell` for debugging and compatibility.
+`nushell` searches `/bin` and then `/usr/bin` for bare command names. This is
+fixed lookup behavior, not a configurable environment `PATH`.
 Absolute paths begin at `/`; relative paths begin in the current directory.
 The `repeat` builtin runs a command a fixed number of times and supports the
 shell's normal input and output redirection:
@@ -292,6 +295,28 @@ shell's normal input and output redirection:
 ```sh
 repeat 200 ls > /dev/null
 ```
+
+### BusyBox profile
+
+KyleOS currently builds BusyBox 1.38.0 with these applets: `[`, `ash`,
+`bunzip2`, `bzip2`, `cat`, `cpio`, `echo`, `env`, `false`, `grep`, `gunzip`,
+`gzip`, `head`, `hd`, `hexdump`, `ls`, `mkdir`, `printenv`, `printf`, `pwd`,
+`rm`, `rmdir`, `sh`, `sleep`, `tail`, `tar`, `test`, `true`, `unzip`, `unxz`,
+`vi`, `wc`, and `xz`.
+Tar includes archive creation (`tar -c`), extraction/listing, and seamless
+gzip, bzip2, and xz compression support.
+Ash provides aliases, job control, globbing, arithmetic, `getopts`, and its
+standard `echo`, `printf`, and `test` builtins. Vi includes colon commands,
+literal search, yank/put and marks, window resizing, settable options,
+dot-repeat, read-only mode, and queued undo. Regex search and signal-aware
+editing remain disabled because they require GNU regex and `sigsetjmp`
+interfaces that KyleOS Newlib does not provide yet.
+
+The KyleOS selection lives in `extras/busybox-kyleos/defconfig`. Add applet or
+feature symbols there and run `make busybox`; `make busybox-image` rebuilds
+BusyBox and resets the normal image. Since the port starts from BusyBox
+`allnoconfig`, upstream applets not listed in that file remain disabled until
+their libc and kernel requirements have been tested on KyleOS.
 
 Background commands are assigned shell job numbers. Use `jobs` to inspect
 them, `fg %1` or `bg %1` to resume a job, and `kill -STOP %1`, `kill -CONT %1`,
@@ -302,17 +327,17 @@ discipline to the complete foreground process group.
 
 ## Init and userspace boot
 
-The kernel starts `/sbin/init` as PID 1. Init starts `/bin/nushell` on
+The kernel starts `/sbin/init` as PID 1. Init starts BusyBox `/bin/sh` on
 `/dev/tty1` through `/dev/tty4` and `/dev/ttyS0`, waits for the supervised
 shells, and restarts any one that exits or is terminated by a userspace fault.
 Use Alt+F1 through Alt+F4 to switch virtual consoles; the serial shell uses
 COM1. When another process exits, its live children are reparented to PID 1 so
 init can reap them.
 
-For compatibility with older disk images, the kernel falls back to
-`/bin/nushell` and then the legacy root-level `nushell` when `/sbin/init` is
-absent.  Run `make image-reset` once after upgrading to install the real init
-binary into an existing generated image.
+For compatibility with development and older disk images, the kernel tries
+`/bin/aqua`, `/bin/sh`, `/bin/nushell`, and then the legacy root-level
+`nushell` when `/sbin/init` is absent. Run `make image-reset` once after
+upgrading to install the real init and BusyBox shell into an existing image.
 
 ## Managing the generated image
 

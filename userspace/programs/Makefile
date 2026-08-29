@@ -1,8 +1,9 @@
-CC = gcc
-CFLAGS = -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone  -static  -I /tmp/z/include -fno-stack-protector
+CC ?= gcc
+NEWLIB_INSTALL ?= /tmp/z
+CFLAGS = -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone  -static  -I $(NEWLIB_INSTALL)/include -fno-stack-protector
 #CFLAGS = -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -static  -I /tmp/z/include
-LDFLAGS = /tmp/z/lib/libc.a /tmp/z/lib/libm.a
-all: forktest names pyramid fullpyramid quicksort fputest donut fpuerrortest filetest write kedit mv ued
+LDFLAGS = $(NEWLIB_INSTALL)/lib/libc.a $(NEWLIB_INSTALL)/lib/libm.a
+all: forktest names pyramid fullpyramid quicksort fputest donut fpuerrortest filetest write kedit cp mv ued
 
 forktest: forktest.c
 	$(CC) $(CFLAGS) $< $(LDFLAGS) -o progs/$@
@@ -44,7 +45,10 @@ write: write.c
 kedit: kedit.c
 	$(CC) $(CFLAGS) $< $(LDFLAGS) -o progs/$@
 
-mv: mv.c
+cp: cp.c path_destination.h
+	$(CC) $(CFLAGS) $< $(LDFLAGS) -o progs/$@
+
+mv: mv.c path_destination.h
 	$(CC) $(CFLAGS) $< $(LDFLAGS) -o progs/$@
 
 ued: ued.c

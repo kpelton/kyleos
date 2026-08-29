@@ -385,8 +385,11 @@ int read_inode_file(struct file *rfile, void *buf, uint32_t count)
     }
     cluster_offset = rfile->pos % cluster_size;
 
+    /* The current cluster is valid even when its FAT entry points to
+     * end-of-chain.  The old !fat_is_eoc(cluster) test skipped the final
+     * cluster of every file, producing short reads for tar and other readers. */
     while (remaining > 0 && cluster >= 2 &&
-           cluster < fs->cluster_count && !fat_is_eoc(cluster)) {
+           cluster < fs->cluster_count) {
         /* Partial clusters need a bounce buffer.  Full, physically adjacent
          * FAT clusters can be transferred straight into the caller's buffer
          * with one ATA command. */

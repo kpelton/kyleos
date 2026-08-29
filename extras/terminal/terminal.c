@@ -15,8 +15,10 @@
 #include "extras/terminal/vt100.h"
 
 #ifndef TERMINAL_SHELL_PATH
-#define TERMINAL_SHELL_PATH "/bin/nushell"
+#define TERMINAL_SHELL_PATH "/bin/sh"
 #endif
+
+#define TERMINAL_SHELL_NAME "sh"
 
 #define TERMINAL_HISTORY_MAX 16
 
@@ -51,7 +53,8 @@ static void note_output(struct terminal_state *state, const char *text,
 {
 #ifndef KYLEOS_HOST
     for (int index = 0; index < length; index++) {
-        if (state->previous_output == '$' && text[index] == ' ')
+        if ((state->previous_output == '$' ||
+             state->previous_output == '#') && text[index] == ' ')
             state->shell_prompt_ready = 1;
         state->previous_output = text[index];
     }
@@ -130,6 +133,31 @@ static int terminal_editing_command(const struct terminal_state *state)
 #else
     return state->shell_prompt_ready;
 #endif
+}
+
+static int send_program_key(struct terminal_state *state,
+                            const struct kui_event *event)
+{
+    unsigned char key = (unsigned char)event->character;
+
+    if (!event->key_extended && event->key_code == 1) key = 27;
+    else if (!event->key_extended && event->key_code == 14) key = 127;
+    else if (!event->key_extended && event->key_code == 28) {
+#ifdef KYLEOS_HOST
+        key = '\n';
+#else
+        key = '\r';
+#endif
+    }
+    else if (!event->key_extended && event->key_code == 15) key = '\t';
+    else if ((event->modifiers & KUI_MOD_CTRL) && key >= '@' && key <= '_')
+        key &= 0x1f;
+    else if ((event->modifiers & KUI_MOD_CTRL) && key >= 'a' && key <= 'z')
+        key &= 0x1f;
+
+    if (key == 0)
+        return 0;
+    return write(state->input_fd, &key, 1) == 1 ? 0 : -1;
 }
 
 static const char *terminal_key_sequence(const struct kui_event *event,
@@ -319,7 +347,7 @@ static int execute(struct terminal_state *state)
         dup2(output_pipe[1], 2);
         close(output_pipe[1]);
         if (use_shell) {
-            char *shell_argv[] = { "nushell", NULL };
+            char *shell_argv[] = { TERMINAL_SHELL_NAME, NULL };
 
             execve(TERMINAL_SHELL_PATH, shell_argv, environment);
             fprintf(stderr, "terminal: cannot start %s\n",
@@ -356,11 +384,17 @@ static int execute(struct terminal_state *state)
     return TERMINAL_ACTION_NONE;
 }
 #else
-static int start_shell(struct terminal_state *state)
+static int start_shell(struct terminal_state *state, int columns, int rows)
 {
     int master;
     int slave;
     int child;
+    char columns_environment[24];
+    char lines_environment[24];
+
+    snprintf(columns_environment, sizeof(columns_environment),
+             "COLUMNS=%d", columns);
+    snprintf(lines_environment, sizeof(lines_environment), "LINES=%d", rows);
 
     if (openpty(&master, &slave, NULL, NULL, NULL) < 0) {
         append_text(state, "terminal: cannot create pty\n", -1);
@@ -368,8 +402,16 @@ static int start_shell(struct terminal_state *state)
     }
     child = fork();
     if (child == 0) {
-        char *shell_argv[] = { "nushell", NULL };
-        char *environment[] = { "PATH=/bin:/usr/bin", NULL };
+        char *shell_argv[] = { TERMINAL_SHELL_NAME, NULL };
+        char *environment[] = {
+            "HOME=/",
+            "PATH=/bin:/usr/bin",
+            "SHELL=/bin/sh",
+            "TERM=xterm",
+            columns_environment,
+            lines_environment,
+            NULL
+        };
 
         close(master);
         if (setsid() < 0)
@@ -379,6 +421,8 @@ static int start_shell(struct terminal_state *state)
         dup2(slave, 2);
         if (slave > 2)
             close(slave);
+        if (tcsetpgrp(STDIN_FILENO, getpgrp()) < 0)
+            _exit(126);
         execve(TERMINAL_SHELL_PATH, shell_argv, environment);
         fprintf(stderr, "terminal: cannot start %s\n", TERMINAL_SHELL_PATH);
         _exit(127);
@@ -396,11 +440,14 @@ static int start_shell(struct terminal_state *state)
 }
 #endif
 
-static void drain_child_output(struct terminal_state *state)
+static int drain_child_output(struct terminal_state *state,
+                              int initial_timeout_ms)
 {
     char buffer[512];
+    int total = 0;
+    int timeout = initial_timeout_ms;
 
-    if (state->output_fd < 0) return;
+    if (state->output_fd < 0) return 0;
     for (;;) {
         struct pollfd descriptor;
         int count;
@@ -409,14 +456,17 @@ static void drain_child_output(struct terminal_state *state)
         descriptor.fd = state->output_fd;
         descriptor.events = POLLIN;
         descriptor.revents = 0;
-        ready = poll(&descriptor, 1, 0);
+        ready = poll(&descriptor, 1, timeout);
         if (ready <= 0 || (descriptor.revents & POLLIN) == 0)
             break;
+        timeout = 0;
         count = read(state->output_fd, buffer, sizeof(buffer));
-        if (count <= 0) return;
+        if (count <= 0) break;
         note_output(state, buffer, count);
         append_text(state, buffer, count);
+        total += count;
     }
+    return total;
 }
 
 static void poll_child(struct terminal_state *state)
@@ -425,10 +475,10 @@ static void poll_child(struct terminal_state *state)
     int result;
 
     if (state->child_pid <= 0) return;
-    drain_child_output(state);
+    drain_child_output(state, 0);
     result = waitpid(state->child_pid, &status, WNOHANG);
     if (result == 0) return;
-    drain_child_output(state);
+    drain_child_output(state, 0);
     if (state->output_fd >= 0) close(state->output_fd);
     if (state->input_fd >= 0 && state->input_fd != state->output_fd)
         close(state->input_fd);
@@ -714,6 +764,7 @@ int main(void)
     copy_buffer[0] = '\0';
     for (;;) {
         int action = TERMINAL_ACTION_NONE;
+        int defer_render = 0;
         const char *launch_path;
 
         if (kui_client_read_event(&event) < 0) break;
@@ -760,7 +811,7 @@ int main(void)
                         -1);
             chdir("/");
 #ifndef KYLEOS_HOST
-            (void)start_shell(&state);
+            (void)start_shell(&state, columns, rows);
 #endif
         } else if (event.type == KUI_EVENT_TIMER && state.child_pid > 0) {
             poll_child(&state);
@@ -935,36 +986,46 @@ int main(void)
                         (ssize_t)strlen(sequence))
                     append_text(&state,
                                 "terminal: cannot send special key\n", -1);
+                else if (sequence != NULL)
+                    defer_render = 1;
             }
         } else if (event.type == KUI_EVENT_KEY && event.key_pressed &&
                    (state.child_pid <= 0 || state.input_fd >= 0)) {
             char key = event.character;
-            if (!event.key_extended && event.key_code == 14) key = '\b';
-            if (!event.key_extended && event.key_code == 28) key = '\n';
-            if (key == '\b' && state.command_cursor > 0) {
-                memmove(state.command + state.command_cursor - 1,
-                        state.command + state.command_cursor,
-                        (size_t)(state.command_length -
-                                 state.command_cursor) + 1);
-                state.command_cursor--;
-                state.command_length--;
-            }
-            else if (key == '\n') {
-                if (state.child_pid > 0)
-                    action = submit_child_input(&state);
-#ifdef KYLEOS_HOST
+            if (!terminal_editing_command(&state) && state.child_pid > 0) {
+                if (send_program_key(&state, &event) < 0)
+                    append_text(&state,
+                                "terminal: cannot send program input\n", -1);
                 else
-                    action = execute(&state);
+                    defer_render = 1;
+            } else {
+                if (!event.key_extended && event.key_code == 14) key = '\b';
+                if (!event.key_extended && event.key_code == 28) key = '\n';
+                if (key == '\b' && state.command_cursor > 0) {
+                    memmove(state.command + state.command_cursor - 1,
+                            state.command + state.command_cursor,
+                            (size_t)(state.command_length -
+                                     state.command_cursor) + 1);
+                    state.command_cursor--;
+                    state.command_length--;
+                }
+                else if (key == '\n') {
+                    if (state.child_pid > 0)
+                        action = submit_child_input(&state);
+#ifdef KYLEOS_HOST
+                    else
+                        action = execute(&state);
 #endif
-            }
-            else if (key >= 32 && key < 127 &&
-                     state.command_length < TERMINAL_COMMAND_MAX - 1) {
-                memmove(state.command + state.command_cursor + 1,
-                        state.command + state.command_cursor,
-                        (size_t)(state.command_length -
-                                 state.command_cursor) + 1);
-                state.command[state.command_cursor++] = key;
-                state.command_length++;
+                }
+                else if (key >= 32 && key < 127 &&
+                         state.command_length < TERMINAL_COMMAND_MAX - 1) {
+                    memmove(state.command + state.command_cursor + 1,
+                            state.command + state.command_cursor,
+                            (size_t)(state.command_length -
+                                     state.command_cursor) + 1);
+                    state.command[state.command_cursor++] = key;
+                    state.command_length++;
+                }
             }
         }
         {
@@ -980,9 +1041,17 @@ int main(void)
             if (state.scroll_from_bottom > maximum)
                 state.scroll_from_bottom = maximum;
         }
+        /* Key repeat events can continually push the normal 50 ms timer
+         * back. Give the PTY a short chance to answer here so held arrows
+         * update while they are still held. */
+        if (defer_render && drain_child_output(&state, 5) > 0)
+            defer_render = 0;
         kui_client_begin(&client, &event, "Terminal");
         kui_client_set_constraints(&client, 360, 180, 700, 481);
-        terminal_render(&client, &event, &state);
+        if (defer_render)
+            kui_client_set_no_display(&client);
+        else
+            terminal_render(&client, &event, &state);
         {
             uint32_t timer = state.child_pid > 0 ? 50U : 0U;
             uint32_t scroll_timer =

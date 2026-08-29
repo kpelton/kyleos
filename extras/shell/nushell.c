@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
@@ -69,7 +70,12 @@ static void reset_child_signals(void)
 
 static pid_t wait_for_process(pid_t pid, int *status, int options)
 {
-    return waitpid(pid, status, options);
+    pid_t result;
+
+    do {
+        result = waitpid(pid, status, options);
+    } while (result < 0 && errno == EINTR);
+    return result;
 }
 
 static const char *job_state_name(enum job_state state)
@@ -774,6 +780,10 @@ int main() {
         if (interactive)
             printf("$ ");
         if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL) {
+            if (errno == EINTR) {
+                clearerr(stdin);
+                continue;
+            }
             break;
         }
 

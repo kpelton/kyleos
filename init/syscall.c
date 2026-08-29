@@ -223,8 +223,12 @@ static char *dirname(char *path)
 
 static int open(char *path, uint32_t flags)
 {
-
     int fd = -1;
+
+    /* POSIX open(NULL, ...) must fail in the syscall, not fault the kernel. */
+    if (!user_range_valid(path, 1) || path[0] == '\0')
+        return -1;
+
     //    if (flags > MAX_FILE_FLAGS)
     //        goto done;
 #ifdef DEBUG_SYSCALL
@@ -234,9 +238,10 @@ static int open(char *path, uint32_t flags)
     struct ktask *pid = get_current_process();
     struct inode *iptr = NULL;
     int pathlen = kstrlen(path);
-    char *s_basepath = (char *)kmalloc(pathlen + 1);
     char *s_dirname = (char *)kmalloc(pathlen + 1);
-    kstrncpy(s_basepath, path, pathlen + 1);
+
+    if (s_dirname == NULL)
+        return -1;
     kstrncpy(s_dirname, path, pathlen + 1);
     char *last_dir = dirname(s_dirname);
     bool walk = false;
@@ -304,6 +309,7 @@ static int open(char *path, uint32_t flags)
 #ifdef DEBUG_SYSCALL
     kprintf("Returning %d for path %s\n", fd, path);
 #endif
+    kfree(s_dirname);
     return fd;
 }
 
@@ -636,11 +642,23 @@ static int stat(const char *file, struct stat *st)
     if (file == NULL || file[0] == '\0' || st == NULL || task == NULL ||
         task->cwd == NULL)
         return -1;
-    dptr = file[0] == DELIM ? vfs_read_root_dir(ROOT) :
-                              vfs_read_inode_dir(task->cwd);
-    if (dptr == NULL)
-        return -1;
-    iptr = vfs_walk_path(file, dptr);
+    if (kstrcmp(file, ROOT) == 0) {
+        dptr = vfs_read_root_dir(ROOT);
+        if (dptr == NULL)
+            return -1;
+        iptr = kmalloc(sizeof(*iptr));
+        vfs_copy_inode(iptr, dptr->root_inode);
+        vfs_free_dnode(dptr);
+    } else if (kstrcmp(file, ".") == 0) {
+        iptr = kmalloc(sizeof(*iptr));
+        vfs_copy_inode(iptr, task->cwd);
+    } else {
+        dptr = file[0] == DELIM ? vfs_read_root_dir(ROOT) :
+                                  vfs_read_inode_dir(task->cwd);
+        if (dptr == NULL)
+            return -1;
+        iptr = vfs_walk_path(file, dptr);
+    }
     if (iptr != NULL) {
 	
     	struct file *fptr = vfs_open_file(iptr, O_RDONLY);

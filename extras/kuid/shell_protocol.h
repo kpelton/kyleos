@@ -19,11 +19,13 @@ enum kui_shell_request_type {
 
 enum kui_shell_action_type {
     KUI_SHELL_ACTION_NONE,
+    /* Index into the shell's Dock/task list. */
     KUI_SHELL_ACTION_OPEN_APP,
     KUI_SHELL_ACTION_ACTIVATE_WINDOW,
     KUI_SHELL_ACTION_CLOSE_ACTIVE,
     KUI_SHELL_ACTION_QUIT,
     KUI_SHELL_ACTION_TOGGLE_PIN,
+    /* Index into request.menu_apps/the compositor application catalog. */
     KUI_SHELL_ACTION_OPEN_MENU_APP
 };
 

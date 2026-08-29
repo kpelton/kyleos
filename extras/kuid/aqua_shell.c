@@ -7,9 +7,12 @@
 
 static int menu_open;
 static int menu_submenu = -1;
+static int menu_hover = -1;
+static int submenu_hover = -1;
 static int zoom_level;
 static int dock_menu_rank = -1;
 static int dock_menu_window = -1;
+static int dock_menu_hover = -1;
 
 #define DOCK_HEIGHT 74
 #define DOCK_BOTTOM_GAP 0
@@ -339,11 +342,19 @@ static void render(struct kui_surface *surface,
                                 0xe8f5f5f5U);
             kui_outline_rect(surface, menu_x, menu_y, 190, 52,
                              0x00656565U);
+            if (dock_menu_hover >= 0)
+                kui_fill_rect(surface, menu_x + 2,
+                              menu_y + 2 + dock_menu_hover * 26,
+                              186, 24, 0x00366fc4U);
             kui_draw_text(surface, menu_x + 10, menu_y + 10, "Open",
-                          KUI_BLACK, 0x00f5f5f5U, 0);
+                          dock_menu_hover == 0 ? KUI_WHITE : KUI_BLACK,
+                          dock_menu_hover == 0 ? 0x00366fc4U : 0x00f5f5f5U,
+                          0);
             kui_draw_text(surface, menu_x + 10, menu_y + 32,
-                          "Keep/Remove from Dock", KUI_BLACK,
-                          0x00f5f5f5U, 0);
+                          "Keep/Remove from Dock",
+                          dock_menu_hover == 1 ? KUI_WHITE : KUI_BLACK,
+                          dock_menu_hover == 1 ? 0x00366fc4U : 0x00f5f5f5U,
+                          0);
             return;
         }
         if (dock_menu_window >= 0) {
@@ -353,10 +364,19 @@ static void render(struct kui_surface *surface,
                                 0xe8f5f5f5U);
             kui_outline_rect(surface, menu_x, menu_y, 190, 52,
                              0x00656565U);
+            if (dock_menu_hover >= 0)
+                kui_fill_rect(surface, menu_x + 2,
+                              menu_y + 2 + dock_menu_hover * 26,
+                              186, 24, 0x00366fc4U);
             kui_draw_text(surface, menu_x + 10, menu_y + 10, "Open",
-                          KUI_BLACK, 0x00f5f5f5U, 0);
+                          dock_menu_hover == 0 ? KUI_WHITE : KUI_BLACK,
+                          dock_menu_hover == 0 ? 0x00366fc4U : 0x00f5f5f5U,
+                          0);
             kui_draw_text(surface, menu_x + 10, menu_y + 32,
-                          "Keep in Dock", KUI_BLACK, 0x00f5f5f5U, 0);
+                          "Keep in Dock",
+                          dock_menu_hover == 1 ? KUI_WHITE : KUI_BLACK,
+                          dock_menu_hover == 1 ? 0x00366fc4U : 0x00f5f5f5U,
+                          0);
             return;
         }
         int category_count = menu_submenu >= 0 ?
@@ -366,9 +386,18 @@ static void render(struct kui_surface *surface,
             kui_fill_rect(surface, 4, 24 + row, 250, 1,
                           row & 1 ? 0x00e0e5e9U : 0x00f9fafbU);
         kui_outline_rect(surface, 4, 24, 250, 90, 0x00656565U);
-        kui_draw_text(surface, 18, 32, "Applications   >", KUI_BLACK, 0x00f9fafbU, 0);
-        kui_draw_text(surface, 18, 58, "Games         >", KUI_BLACK, 0x00e0e5e9U, 0);
-        kui_draw_text(surface, 18, 84, "Quit Aqua", KUI_BLACK, 0x00f9fafbU, 0);
+        if (menu_hover >= 0)
+            kui_fill_rect(surface, 6, 26 + menu_hover * 26,
+                          246, 26, 0x00366fc4U);
+        kui_draw_text(surface, 18, 32, "Applications   >",
+                      menu_hover == 0 ? KUI_WHITE : KUI_BLACK,
+                      menu_hover == 0 ? 0x00366fc4U : 0x00f9fafbU, 0);
+        kui_draw_text(surface, 18, 58, "Games         >",
+                      menu_hover == 1 ? KUI_WHITE : KUI_BLACK,
+                      menu_hover == 1 ? 0x00366fc4U : 0x00e0e5e9U, 0);
+        kui_draw_text(surface, 18, 84, "Quit Aqua",
+                      menu_hover == 2 ? KUI_WHITE : KUI_BLACK,
+                      menu_hover == 2 ? 0x00366fc4U : 0x00f9fafbU, 0);
         if (menu_submenu >= 0) {
             for (int row = 0; row < child_height; row++)
                 kui_fill_rect(surface, 258, 24 + row, 300, 1,
@@ -378,12 +407,25 @@ static void render(struct kui_surface *surface,
             for (int rank = 0; rank < menu_apps; rank++) {
                 const char *title = request->menu_apps[rank].title;
                 if (menu_is_game(title) != menu_submenu) continue;
-                kui_draw_text(surface, 272, 32 + row * 26, title, KUI_BLACK,
-                              row & 1 ? 0x00e0e5e9U : 0x00f9fafbU, 0);
+                if (row == submenu_hover)
+                    kui_fill_rect(surface, 260, 26 + row * 26,
+                                  296, 26, 0x00366fc4U);
+                kui_draw_text(surface, 272, 32 + row * 26, title,
+                              row == submenu_hover ? KUI_WHITE : KUI_BLACK,
+                              row == submenu_hover ? 0x00366fc4U :
+                              (row & 1 ? 0x00e0e5e9U : 0x00f9fafbU), 0);
                 row++;
             }
+            if (submenu_hover == category_count)
+                kui_fill_rect(surface, 260,
+                              26 + category_count * 26,
+                              296, 26, 0x00366fc4U);
             kui_draw_text(surface, 272, 32 + category_count * 26,
-                          "< Back", KUI_BLACK, 0x00f5f5f5U, 0);
+                          "< Back",
+                          submenu_hover == category_count ?
+                          KUI_WHITE : KUI_BLACK,
+                          submenu_hover == category_count ?
+                          0x00366fc4U : 0x00f5f5f5U, 0);
         }
     }
 }
@@ -398,6 +440,48 @@ static void pointer(const struct kui_shell_request *request,
     int dock_width = 20 + items * DOCK_ITEM_STEP;
     int dock_x = (request->screen_width - dock_width) / 2;
 
+    if (request->button == 0) {
+        int hovered = -1;
+        int child_hovered = -1;
+        int dock_hovered = -1;
+
+        if (menu_open && dock_menu_rank >= 0 && dock_menu_rank < apps) {
+            int menu_x = dock_x + dock_menu_rank * DOCK_ITEM_STEP;
+            int menu_y = request->screen_height - DOCK_HEIGHT -
+                         DOCK_BOTTOM_GAP - 58;
+
+            if (kui_in_rect(request->x, request->y,
+                            menu_x, menu_y, 190, 52))
+                dock_hovered = (request->y - menu_y) / 26;
+        } else if (menu_open && dock_menu_window >= 0) {
+            int menu_x = dock_x + (apps + dock_menu_window) * DOCK_ITEM_STEP;
+            int menu_y = request->screen_height - DOCK_HEIGHT -
+                         DOCK_BOTTOM_GAP - 58;
+
+            if (kui_in_rect(request->x, request->y,
+                            menu_x, menu_y, 190, 52))
+                dock_hovered = (request->y - menu_y) / 26;
+        } else if (menu_open) {
+            int category_count = menu_submenu >= 0 ?
+                menu_category_count(request, menu_submenu) : 0;
+
+            if (kui_in_rect(request->x, request->y, 4, 29, 250, 78))
+                hovered = (request->y - 29) / 26;
+            if (menu_submenu >= 0 &&
+                kui_in_rect(request->x, request->y, 258, 29, 300,
+                            (category_count + 1) * 26))
+                child_hovered = (request->y - 29) / 26;
+        }
+        if (hovered != menu_hover || child_hovered != submenu_hover ||
+            dock_hovered != dock_menu_hover) {
+            menu_hover = hovered;
+            submenu_hover = child_hovered;
+            dock_menu_hover = dock_hovered;
+            response->consumed = 1;
+        }
+        if (menu_open) response->consumed = 1;
+        return;
+    }
     if (menu_open) {
         if (dock_menu_rank >= 0 && dock_menu_rank < apps) {
             int menu_x = dock_x + dock_menu_rank * DOCK_ITEM_STEP;
@@ -417,6 +501,7 @@ static void pointer(const struct kui_shell_request *request,
             }
             menu_open = 0;
             dock_menu_rank = -1;
+            dock_menu_hover = -1;
             return;
         }
         if (dock_menu_window >= 0) {
@@ -432,6 +517,7 @@ static void pointer(const struct kui_shell_request *request,
             }
             menu_open = 0;
             dock_menu_window = -1;
+            dock_menu_hover = -1;
             return;
         }
         int category_count = menu_submenu >= 0 ?
@@ -451,8 +537,11 @@ static void pointer(const struct kui_shell_request *request,
                 }
                 menu_open = 0;
                 menu_submenu = -1;
+                menu_hover = -1;
+                submenu_hover = -1;
             } else {
                 menu_submenu = -1;
+                submenu_hover = -1;
             }
             return;
         }
@@ -465,16 +554,25 @@ static void pointer(const struct kui_shell_request *request,
                 if (rank < 2) {
                     menu_submenu = rank;
                     menu_open = 1;
+                    submenu_hover = -1;
                 } else {
                     menu_open = 0;
                     menu_submenu = -1;
+                    menu_hover = -1;
+                    submenu_hover = -1;
                     response->action = KUI_SHELL_ACTION_QUIT;
                 }
                 return;
             }
             menu_open = 0;
+            menu_hover = -1;
             if (menu_submenu < 0) {
-                if (rank < 2) { menu_submenu = rank; menu_open = 1; return; }
+                if (rank < 2) {
+                    menu_submenu = rank;
+                    menu_open = 1;
+                    submenu_hover = -1;
+                    return;
+                }
                 response->action = KUI_SHELL_ACTION_QUIT;
             } else if (rank < category_count) {
                 int found = 0;
@@ -490,12 +588,20 @@ static void pointer(const struct kui_shell_request *request,
             return;
         }
         menu_open = 0;
+        menu_hover = -1;
+        submenu_hover = -1;
+        dock_menu_hover = -1;
         response->consumed = 1;
         return;
     }
     if (request->y < 24) {
         response->consumed = 1;
-        if (request->x < 30) { menu_open = 1; menu_submenu = -1; }
+        if (request->x < 30) {
+            menu_open = 1;
+            menu_submenu = -1;
+            menu_hover = -1;
+            submenu_hover = -1;
+        }
         return;
     }
     if (!kui_in_rect(request->x, request->y, dock_x,
@@ -510,6 +616,7 @@ static void pointer(const struct kui_shell_request *request,
             if (request->button == 2) {
                 menu_open = 1;
                 dock_menu_rank = rank;
+                dock_menu_hover = -1;
                 return;
             }
             int window = active_window_for_app(request, rank);
@@ -527,6 +634,7 @@ static void pointer(const struct kui_shell_request *request,
             if (request->button == 2) {
                 menu_open = 1;
                 dock_menu_window = rank - apps;
+                dock_menu_hover = -1;
                 return;
             }
 

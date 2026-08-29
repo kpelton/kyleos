@@ -240,6 +240,44 @@ bool ramfs_file_is_tty(struct file *file)
     return fs->has_console && ramfs_tty_index(file->i_node.i_ino) != -2;
 }
 
+int ramfs_tty_get_foreground_group(struct file *file)
+{
+    return ramfs_file_is_tty(file) ?
+           tty_get_foreground_group(ramfs_tty_index(file->i_node.i_ino)) : -1;
+}
+
+int ramfs_tty_set_foreground_group(struct file *file, int session,
+                                   int process_group)
+{
+    return ramfs_file_is_tty(file) ?
+           tty_set_foreground_group(ramfs_tty_index(file->i_node.i_ino),
+                                    session, process_group) : -1;
+}
+
+int ramfs_tty_get_attributes(struct file *file,
+                             struct kyleos_termios *termios)
+{
+    return ramfs_file_is_tty(file) ?
+           tty_get_attributes(ramfs_tty_index(file->i_node.i_ino), termios) :
+           -1;
+}
+
+int ramfs_tty_set_attributes(struct file *file, int action,
+                             const struct kyleos_termios *termios)
+{
+    return ramfs_file_is_tty(file) ?
+           tty_set_attributes(ramfs_tty_index(file->i_node.i_ino), action,
+                              termios) : -1;
+}
+
+int ramfs_tty_status(struct file *file, uint32_t *readable,
+                     uint32_t *writable, uint32_t *hung_up)
+{
+    return ramfs_file_is_tty(file) ?
+           tty_status(ramfs_tty_index(file->i_node.i_ino), readable,
+                      writable, hung_up) : -1;
+}
+
 static int ramfs_read_console(uint64_t inode, void *buf, uint32_t count) {
     int val=0;
     while (val == 0)
@@ -247,6 +285,8 @@ static int ramfs_read_console(uint64_t inode, void *buf, uint32_t count) {
         if (signal_has_unmasked_pending(get_current_process()))
             return -1;
         val = tty_read(ramfs_tty_index(inode), buf, count);
+        if (val == -2)
+            return 0;
         if (val == 0)
             ksleepm(50);
     }

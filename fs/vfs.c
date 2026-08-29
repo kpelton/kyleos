@@ -445,6 +445,7 @@ int vfs_stat_file(struct file *rfile, struct stat *st)
     int idev;
     if (rfile == NULL || st == NULL)
         return -1;
+    memzero8((uint8_t *)st, sizeof(*st));
     if (rfile->pipe != NULL) {
         st->st_dev = 0;
         st->st_ino = 0;
@@ -478,34 +479,50 @@ bool vfs_file_is_tty(struct file *file)
 
 int vfs_terminal_get_foreground_group(struct file *file)
 {
-    if (file == NULL || file->pty == NULL)
+    if (file == NULL)
         return -1;
-    return pty_get_foreground_group((struct pty_data *)file->pty);
+    if (file->pty != NULL)
+        return pty_get_foreground_group((struct pty_data *)file->pty);
+    if (file->dev != NULL && file->dev->fstype == RAM_FS)
+        return ramfs_tty_get_foreground_group(file);
+    return -1;
 }
 
 int vfs_terminal_set_foreground_group(struct file *file, int session,
                                       int process_group)
 {
-    if (file == NULL || file->pty == NULL)
+    if (file == NULL)
         return -1;
-    return pty_set_foreground_group((struct pty_data *)file->pty, session,
-                                    process_group);
+    if (file->pty != NULL)
+        return pty_set_foreground_group((struct pty_data *)file->pty, session,
+                                        process_group);
+    if (file->dev != NULL && file->dev->fstype == RAM_FS)
+        return ramfs_tty_set_foreground_group(file, session, process_group);
+    return -1;
 }
 
 int vfs_terminal_get_attributes(struct file *file,
                                 struct kyleos_termios *termios)
 {
-    if (file == NULL || file->pty == NULL)
+    if (file == NULL)
         return -1;
-    return pty_get_termios((struct pty_data *)file->pty, termios);
+    if (file->pty != NULL)
+        return pty_get_termios((struct pty_data *)file->pty, termios);
+    if (file->dev != NULL && file->dev->fstype == RAM_FS)
+        return ramfs_tty_get_attributes(file, termios);
+    return -1;
 }
 
 int vfs_terminal_set_attributes(struct file *file, int action,
                                 const struct kyleos_termios *termios)
 {
-    if (file == NULL || file->pty == NULL)
+    if (file == NULL)
         return -1;
-    return pty_set_termios((struct pty_data *)file->pty, action, termios);
+    if (file->pty != NULL)
+        return pty_set_termios((struct pty_data *)file->pty, action, termios);
+    if (file->dev != NULL && file->dev->fstype == RAM_FS)
+        return ramfs_tty_set_attributes(file, action, termios);
+    return -1;
 }
 
 /* Keep seeking in the VFS so every filesystem shares the same file-position
@@ -583,6 +600,9 @@ int vfs_file_status(struct file *file, uint32_t *readable,
                    readable, writable, hung_up);
         return 0;
     }
+    if (file->dev != NULL && file->dev->fstype == RAM_FS &&
+        ramfs_file_is_tty(file))
+        return ramfs_tty_status(file, readable, writable, hung_up);
     available = file->i_node.file_size > file->pos ?
                 file->i_node.file_size - file->pos : 0;
     *readable = available > 0xffffffffULL ? 0xffffffffU :
@@ -613,6 +633,16 @@ int vfs_file_poll(struct file *file, int16_t events, int16_t *revents)
     } else if (file->pty != NULL) {
         pty_status((struct pty_data *)file->pty, file->pty_master,
                    &readable, &writable, &hung_up);
+        if ((events & KYLEOS_POLLIN) != 0 && readable != 0)
+            ready |= KYLEOS_POLLIN;
+        if ((events & KYLEOS_POLLOUT) != 0 && writable != 0)
+            ready |= KYLEOS_POLLOUT;
+        if (hung_up != 0)
+            ready |= KYLEOS_POLLHUP;
+    } else if (file->dev != NULL && file->dev->fstype == RAM_FS &&
+               ramfs_file_is_tty(file)) {
+        if (ramfs_tty_status(file, &readable, &writable, &hung_up) < 0)
+            return -1;
         if ((events & KYLEOS_POLLIN) != 0 && readable != 0)
             ready |= KYLEOS_POLLIN;
         if ((events & KYLEOS_POLLOUT) != 0 && writable != 0)

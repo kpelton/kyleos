@@ -30,6 +30,7 @@ duke3d_binary=${DUKE3D_BINARY:-"$root/build/extras/duke3d/duke3d"}
 duke3d_grp=${DUKE3D_GRP:-"$root/assets/duke3d/duke3d.grp"}
 
 lua_binary=${LUA_BINARY:-"$root/build/extras/lua/lua"}
+busybox_binary=${BUSYBOX_BINARY:-"$root/build/userland/busybox"}
 
 bible_text=${BIBLE_TEXT:-"$root/assets/bible.txt"}
 
@@ -226,6 +227,25 @@ done < "$root/image/manifest.txt"
 }
 
 cp "$stage_dir/init" "$mount_dir/sbin/init"
+
+
+# ----------------------------------------------------------------------
+# BusyBox / ash
+# ----------------------------------------------------------------------
+
+if [[ -f $busybox_binary ]]; then
+    cp "$busybox_binary" "$mount_dir/bin/busybox"
+    # FAT does not provide Unix symlinks.  BusyBox dispatches on argv[0], so
+    # install separate directory entries for both shell applet names.
+    cp "$busybox_binary" "$mount_dir/bin/ash"
+    cp "$busybox_binary" "$mount_dir/bin/sh"
+    cp "$busybox_binary" "$mount_dir/bin/vi"
+    # FAT does not preserve Unix symlinks; install selected applets as
+    # separate directory entries so they are directly invokable via PATH.
+    for applet in bunzip2 bzip2 cpio gunzip gzip hd hexdump tar unzip unxz xz; do
+        cp "$busybox_binary" "$mount_dir/bin/$applet"
+    done
+fi
 
 
 # ----------------------------------------------------------------------

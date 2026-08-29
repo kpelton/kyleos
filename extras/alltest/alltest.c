@@ -13,6 +13,7 @@
 
 #ifndef ALLTEST_ROOT
 #define ALLTEST_ROOT ""
+#define ALLTEST_GUEST 1
 #endif
 
 #define TEST_PATH(path) ALLTEST_ROOT path
@@ -46,7 +47,23 @@ static int wait_status_code(int status)
     return 255;
 }
 
-static int run_process(const char *path, char *const argv[], int quiet)
+static int remove_test_directory(const char *path)
+{
+#ifdef ALLTEST_GUEST
+    long result;
+
+    __asm__ volatile("mov $29, %%rax; int $0x80"
+                     : "=a"(result)
+                     : "D"(path)
+                     : "memory");
+    return (int)result;
+#else
+    return rmdir(path);
+#endif
+}
+
+static int run_process_at(const char *path, char *const argv[], int quiet,
+                          const char *directory)
 {
     pid_t child = fork();
     int status = 0;
@@ -54,6 +71,8 @@ static int run_process(const char *path, char *const argv[], int quiet)
     if (child < 0)
         return 255;
     if (child == 0) {
+        if (directory != NULL && chdir(directory) < 0)
+            _exit(125);
         if (quiet) {
             int null_fd = open("/dev/null", O_WRONLY);
 
@@ -67,6 +86,11 @@ static int run_process(const char *path, char *const argv[], int quiet)
     if (waitpid(child, &status, 0) != child)
         return 255;
     return wait_status_code(status);
+}
+
+static int run_process(const char *path, char *const argv[], int quiet)
+{
+    return run_process_at(path, argv, quiet, NULL);
 }
 
 static int run_program_test(const struct program_test *test)
@@ -134,6 +158,10 @@ static int run_copy_test(void)
         TEST_PATH("/tmp/alltest-copy-d"),
     };
     const char *source = TEST_PATH("/bin/nushell");
+    const char *directory = TEST_PATH("/tmp/alltest-path-destination");
+    const char *copied = TEST_PATH("/tmp/alltest-path-destination/nushell");
+    const char *move_source = TEST_PATH("/MVSRC");
+    const char *moved = TEST_PATH("/tmp/alltest-path-destination/MVSRC");
 
     puts("TEST copy START");
     for (int i = 0; i < COPY_ITERATIONS; i++) {
@@ -160,8 +188,55 @@ static int run_copy_test(void)
             return 1;
         }
     }
-    printf("TEST copy PASS iterations=%d\n", COPY_ITERATIONS);
+    unlink(copied);
+    unlink(move_source);
+    unlink(moved);
+    remove_test_directory(directory);
+    if (mkdir(directory, 0777) < 0) {
+        puts("TEST copy FAIL destination mkdir");
+        return 1;
+    }
+    {
+        char *copy_dot_argv[] = {
+            TEST_PATH("/bin/cp"), (char *)source, ".", NULL
+        };
+        char *copy_move_source_argv[] = {
+            TEST_PATH("/bin/cp"), (char *)source, (char *)move_source, NULL
+        };
+        char *move_dot_argv[] = {
+            TEST_PATH("/bin/mv"), (char *)move_source, ".", NULL
+        };
+
+        if (run_process_at(TEST_PATH("/bin/cp"), copy_dot_argv, 1,
+                           directory) != 0 || !files_equal(source, copied)) {
+            puts("TEST copy FAIL dot destination");
+            goto destination_failure;
+        }
+        if (run_process(TEST_PATH("/bin/cp"), copy_move_source_argv, 1) != 0 ||
+            run_process_at(TEST_PATH("/bin/mv"), move_dot_argv, 1,
+                           directory) != 0 ||
+            stat(move_source, &(struct stat){0}) == 0 ||
+            !files_equal(source, moved)) {
+            puts("TEST copy FAIL mv dot destination");
+            goto destination_failure;
+        }
+    }
+    unlink(copied);
+    unlink(moved);
+    if (remove_test_directory(directory) < 0) {
+        puts("TEST copy FAIL destination cleanup");
+        return 1;
+    }
+    printf("TEST copy PASS iterations=%d directory-destinations=2\n",
+           COPY_ITERATIONS);
     return 0;
+
+destination_failure:
+    unlink(copied);
+    unlink(move_source);
+    unlink(moved);
+    remove_test_directory(directory);
+    return 1;
 }
 
 static int run_exec_stress_test(void)

@@ -125,6 +125,7 @@ static int resize_bottom_gap;
 static int resize_preview_width;
 static int resize_preview_height;
 static int pointer_window = -1;
+static int hover_window = -1;
 static int drag_icon = -1;
 static int drag_icon_dx;
 static int drag_icon_dy;
@@ -1506,8 +1507,8 @@ static int dispatch_shell_pointer(int x, int y, int button)
         int app = dock_app_by_rank(response.index);
         if (app >= 0) open_application(&apps[app], NULL);
     } else if (response.action == KUI_SHELL_ACTION_OPEN_MENU_APP) {
-        int app = start_app_by_rank(response.index);
-        if (app >= 0) open_application(&apps[app], NULL);
+        if (response.index >= 0 && response.index < app_count)
+            open_application(&apps[response.index], NULL);
     } else if (response.action == KUI_SHELL_ACTION_TOGGLE_PIN) {
         int app = -1;
         if (response.index >= 100 && response.index < 100 + MAX_WINDOWS) {
@@ -1662,6 +1663,26 @@ static void dispatch_pointer(int index, int button, int buttons, int wheel)
                           NULL, &action) < 0)
         close_window_index(index);
     else apply_action(&action);
+}
+
+static void dispatch_hover_pointer(void)
+{
+    int shell_consumed = dispatch_shell_pointer(cursor_x, cursor_y, 0);
+    int hovered = shell_consumed ? -1 : window_at(cursor_x, cursor_y);
+
+    if (hovered >= 0 &&
+        !kui_in_rect(cursor_x, cursor_y,
+                     content_x(&windows[hovered]),
+                     content_y(&windows[hovered]),
+                     content_width(&windows[hovered]),
+                     content_height(&windows[hovered])))
+        hovered = -1;
+    if (hover_window >= 0 && hover_window != hovered &&
+        windows[hover_window].visible)
+        dispatch_pointer(hover_window, 0, 0, 0);
+    if (hovered >= 0 && windows[hovered].visible)
+        dispatch_pointer(hovered, 0, 0, 0);
+    hover_window = hovered;
 }
 
 static void notify_resize(int index)
@@ -1890,6 +1911,7 @@ static int handle_mouse(void)
     int changed = 0;
     int events_handled = 0;
     int pointer_moved = 0;
+    int hover_pointer_moved = 0;
     int dx;
     int dy;
     int wheel;
@@ -1913,6 +1935,8 @@ static int handle_mouse(void)
         if (pressed_left) handle_mouse_down(1);
         if ((buttons & 2) && !(mouse_buttons & 2)) handle_mouse_down(2);
         mouse_buttons = buttons;
+        if ((dx != 0 || dy != 0) && buttons == 0)
+            hover_pointer_moved = 1;
         if (!pressed_left && (buttons & 1) && (dx != 0 || dy != 0) &&
             pointer_window >= 0 && windows[pointer_window].visible &&
             drag_window < 0 && resize_window < 0)
@@ -1993,6 +2017,8 @@ static int handle_mouse(void)
     if (pointer_moved && (mouse_buttons & 1) && pointer_window >= 0 &&
         windows[pointer_window].visible)
         dispatch_pointer(pointer_window, 0, mouse_buttons, 0);
+    if (hover_pointer_moved && mouse_buttons == 0)
+        dispatch_hover_pointer();
     return changed;
 }
 
@@ -2026,18 +2052,20 @@ static int handle_keyboard(void)
             }
             top = top_window();
             if (top < 0 ||
-                (strcmp(windows[top].application, "Doom") != 0 &&
+                (strcmp(windows[top].application, "Terminal") != 0 &&
+                 strcmp(windows[top].application, "Doom") != 0 &&
                  strcmp(windows[top].application, "Quake") != 0)) {
                 close_window_index(top);
                 changed = 1;
                 continue;
             }
-            /* Games own Escape for their in-game menus. */
+            /* Interactive terminal programs and games own Escape. */
         }
         top = top_window();
         if (top < 0) continue;
         if (!extended) {
-            if (code == 28) character = '\n';
+            if (code == 1) character = 27;
+            else if (code == 28) character = '\n';
             else if (code == 15) character = '\t';
             else if (code == 14) character = '\b';
             else character = kui_scan_to_char(code, shift_down);

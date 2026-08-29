@@ -23,6 +23,7 @@ for program in fstest kmsgtest waittest pipetest polltest signaltest ttytest pty
     ln -s /bin/true "$test_root/bin/$program"
 done
 ln -s /bin/cp "$test_root/bin/cp"
+ln -s /bin/mv "$test_root/bin/mv"
 ln -s /bin/rm "$test_root/bin/rm"
 ln -s /bin/true "$test_root/bin/ls"
 ln -s /bin/true "$test_root/bin/nushell"

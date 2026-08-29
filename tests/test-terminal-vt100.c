@@ -78,6 +78,20 @@ int main(void)
     check(vt100_cursor_visible(&terminal), "cursor visibility restore");
 
     vt100_reset(&terminal);
+    vt100_write(&terminal, "shell", -1);
+    vt100_write(&terminal, "\033[?1049h", -1);
+    check(cell(&terminal, 0, 0)->character == ' ',
+          "alternate screen starts blank");
+    vt100_write(&terminal, "vi", -1);
+    check(cell(&terminal, 0, 0)->character == 'v',
+          "alternate screen receives output");
+    vt100_write(&terminal, "\033[?1049l", -1);
+    check(cell(&terminal, 0, 0)->character == 's',
+          "alternate screen restores primary contents");
+    check(vt100_cursor_column(&terminal) == 5,
+          "alternate screen restores primary cursor");
+
+    vt100_reset(&terminal);
     for (int index = 0; index < 400; index++)
         vt100_write(&terminal, "overflow\n", -1);
     check(vt100_line_count(&terminal) == VT100_MAX_LINES,
