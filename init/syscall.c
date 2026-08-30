@@ -13,6 +13,7 @@
 #include <sched/signal.h>
 #include <timer/pit.h>
 #include <timer/rtc.h>
+#include <acpi/acpi.h>
 typedef int (*sys_call)(void);
 
 static bool user_range_valid(const void *pointer, uint64_t size)
@@ -149,6 +150,24 @@ static int creat(char *path, uint32_t flags)
     if (iptr)
         vfs_free_inode(iptr);
     return fd;
+}
+
+static int poweroff_syscall(void)
+{
+    struct ktask *task = get_current_process();
+    /* Credentials are not implemented yet; allow userspace callers while
+     * rejecting kernel tasks. */
+    if (task == NULL || task->type != USER_PROCESS)
+        return -1;
+    return acpi_poweroff();
+}
+
+static int reboot_syscall(void)
+{
+    struct ktask *task = get_current_process();
+    if (task == NULL || task->type != USER_PROCESS)
+        return -1;
+    return acpi_reboot();
 }
 //  Also does not handle duplicate ///
 static char *basename(char *path)
@@ -1074,7 +1093,9 @@ void *syscall_tbl[] = {
     (void *)&tcsetpgrp_syscall,                 // 48
     (void *)&tcgetattr_syscall,                 // 49
     (void *)&tcsetattr_syscall,                 // 50
-    (void *)&dupfd                              // 51
+    (void *)&dupfd,                             // 51
+    (void *)&poweroff_syscall,                   // 52
+    (void *)&reboot_syscall                      // 53
 };
 
 const int NR_syscall = sizeof(syscall_tbl) / sizeof(syscall_tbl[0]);

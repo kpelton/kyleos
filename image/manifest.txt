@@ -40,6 +40,9 @@ kterm
 ktermtest
 ksheet
 kill
+halt
+shutdown
+reboot
 ls
 mkdir
 minesweeper
