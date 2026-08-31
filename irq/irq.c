@@ -3,6 +3,7 @@
 #include <output/keyboard.h>
 #include <irq/irq.h>
 #include <sched/sched.h>
+#include <irq/apic.h>
 
 #define PIC1 0x20 /* IO base address for master PIC */
 #define PIC2 0xA0 /* IO base address for slave PIC */
@@ -26,6 +27,10 @@
 
 void PIC_sendEOI(uint8_t irq)
 {
+  if (apic_routing_enabled()) {
+    lapic_eoi();
+    return;
+  }
   if (irq >= 8)
     outb(PIC2_COMMAND, PIC_EOI);
 
@@ -65,6 +70,11 @@ void IRQ_set_mask(uint8_t IRQline)
   uint16_t port;
   uint8_t value;
 
+  if (apic_routing_enabled()) {
+    apic_mask_irq(IRQline);
+    return;
+  }
+
   if (IRQline < 8)
   {
     port = PIC1_DATA;
@@ -82,6 +92,12 @@ void IRQ_clear_mask(uint8_t IRQline)
 {
   uint16_t port;
   uint8_t value;
+
+  if (apic_routing_enabled()) {
+    apic_unmask_irq(IRQline);
+    return;
+  }
+
   if (IRQline < 8)
   {
     port = PIC1_DATA;

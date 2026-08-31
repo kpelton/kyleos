@@ -40,8 +40,6 @@ void timer_irq()
 {
    acquire_spinlock(&spinlock_time);
    
-   PIC_sendEOI(0);
-
    jiffies++;
    release_spinlock(&spinlock_time);
    PIC_sendEOI(0);

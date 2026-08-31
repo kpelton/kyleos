@@ -4,6 +4,7 @@
 #include <asm/asm.h>
 #include <sched/sched.h>
 #include <output/output.h>
+#include <irq/apic.h>
 
 static bool acpi_initialized;
 static bool acpi_tables_valid;
@@ -13,6 +14,9 @@ static uint64_t acpi_lapic_address;
 static uint32_t acpi_ioapic_count;
 static uint32_t acpi_cpu_count;
 static uint32_t acpi_iso_count;
+static struct acpi_cpu_info acpi_cpus[ACPI_MAX_CPUS];
+static struct acpi_ioapic_info acpi_ioapics[ACPI_MAX_IOAPICS];
+static struct acpi_iso_info acpi_isos[ACPI_MAX_ISOS];
 static uint64_t acpi_dsdt_address;
 static uint32_t acpi_pm1a_control;
 static uint32_t acpi_pm1b_control;
@@ -79,7 +83,7 @@ static void *acpi_phys_map(uint64_t address, uint32_t length)
     uint64_t offset = address - first;
     uint64_t mapped = (uint64_t)length + offset;
     mapped = (mapped + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
-    if (!paging_map_physmap_range(first, mapped)) return NULL;
+    if (!paging_map_physmap_range(first, mapped / PAGE_SIZE)) return NULL;
     return (void *)(KERN_PHYS_TO_PVIRT(first) + offset);
 }
 
@@ -142,22 +146,44 @@ static void acpi_parse_madt(struct acpi_sdt_header *header)
     while (entry + 2 <= end && entry[1] >= 2 && entry + entry[1] <= end) {
         switch (entry[0]) {
         case 0: /* Processor Local APIC */
-            if (entry[1] >= 8 && (*(uint32_t *)(entry + 4) & 1))
-                acpi_cpu_count++;
+            if (entry[1] >= 8 && acpi_cpu_count < ACPI_MAX_CPUS &&
+                (*(uint32_t *)(entry + 4) & 3)) {
+                struct acpi_cpu_info *info = &acpi_cpus[acpi_cpu_count++];
+                info->processor_uid = entry[2];
+                info->apic_id = entry[3];
+                info->flags = *(uint32_t *)(entry + 4);
+                info->x2apic = false;
+            }
             break;
         case 1: /* I/O APIC */
-            if (entry[1] >= 12) acpi_ioapic_count++;
+            if (entry[1] >= 12 && acpi_ioapic_count < ACPI_MAX_IOAPICS) {
+                struct acpi_ioapic_info *info = &acpi_ioapics[acpi_ioapic_count++];
+                info->id = entry[2];
+                info->address = *(uint32_t *)(entry + 4);
+                info->gsi_base = *(uint32_t *)(entry + 8);
+            }
             break;
         case 2: /* Interrupt Source Override */
-            if (entry[1] >= 10) acpi_iso_count++;
+            if (entry[1] >= 10 && acpi_iso_count < ACPI_MAX_ISOS) {
+                struct acpi_iso_info *info = &acpi_isos[acpi_iso_count++];
+                info->source = entry[3];
+                info->gsi = *(uint32_t *)(entry + 4);
+                info->flags = *(uint16_t *)(entry + 8);
+            }
             break;
         case 5: /* Local APIC address override */
             if (entry[1] >= 12)
                 acpi_lapic_address = *(uint64_t *)(entry + 4);
             break;
         case 9: /* Processor Local x2APIC */
-            if (entry[1] >= 16 && (*(uint32_t *)(entry + 8) & 1))
-                acpi_cpu_count++;
+            if (entry[1] >= 16 && acpi_cpu_count < ACPI_MAX_CPUS &&
+                (*(uint32_t *)(entry + 8) & 3)) {
+                struct acpi_cpu_info *info = &acpi_cpus[acpi_cpu_count++];
+                info->processor_uid = *(uint32_t *)(entry + 12);
+                info->apic_id = *(uint32_t *)(entry + 4);
+                info->flags = *(uint32_t *)(entry + 8);
+                info->x2apic = true;
+            }
             break;
         default:
             break;
@@ -260,6 +286,23 @@ int acpi_reboot(void)
     for (;;) asm volatile("hlt");
 }
 
+uint64_t acpi_lapic_phys(void) { return acpi_lapic_address; }
+uint32_t acpi_get_cpus(const struct acpi_cpu_info **items)
+{
+    if (items != NULL) *items = acpi_cpus;
+    return acpi_cpu_count;
+}
+uint32_t acpi_get_ioapics(const struct acpi_ioapic_info **items)
+{
+    if (items != NULL) *items = acpi_ioapics;
+    return acpi_ioapic_count;
+}
+uint32_t acpi_get_isos(const struct acpi_iso_info **items)
+{
+    if (items != NULL) *items = acpi_isos;
+    return acpi_iso_count;
+}
+
 
 static uint32_t acpi_append(char *buffer, uint32_t size, uint32_t position,
                             const char *text)
@@ -315,8 +358,11 @@ int acpi_proc_report(char *buffer, uint32_t size)
     position = acpi_append_number(buffer, size, position, acpi_s5a_type);
     position = acpi_append(buffer, size, position, "/");
     position = acpi_append_number(buffer, size, position, acpi_s5b_type);
+    position = acpi_append(buffer, size, position, "\nAPIC: ");
     position = acpi_append(buffer, size, position,
-                           "\nAPIC: using legacy PIC\nSMP: not started\n");
+                           apic_routing_enabled() ?
+                           "I/O APIC routing enabled" : "using legacy PIC");
+    position = acpi_append(buffer, size, position, "\nSMP: not started\n");
     if (position < size) buffer[position] = '\0';
     return (int)position;
 }

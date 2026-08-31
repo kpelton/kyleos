@@ -1,6 +1,9 @@
-all: irq.o
+all: irq.o apic.o
 
 irq.o:  irq.c irq.h
+	$(CC) $(CFLAGS) -o $@ -c $<
+
+apic.o: apic.c apic.h
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 clean:

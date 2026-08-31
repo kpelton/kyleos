@@ -75,7 +75,7 @@ OBJ_FILES = asm/asm.o asm/asm_calls.o \
 	drivers/pci.o \
 	fs/fat.o fs/ramfs.o fs/vfs.o fs/pipe.o fs/pty.o \
 	init/kernel.o init/tables.o init/dshell.o init/loader.o init/syscall.o \
-	irq/irq.o \
+	irq/irq.o irq/apic.o \
 	locks/spinlock.o locks/mutex.o \
 	mm/paging.o mm/mm.o mm/pmem.o mm/vmm.o mm/mtrr.o \
 	output/keyboard.o output/uart.o output/vga.o output/vt100.o output/framebuffer.o \
