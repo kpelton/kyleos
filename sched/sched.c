@@ -340,6 +340,8 @@ void kthread_add(void (*fptr)(), char *name)
 
 struct ktask *get_current_process()
 {
+    if (prev_task < 0 || prev_task >= SCHED_MAX_TASKS)
+        return NULL;
     return &ktasks[prev_task];
 }
 

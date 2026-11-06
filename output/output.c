@@ -5,6 +5,7 @@
 #include <asm/asm.h>
 #include <include/stdarg.h>
 #include <include/types.h>
+#include <mm/paging.h>
 #include <timer/pit.h>
 
 void output_init() {
@@ -247,9 +248,9 @@ static void print_reg(char * name,unsigned long val)
 
 void print_regs(unsigned long exception,unsigned long rip) {
     struct RegDump dump;
-    uint64_t rsp;
+    uint64_t stack_pointer;
     asm volatile("movq %%rbp ,%0"
-    : "=g"(rsp));
+    : "=g"(stack_pointer));
 
     char buffer[50];
     kprintf("\n\nREGISTER DUMP\n=============\n");
@@ -283,16 +284,29 @@ void print_regs(unsigned long exception,unsigned long rip) {
     print_reg("r15",dump.r15);
     kprintf("\n=============\n");
     kprintf("cr0:0x%x cr2:0x%x cr3:0x%x cr4:0x%x flags:0x%x\n" ,dump.cr0, dump.cr2,dump.cr3,dump.cr4,dump.flags);
-    kprintf("rbp: ");
-    for(int i=0; i<13; i++) 
-    	kprintf("%x ",*((uint64_t*)(rsp+8*i)));
-    kprintf("\n");
+
+    /* An exception from ring 3 can leave RBP pointing into the user stack.
+     * Never dereference that value while printing a kernel panic: the
+     * diagnostic path must not raise a second page fault and hide the first
+     * one. */
+    if (stack_pointer >= KERN_SPACE_BOUNDRY) {
+        kprintf("rbp: ");
+        for(int i=0; i<13; i++)
+            kprintf("%x ",*((uint64_t*)(stack_pointer+8*i)));
+        kprintf("\n");
+    } else {
+        kprintf("rbp: <userspace>\n");
+    }
 	asm volatile("movq %%rsp ,%0"
-    : "=g"(rsp));
-    kprintf("rsp: ");
-    for(int i=0; i<13; i++) 
-    	kprintf("%x ",*((uint64_t*)(rsp+8*i)));
-    kprintf("\n");
+    : "=g"(stack_pointer));
+    if (stack_pointer >= KERN_SPACE_BOUNDRY) {
+        kprintf("rsp: ");
+        for(int i=0; i<13; i++)
+            kprintf("%x ",*((uint64_t*)(stack_pointer+8*i)));
+        kprintf("\n");
+    } else {
+        kprintf("rsp: <userspace>\n");
+    }
 }
 
 
