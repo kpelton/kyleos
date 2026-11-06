@@ -1,0 +1,44 @@
+# Build products copied from the legacy userspace checkout.
+*.o
+*.a
+*.so
+*~
+.#*
+#*#
+dist/
+glibt/old
+glibt/house
+glibt/data.so
+glibt/world.so
+new house/old
+new house/house
+new house/world.so
+new house/josh
+lib/*.a
+lib/*.o
+head
+cat
+shell
+stat
+ued
+nushell
+echo
+ed
+argv-copy
+argv
+write
+wc
+testprint
+writebomb
+constest
+tail
+cp
+rm
+rdwr
+mkdir
+kedit
+maxargs
+ls
+grep
+lua
+donut
