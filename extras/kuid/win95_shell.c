@@ -9,6 +9,15 @@
 static int menu_open;
 static int menu_hover = -1;
 
+static int launch_desktop_from_terminal(void)
+{
+    char *argv[] = { "desktop", NULL };
+
+    if (!isatty(0) || !isatty(1)) return 0;
+    execve("/bin/desktop", argv, NULL);
+    return 127;
+}
+
 static const struct kui_shell_app *start_app(
     const struct kui_shell_request *request, int rank)
 {
@@ -182,6 +191,12 @@ int main(void)
 {
     struct kui_shell_profile profile;
     struct kui_command_buffer display;
+
+    /* win95-shell is normally a child of kuid.  Make the binary useful when
+     * launched from the serial/virtual console too, instead of sending the
+     * binary shell profile to a human-readable terminal and then blocking on
+     * compositor requests that will never arrive. */
+    if (launch_desktop_from_terminal() != 0) return 127;
 
     memset(&profile, 0, sizeof(profile));
     profile.magic = KUI_SHELL_MAGIC;
