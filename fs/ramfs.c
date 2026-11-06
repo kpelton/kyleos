@@ -7,6 +7,7 @@
 #include <output/input.h>
 #include <output/mouse.h>
 #include <output/tty.h>
+#include <acpi/acpi.h>
 
 static int ramfs_truncate_file(struct file *rfile);
 static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
@@ -26,6 +27,7 @@ static int ramfs_rename_file(struct inode *i_node, struct inode *new_parent,
 #define TTYS0_INO (TTY_LAST_INO + 1)
 #define PROC_PROCESSES_INO 1
 #define PROC_MEMINFO_INO 2
+#define PROC_ACPI_INO 3
 #define RAMFS_INSTANCE_COUNT 3
 struct ramfs_instance {
     struct ramfs_inode *inodes;
@@ -111,7 +113,7 @@ static void create_root_dir(struct vfs_device *dev, bool with_console,
         }
         create_device_inode(fs, dev, TTYS0_INO, "ttyS0");
     } else if (with_proc) {
-        fs->inodes[0].last_child = 2;
+        fs->inodes[0].last_child = 3;
         fs->inodes[0].children[0] = PROC_PROCESSES_INO;
         fs->inodes[PROC_PROCESSES_INO].dev = dev;
         kstrcpy(fs->inodes[PROC_PROCESSES_INO].i_name, "processes");
@@ -128,6 +130,14 @@ static void create_root_dir(struct vfs_device *dev, bool with_console,
         fs->inodes[PROC_MEMINFO_INO].file_size = 0;
         fs->inodes[PROC_MEMINFO_INO].parent = 0;
         fs->inodes[PROC_MEMINFO_INO].blocks = NULL;
+        fs->inodes[0].children[2] = PROC_ACPI_INO;
+        fs->inodes[PROC_ACPI_INO].dev = dev;
+        kstrcpy(fs->inodes[PROC_ACPI_INO].i_name, "acpi");
+        fs->inodes[PROC_ACPI_INO].i_type = I_FILE;
+        fs->inodes[PROC_ACPI_INO].i_ino = PROC_ACPI_INO;
+        fs->inodes[PROC_ACPI_INO].file_size = 0;
+        fs->inodes[PROC_ACPI_INO].parent = 0;
+        fs->inodes[PROC_ACPI_INO].blocks = NULL;
     }
 
 }
@@ -353,6 +363,12 @@ static int ramfs_read_proc(struct file *rfile, void *buf, uint32_t count)
         length = proc_append_number(report, sizeof(report), length,
                                     free / 1024);
         length = proc_append(report, sizeof(report), length, " kB\n");
+        return proc_copy_read(rfile, buf, count, report, length);
+    }
+    if (rfile->i_node.i_ino == PROC_ACPI_INO) {
+        char report[512];
+        int length = acpi_proc_report(report, sizeof(report));
+
         return proc_copy_read(rfile, buf, count, report, length);
     }
     return -1;

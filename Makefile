@@ -68,13 +68,14 @@ export CC
 export AS
 export ASFLAGS
 SUBDIRS = $(shell ls -d */)
-KERNEL_OBJECT_DIRS = asm block drivers fs init irq locks mm output sched timer utils
+KERNEL_OBJECT_DIRS = acpi asm block drivers fs init irq locks mm output sched timer utils
 OBJ_FILES = asm/asm.o asm/asm_calls.o \
+	acpi/acpi.o \
 	block/ata.o \
 	drivers/pci.o \
 	fs/fat.o fs/ramfs.o fs/vfs.o fs/pipe.o fs/pty.o \
 	init/kernel.o init/tables.o init/dshell.o init/loader.o init/syscall.o \
-	irq/irq.o \
+	irq/irq.o irq/apic.o \
 	locks/spinlock.o locks/mutex.o \
 	mm/paging.o mm/mm.o mm/pmem.o mm/vmm.o mm/mtrr.o \
 	output/keyboard.o output/uart.o output/vga.o output/vt100.o output/framebuffer.o \
@@ -92,6 +93,9 @@ fs/pipe.o: fs/pipe.h
 fs/pty.o: fs/pty.h
 
 all: kernel.img user
+
+acpi: acpi/acpi.o
+	$(MAKE) -C acpi
 
 install: user
 	$(MAKE) -C user install
@@ -156,7 +160,7 @@ toolchain:
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)
 	$(MAKE) -C $(PROGS_SRC) NEWLIB_INSTALL=$(SYSROOT) cp mv
-	$(MAKE) userinit nushell ps kill desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest ttytest ptytest demandtest oomtest breakout cc
+	$(MAKE) userinit nushell ps kill halt shutdown reboot desktop kuid win95-shell aqua aqua-shell controlcenter finder sysmon editor notes writer cide kterm ktermtest ksheet minesweeper solitaire calculator paint citybuilder tetris flappy kylekart fps help parallel-writers kedit rm rmdir alltest fstest gpfault kmsgtest waittest pipetest polltest signaltest ttytest ptytest demandtest oomtest breakout cc
 	mkdir -p $(USERLAND_STAGE)
 	cp $(PROGS_SRC)/progs/cp $(USERLAND_STAGE)/cp
 	cp $(PROGS_SRC)/progs/mv $(USERLAND_STAGE)/mv
@@ -187,6 +191,10 @@ ps: extras/shell/ps.c
 kill: extras/shell/kill.c
 	mkdir -p $(USERLAND_STAGE)
 	$(CC) $(CFLAGS) -static -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a -o $(USERLAND_STAGE)/kill
+
+halt shutdown reboot: extras/shell/power.c include/uapi/syscall.h
+	mkdir -p $(USERLAND_STAGE)
+	$(CC) $(CFLAGS) -static -I $(KERNEL_ROOT) -I $(SYSROOT)/include $< $(SYSROOT)/lib/libc.a -o $(USERLAND_STAGE)/$@
 
 kui: $(KUI_LIBRARY)
 

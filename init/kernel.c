@@ -17,6 +17,8 @@
 #include <include/types.h>
 #include <sched/exec.h>
 #include <mm/mtrr.h>
+#include <acpi/acpi.h>
+#include <irq/apic.h>
 #define STACK_PAGES 256
 //#define DSHELL_EN
 #define INIT "/sbin/init"
@@ -95,6 +97,7 @@ static void kinit(uint64_t mb_info)
     klog("Phys mem init done\n");
     paging_enable_protected();
     mm_init();
+    acpi_init();
     pci_init();
     framebuffer_init(mb_info);
     klog("Allocating stack\n");
@@ -108,6 +111,18 @@ static void kinit(uint64_t mb_info)
     klog("PIC init done\n");
     ata_init();
     timer_system_init();
+    uint64_t interrupt_flags = get_flags_reg();
+    asm volatile("cli" ::: "memory");
+    bool using_apic = apic_enable_routing();
+    if (using_apic) {
+        /* The I/O APIC owns external interrupt delivery from this point. */
+        outb(0x21, 0xff);
+        outb(0xa1, 0xff);
+    } else {
+        klog("APIC: unavailable, continuing with PIC routing\n");
+    }
+    if (interrupt_flags & INTERRUPT_ENABLE_FLAG)
+        asm volatile("sti" ::: "memory");
     exec_init();
     sched_init();
     fpu_init();

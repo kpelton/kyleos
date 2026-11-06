@@ -77,6 +77,6 @@ void serial_irq()
     outb(PORT + 3, 0x03);
     while ((inb(PORT + 5) & 0x01) != 0)
         tty_receive_serial_char((char)inb(PORT));
-    PIC_sendEOI(1);
+    PIC_sendEOI(4);
     release_spinlock(&uart_spinlock);
 }

@@ -15,12 +15,14 @@
 #define PS2_WRITE_CONFIG 0x60
 #define PS2_WRITE_MOUSE 0xd4
 #define MOUSE_DEFAULTS 0xf6
+#define MOUSE_RESET 0xff
 #define MOUSE_SET_SAMPLE_RATE 0xf3
 #define MOUSE_GET_DEVICE_ID 0xf2
 #define MOUSE_SET_RESOLUTION 0xe8
 #define MOUSE_SCALING_1_TO_1 0xe6
 #define MOUSE_ENABLE_STREAM 0xf4
 #define MOUSE_ACK 0xfa
+#define MOUSE_SELF_TEST_OK 0xaa
 
 #define MOUSE_SAMPLE_RATE_200 200
 #define MOUSE_SAMPLE_RATE_100 100
@@ -93,6 +95,18 @@ static bool write_mouse(uint8_t value)
     return response == MOUSE_ACK;
 }
 
+static bool reset_mouse(uint8_t *device_id)
+{
+    uint8_t response;
+
+    if (!write_controller(PS2_WRITE_MOUSE) || !write_data(MOUSE_RESET) ||
+        !read_data(&response) || response != MOUSE_ACK ||
+        !read_data(&response) || response != MOUSE_SELF_TEST_OK ||
+        !read_data(device_id))
+        return false;
+    return true;
+}
+
 static bool set_sample_rate(uint8_t rate)
 {
     return write_mouse(MOUSE_SET_SAMPLE_RATE) && write_mouse(rate);
@@ -141,15 +155,22 @@ void mouse_init(void)
     packet_size = 3;
     mouse_ready = false;
 
+    /* IRQ1 and IRQ12 share port 0x60. Keep their handlers from consuming
+     * command responses while the auxiliary device is initialized. */
+    IRQ_set_mask(1);
+    IRQ_set_mask(MOUSE_IRQ);
+
     if (!write_controller(PS2_ENABLE_AUX) ||
         !write_controller(PS2_READ_CONFIG) || !read_data(&config)) {
         klog("PS/2 mouse: controller unavailable\n");
+        IRQ_clear_mask(1);
         return;
     }
 
     config |= 0x02;  /* Enable IRQ12. */
     config &= ~0x20; /* Enable the auxiliary clock. */
     if (!write_controller(PS2_WRITE_CONFIG) || !write_data(config) ||
+        !reset_mouse(&device_id) ||
         !write_mouse(MOUSE_DEFAULTS) ||
         !set_sample_rate(MOUSE_SAMPLE_RATE_200) ||
         !set_sample_rate(MOUSE_SAMPLE_RATE_100) ||
@@ -161,6 +182,7 @@ void mouse_init(void)
         !set_sample_rate(MOUSE_SAMPLE_RATE_200) ||
         !write_mouse(MOUSE_ENABLE_STREAM)) {
         klog("PS/2 mouse: initialization failed\n");
+        IRQ_clear_mask(1);
         return;
     }
 
@@ -168,6 +190,7 @@ void mouse_init(void)
         packet_size = 4;
     packet_index = 0;
     mouse_ready = true;
+    IRQ_clear_mask(1);
     IRQ_clear_mask(MOUSE_IRQ);
     klog("PS/2 mouse ready (device %d, %d-byte packets)\n",
          device_id, packet_size);

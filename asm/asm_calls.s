@@ -377,6 +377,10 @@ ata_secondary_handler:
     pop rax
     iretq
 
+[global apic_spurious_handler]
+apic_spurious_handler:
+    iretq
+
 [global switch_to]
 switch_to:
     mov rsp,rdi

@@ -84,6 +84,7 @@ void rtc_handler();
 void mouse_handler();
 void ata_primary_handler();
 void ata_secondary_handler();
+void apic_spurious_handler();
 void jump_usermode();
 
 struct tss_entry_struct {
@@ -172,6 +173,7 @@ void idt_install(void) {
     /* The slave PIC is remapped to vector 64: IRQ14/15 become 70/71. */
     idt_set_gate(70,ata_primary_handler,INT_GATE);
     idt_set_gate(71,ata_secondary_handler,INT_GATE);
+    idt_set_gate(255,apic_spurious_handler,INT_GATE);
               
     //write to cpu
     idt_flush();

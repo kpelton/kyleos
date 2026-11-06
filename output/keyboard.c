@@ -30,6 +30,17 @@
 #define KEY_INSERT 0x52
 #define KEY_DELETE 0x53
 #define SC_MAX 57
+#define PS2_DATA 0x60
+#define PS2_STATUS 0x64
+#define PS2_COMMAND 0x64
+#define PS2_OUTPUT_FULL 0x01
+#define PS2_INPUT_FULL 0x02
+#define PS2_READ_CONFIG 0x20
+#define PS2_WRITE_CONFIG 0x60
+#define PS2_ENABLE_KEYBOARD 0xae
+#define PS2_KEYBOARD_DEFAULTS 0xf6
+#define PS2_KEYBOARD_ENABLE_SCAN 0xf4
+#define PS2_ACK 0xfa
 
 static struct spinlock kbd_spinlock;
 static bool extended_prefix;
@@ -38,6 +49,43 @@ static bool right_shift;
 static bool alt;
 static bool ctrl;
 static bool caps_lock;
+
+static bool ps2_wait_write(void)
+{
+    for (int i = 0; i < 100000; i++) {
+        if ((inb(PS2_STATUS) & PS2_INPUT_FULL) == 0) return true;
+        io_wait();
+    }
+    return false;
+}
+
+static bool ps2_wait_read(void)
+{
+    for (int i = 0; i < 100000; i++) {
+        if ((inb(PS2_STATUS) & PS2_OUTPUT_FULL) != 0) return true;
+        io_wait();
+    }
+    return false;
+}
+
+static bool ps2_command(uint8_t command)
+{
+    if (!ps2_wait_write()) return false;
+    outb(PS2_COMMAND, command);
+    return true;
+}
+
+static bool ps2_data(uint8_t data)
+{
+    if (!ps2_wait_write()) return false;
+    outb(PS2_DATA, data);
+    return true;
+}
+
+static bool ps2_keyboard_command(uint8_t command)
+{
+    return ps2_data(command) && ps2_wait_read() && inb(PS2_DATA) == PS2_ACK;
+}
 
 static void input_add_sequence(const char *sequence)
 {
@@ -192,7 +240,23 @@ void kbd_irq()
 
 void kbd_init() 
 {
-    PIC_sendEOI(1);
-    keyboard_callback();
+    uint8_t config;
+
     init_spinlock(&kbd_spinlock);
+    extended_prefix = left_shift = right_shift = alt = ctrl = caps_lock = false;
+
+    /* Warm resets may leave stale controller output and both clocks/IRQs in
+     * their previous state. Re-establish the keyboard port explicitly. */
+    for (int i = 0; i < 32 && (inb(PS2_STATUS) & PS2_OUTPUT_FULL); i++)
+        (void)inb(PS2_DATA);
+    if (!ps2_command(PS2_ENABLE_KEYBOARD) ||
+        !ps2_command(PS2_READ_CONFIG) || !ps2_wait_read())
+        return;
+    config = inb(PS2_DATA);
+    config |= 0x01;  /* Enable IRQ1. */
+    config &= ~0x10; /* Enable the first-port clock. */
+    if (!ps2_command(PS2_WRITE_CONFIG) || !ps2_data(config))
+        return;
+    (void)ps2_keyboard_command(PS2_KEYBOARD_DEFAULTS);
+    (void)ps2_keyboard_command(PS2_KEYBOARD_ENABLE_SCAN);
 }

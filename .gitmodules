@@ -13,3 +13,6 @@
 [submodule "extras/busybox"]
 	path = extras/busybox
 	url = https://git.busybox.net/busybox
+[submodule "acpi/acpica"]
+	path = acpi/acpica
+	url = https://github.com/open-acpica/acpica.git
