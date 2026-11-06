@@ -11,7 +11,9 @@ TEST_IMAGE_MOUNT ?= $(KERNEL_ROOT)/build/image/test-suite-mnt
 TEST_TIMEOUT ?= 180
 QEMU ?= qemu-system-x86_64
 # Extra options are intentionally overridable: e.g. `make test QEMU_OPTS="-cpu host -enable-kvm"`.
-QEMU_OPTS ?= -rtc base=localtime
+# Userland is compiled for SSE4.2; expose the complete emulated CPU feature set
+# by default so ordinary `make test` matches the documented QEMU profile.
+QEMU_OPTS ?= -cpu max -rtc base=localtime
 USERLAND_STAGE ?= $(KERNEL_ROOT)/build/userland
 KUI_LIBRARY ?= $(USERLAND_STAGE)/libkui.a
 KUI_OBJECT ?= $(USERLAND_STAGE)/kui.o
