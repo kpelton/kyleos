@@ -763,7 +763,7 @@ test-nox: kernel32.bin image
 test-log: kernel32.bin image
 	$(QEMU) $(QEMU_OPTS) -m 8G -kernel kernel32.bin -d int,cpu_reset -hda $(IMAGE) -serial stdio 2>log
 kvm-test: kernel32.bin image
-	$(QEMU) $(QEMU_OPTS) -m 8G -kernel kernel32.bin -d int,cpu_reset -hda $(IMAGE) -serial stdio -enable-kvm 2>log
+	$(QEMU) $(QEMU_OPTS) -m 8G -vga std -global VGA.xres=1920 -global VGA.yres=1080 -kernel kernel32.bin -d int,cpu_reset -hda $(IMAGE) -serial stdio -enable-kvm 2>log
 
 test-c: kernel32.bin image
 	$(QEMU) $(QEMU_OPTS) -m 8G -kernel kernel32.bin -d int,cpu_reset -hda $(IMAGE) -display none -serial stdio 2>log

@@ -5,8 +5,8 @@
 
 #include "extras/kui/kui_protocol.h"
 
-#define KUI_SCREEN_WIDTH 1280
-#define KUI_SCREEN_HEIGHT 720
+#define KUI_SCREEN_WIDTH 1920
+#define KUI_SCREEN_HEIGHT 1080
 
 #define KUI_BLACK 0x00000000U
 #define KUI_WHITE 0x00ffffffU
