@@ -5,6 +5,10 @@ kernel32.bin
 *.img
 build/
 
+# Newlib's generated Automake support files
+/external/config.guess
+/external/depcomp
+
 # Editor, test, and runtime by-products
 *.sw?
 *~

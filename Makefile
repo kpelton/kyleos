@@ -30,7 +30,7 @@ SOLITAIRE_WIDGET_OBJECT ?= $(USERLAND_STAGE)/solitaire_widget.o
 CALCULATOR_WIDGET_OBJECT ?= $(USERLAND_STAGE)/calculator_widget.o
 CORE_SRC ?= $(KERNEL_ROOT)/userspace/core
 PROGS_SRC ?= $(KERNEL_ROOT)/userspace/programs
-NEWLIB_BUILD ?= $(KERNEL_ROOT)/toolchain/newlib-build
+NEWLIB_BUILD ?= $(KERNEL_ROOT)/build/toolchain/newlib
 SYSROOT ?= $(KERNEL_ROOT)/build/sysroot
 DOOM_BINARY ?= $(KERNEL_ROOT)/build/extras/doom/doom
 DOOM_AQUA_BINARY ?= $(KERNEL_ROOT)/build/extras/doom-aqua/doom-aqua
@@ -154,10 +154,7 @@ HOST_TEST_TARGETS = \
 	test-help-ui test-kui-shells
 
 toolchain:
-	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
-		CFLAGS="-g -fno-stack-protector -DSIGNAL_PROVIDED" DESTDIR= all
-	$(MAKE) -C $(NEWLIB_BUILD) prefix=$(SYSROOT) exec_prefix=$(SYSROOT) \
-		CFLAGS="-g -fno-stack-protector -DSIGNAL_PROVIDED" DESTDIR= install
+	NEWLIB_BUILD="$(NEWLIB_BUILD)" SYSROOT="$(SYSROOT)" bash scripts/build-newlib.sh
 
 userland:
 	$(MAKE) -C $(CORE_SRC) NEWLIB_INSTALL=$(SYSROOT)

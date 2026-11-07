@@ -1,0 +1,29 @@
+#!/bin/sh
+
+# Newlib's configure.host contains a KyleOS target, but current Automake
+# config.sub releases do not know that OS name.  Keep the historical alias
+# used by this project and delegate all ordinary tuples to Automake.
+case "${1-}" in
+    kyleos)
+        printf '%s\n' 'x86_64-pc-kyleos'
+        exit 0
+        ;;
+    *-*-kyleos*)
+        printf '%s\n' "$1"
+        exit 0
+        ;;
+esac
+
+automake_libdir=${AUTOMAKE_LIBDIR:-}
+if [ -z "$automake_libdir" ] && command -v automake >/dev/null 2>&1; then
+    automake_libdir=$(automake --print-libdir 2>/dev/null || true)
+fi
+if [ -n "$automake_libdir" ] && [ -x "$automake_libdir/config.sub" ]; then
+    exec "$automake_libdir/config.sub" "$@"
+fi
+if [ -x /usr/share/misc/config.sub ]; then
+    exec /usr/share/misc/config.sub "$@"
+fi
+
+echo "cannot find a system config.sub; install Automake" >&2
+exit 1

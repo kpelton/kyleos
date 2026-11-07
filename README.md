@@ -224,7 +224,7 @@ The default configuration uses these repository-local trees:
 userspace/core
 userspace/programs
 external/newlib
-toolchain/newlib-build
+build/toolchain/newlib
 ```
 
 The repository-local dependency policy is intentional: source dependencies are
@@ -235,9 +235,9 @@ No build target should require `/tmp/z` or a sibling checkout.
 See [`userspace/README.md`](userspace/README.md) for the ownership boundary
 between the core userspace tree and the additional programs tree.
 
-`config.mk` is ignored by Git. The configured Newlib build tree is kept
-in-tree to reproduce the existing KyleOS sysroot; generated libraries and
-headers are installed under `build/sysroot`.
+`config.mk` is ignored by Git. The configured Newlib build tree is generated
+under `build/toolchain/newlib`; generated libraries and headers are installed
+under `build/sysroot`.
 
 ## Build and boot
 

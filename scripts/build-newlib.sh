@@ -3,14 +3,37 @@ set -euo pipefail
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 source_dir=${NEWLIB_SOURCE:-"$root/external/newlib"}
+source_dir=$(CDPATH= cd -- "$source_dir" && pwd)
 build_dir=${NEWLIB_BUILD:-"$root/build/toolchain/newlib"}
 sysroot=${SYSROOT:-"$root/build/sysroot"}
+
+# Newlib's generated configure script expects these Automake support files in
+# the directory above its source tree.  They are host build helpers, not
+# project source, so materialize them there when a checkout does not already
+# have them.  Keeping this setup here makes a fresh clone independent of any
+# generated files from a different machine.
+source_parent=$(dirname "$source_dir")
+automake_libdir=${AUTOMAKE_LIBDIR:-}
+if [[ -z "$automake_libdir" ]] && command -v automake >/dev/null 2>&1; then
+    automake_libdir=$(automake --print-libdir 2>/dev/null || true)
+fi
+for helper in config.guess config.sub depcomp; do
+    if [[ ! -f "$source_parent/$helper" ]]; then
+        if [[ -z "$automake_libdir" || ! -f "$automake_libdir/$helper" ]]; then
+            echo "missing Newlib build helper: $helper" >&2
+            echo "install Automake or set AUTOMAKE_LIBDIR to its support directory" >&2
+            exit 1
+        fi
+        cp "$automake_libdir/$helper" "$source_parent/$helper"
+    fi
+done
 
 if [[ ! -f "$build_dir/Makefile" ]]; then
     mkdir -p "$build_dir"
     (
         cd "$build_dir"
-        CC=gcc CFLAGS="-O2 -mno-mmx -D_LDBL_EQ_DBL" \
+        CC="${CC:-gcc}" AS="${AS:-nasm}" \
+            CFLAGS="-O2 -mno-mmx -D_LDBL_EQ_DBL -Wno-error -Wno-implicit-function-declaration" \
             "$source_dir/configure" --build=kyleos --prefix="$sysroot" \
                 --disable-dependency-tracking
     )
